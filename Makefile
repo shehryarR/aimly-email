@@ -146,17 +146,17 @@ logs-microservices:
 # ── RUN (local dev, no Docker) ───────────────────────────────
 run:
 	@echo ""
-	@echo "  🚀  Starting all services in background..."
+	@echo "  🚀  Starting all services..."
 	@-pkill -f "outreach_agent/main.py" 2>/dev/null || true
 	@-pkill -f "AimlyMicroservices" 2>/dev/null || true
 	@-pkill -f "vite" 2>/dev/null || true
 	@sleep 1
-	cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py > /dev/null 2>&1 &
-	cd AimlyMicroservices && ./venv/bin/python3 main.py > /dev/null 2>&1 &
-	cd AimlyFrontend && npm run dev -- --port 8501 > /dev/null 2>&1 &
-	@echo "  ✅  All services running"
-	@echo "      Run 'make stop' to shut everything down"
+	@echo "  Ctrl+C to stop all services"
 	@echo ""
+	(cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py 2>&1 | sed 's/^/[backend]       /') &
+	(cd AimlyMicroservices && ./venv/bin/python3 main.py 2>&1 | sed 's/^/[microservices] /') &
+	(cd AimlyFrontend && npm run dev -- --port 8501 2>&1 | sed 's/^/[frontend]      /') &
+	wait
 
 run-backend:
 	@echo "── Run: AimlyBackend ──"
