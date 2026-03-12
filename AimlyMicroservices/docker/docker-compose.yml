@@ -1,12 +1,10 @@
 version: '3.8'
-
 services:
   email-microservice:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    ports:
-      - "8001:8001"
+    network_mode: host
     env_file:
       - ../.env
     volumes:
