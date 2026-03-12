@@ -1,6 +1,6 @@
-# ----------------------------
-# UI Makefile
-# ----------------------------
+setup:
+	@echo "Installing frontend dependencies..."
+	npm install
 
 build:
 	docker build -t outreach_ui -f docker/Dockerfile .
@@ -17,4 +17,5 @@ logs:
 	docker compose -f docker/docker-compose.yml logs -f
 
 run:
+	@echo "Starting frontend..."
 	npm run dev -- --port 8501
