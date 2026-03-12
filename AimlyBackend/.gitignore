@@ -1,0 +1,59 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ubuntu@51.79.254.194
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+.eggs/
+
+# Local DB / state
+outreach.db
+last_successful_index.txt
+
+# Docker export files
+*.tar
+
+# Logs
+*.log
+logs/
+**/logs/
+
+# Env / secrets
+.env
+.env
+secrets/
+config/secrets.yml
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+.cache/
+tmp/
+commands.txt
+.dockerignore
+ubuntu@51.79.254.194
+.env
+companies.csv
+outreach_email_v3.tar
+*.csv
+*.db-shm
+*.db-wal
+data/
+.nicegui/
+.refresh_scheduled_view
+env.json

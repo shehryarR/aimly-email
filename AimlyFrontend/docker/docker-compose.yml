@@ -1,0 +1,16 @@
+services:
+  outreach_ui:
+    image: outreach_ui
+    container_name: outreach_ui
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - ../.env
+    volumes:
+      - ..:/app
+      - /app/node_modules
+    entrypoint: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8501"]
+    restart: unless-stopped
