@@ -1,6 +1,8 @@
 setup:
-	@echo "Installing frontend dependencies..."
+	python3 env_generator.py
+	@echo "  Installing frontend dependencies..."
 	npm install
+	@echo "  ✅  Frontend ready"
 
 build:
 	docker build -t outreach_ui -f docker/Dockerfile .
@@ -17,5 +19,5 @@ logs:
 	docker compose -f docker/docker-compose.yml logs -f
 
 run:
-	@echo "Starting frontend..."
+	@echo "── Run: AimlyFrontend ──"
 	npm run dev -- --port 8501
