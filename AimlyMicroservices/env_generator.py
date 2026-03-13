@@ -23,13 +23,19 @@ def ask(prompt, default=None):
             print("  ⚠️   Required. Please enter a value.")
 
 
-def ask_secret(prompt):
-    display = f"  {prompt} : "
+def ask_secret(prompt, default=None):
+    display = f"  {prompt}"
+    if default is not None:
+        display += f" (default: {default})"
+    display += " : "
     while True:
         value = getpass.getpass(display)
         if value:
             return value
-        print("  ⚠️   Required. Please enter a value.")
+        elif default is not None:
+            return default
+        else:
+            print("  ⚠️   Required. Please enter a value.")
 
 
 print()
@@ -37,7 +43,7 @@ print("  ⚙️   MICROSERVICES CONFIGURATION  →  .env")
 print("  " + "─" * 53)
 print()
 
-svc_api_key = ask_secret("Microservice API Key")
+svc_api_key = ask_secret("Microservice API Key", default="your-super-secure-microservice-key")
 svc_db      = ask("DB Path",           default="./data/email_microservice.db")
 svc_port    = ask("Microservice Port", default="8001")
 
