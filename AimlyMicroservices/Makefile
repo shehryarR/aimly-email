@@ -2,10 +2,11 @@ PYTHON := python3
 VENV := venv
 
 setup:
-	@echo "Creating microservice virtual environment..."
+	python3 env_generator.py
+	@echo "  Installing microservice dependencies..."
 	$(PYTHON) -m venv $(VENV)
-	@echo "Installing microservice dependencies..."
-	. $(VENV)/bin/activate && pip install -r requirements.txt
+	./$(VENV)/bin/pip install -r requirements.txt
+	@echo "  ✅  Microservices ready"
 
 build:
 	docker compose -f docker/docker-compose.yml build email-microservice
@@ -23,5 +24,5 @@ logs:
 	docker compose -f docker/docker-compose.yml logs -f email-microservice
 
 run:
-	@echo "Activating venv and running microservice..."
+	@echo "── Run: AimlyMicroservices ──"
 	. $(VENV)/bin/activate && $(PYTHON) main.py
