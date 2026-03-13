@@ -8,6 +8,9 @@ setup:
 	./$(VENV)/bin/pip install -r requirements.txt
 	@echo "  ✅  Microservices ready"
 
+env:
+	python3 env_generator.py
+
 build:
 	docker compose -f docker/docker-compose.yml build email-microservice
 

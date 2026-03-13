@@ -4,6 +4,9 @@ setup:
 	npm install
 	@echo "  ✅  Frontend ready"
 
+env:
+	python3 env_generator.py
+
 build:
 	docker build -t outreach_ui -f docker/Dockerfile .
 

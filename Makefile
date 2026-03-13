@@ -5,6 +5,7 @@
 
 .PHONY: help \
         setup setup-backend setup-frontend setup-microservices \
+        env env-backend env-frontend env-microservices \
         _start-microservices _stop-microservices \
         build build-backend build-frontend build-microservices \
         up up-backend up-frontend up-microservices \
@@ -21,6 +22,7 @@ help:
 	@echo "  AIMLY Makefile Commands"
 	@echo "  ────────────────────────────────────────────────────"
 	@echo "  make setup    → Configure + install ALL projects (run once)"
+	@echo "  make env      → Re-run env config for ALL (no reinstall)"
 	@echo "  make build    → Build ALL Docker images"
 	@echo "  make up       → Start ALL services via Docker"
 	@echo "  make down     → Stop  ALL Docker containers"
@@ -68,6 +70,24 @@ setup-frontend:
 	@echo "── Setup: AimlyFrontend ──"
 	cd AimlyFrontend && python3 env_generator.py
 	cd AimlyFrontend && npm install
+
+
+# ── ENV (re-configure only, no reinstall) ────────────────────
+env: _start-microservices env-backend _stop-microservices env-frontend env-microservices
+	@echo ""
+	@echo "  ✅  All env files updated!"
+
+env-microservices:
+	@echo "── Env: AimlyMicroservices ──"
+	cd AimlyMicroservices && python3 env_generator.py
+
+env-backend:
+	@echo "── Env: AimlyBackend ──"
+	cd AimlyBackend && python3 env_generator.py
+
+env-frontend:
+	@echo "── Env: AimlyFrontend ──"
+	cd AimlyFrontend && python3 env_generator.py
 
 
 # ── BUILD ────────────────────────────────────────────────────
