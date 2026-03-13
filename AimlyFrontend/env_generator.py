@@ -27,7 +27,7 @@ print("  ⚙️   FRONTEND CONFIGURATION  →  .env")
 print("  " + "─" * 53)
 print()
 
-vite_url  = ask("Backend URL",  default="https://localhost:8000")
+vite_url  = ask("Backend URL",  default="http://localhost:8000")
 print()
 print("  ℹ️   Set Backend Port ONLY if your URL has no port.")
 print("      e.g. URL=https://myapp.com        → set port 8000")
