@@ -8,9 +8,6 @@ setup:
 	./$(VENV)/bin/pip install -r requirements.txt
 	@echo "  ✅  Backend ready"
 
-env:
-	python3 env_generator.py
-
 build:
 	docker build --no-cache -t outreach_agent -f docker/Dockerfile .
 

@@ -5,7 +5,6 @@
 
 .PHONY: help \
         setup setup-backend setup-frontend setup-microservices \
-        env env-backend env-frontend env-microservices \
         _start-microservices _stop-microservices \
         build build-backend build-frontend build-microservices \
         up up-backend up-frontend up-microservices \
@@ -22,7 +21,6 @@ help:
 	@echo "  AIMLY Makefile Commands"
 	@echo "  ────────────────────────────────────────────────────"
 	@echo "  make setup    → Configure + install ALL projects (run once)"
-	@echo "  make env      → Re-run env config for ALL (no reinstall)"
 	@echo "  make build    → Build ALL Docker images"
 	@echo "  make up       → Start ALL services via Docker"
 	@echo "  make down     → Stop  ALL Docker containers"
@@ -36,24 +34,27 @@ help:
 	@echo ""
 
 
-# ── SETUP ────────────────────────────────────────────────────
-# NOTE: Run 'make stop' first if services are already running.
-setup: setup-microservices _start-microservices setup-backend _stop-microservices setup-frontend
-	@echo ""
-	@echo "  ✅  All projects configured and set up!"
-
-# Internal: start microservice in background so backend env_generator can call it
+# ── INTERNAL ─────────────────────────────────────────────────
+# Start microservice in background so backend env_generator can call it.
+# Requires AimlyMicroservices/venv to already exist.
 _start-microservices:
 	@echo "── Starting microservice for credential generation ──"
 	cd AimlyMicroservices && ./venv/bin/python3 main.py > /tmp/microservice-setup.log 2>&1 &
 	@echo "  Waiting for microservice to boot..."
 	@sleep 8
 
-# Internal: stop microservice after backend setup is done
+# Stop microservice and wait for full shutdown before continuing
 _stop-microservices:
 	@echo "── Stopping temporary microservice process ──"
 	@-pkill -f "main.py" 2>/dev/null || true
 	@sleep 3
+
+
+# ── SETUP (configure + install deps) ─────────────────────────
+# NOTE: Run 'make stop' first if services are already running.
+setup: setup-microservices _start-microservices setup-backend _stop-microservices setup-frontend
+	@echo ""
+	@echo "  ✅  All projects configured and set up!"
 
 setup-microservices:
 	@echo "── Setup: AimlyMicroservices ──"
@@ -71,24 +72,6 @@ setup-frontend:
 	@echo "── Setup: AimlyFrontend ──"
 	cd AimlyFrontend && python3 env_generator.py
 	cd AimlyFrontend && npm install
-
-
-# ── ENV (re-configure only, no reinstall) ────────────────────
-env: _start-microservices env-backend _stop-microservices env-frontend env-microservices
-	@echo ""
-	@echo "  ✅  All env files updated!"
-
-env-microservices:
-	@echo "── Env: AimlyMicroservices ──"
-	cd AimlyMicroservices && python3 env_generator.py
-
-env-backend:
-	@echo "── Env: AimlyBackend ──"
-	cd AimlyBackend && python3 env_generator.py
-
-env-frontend:
-	@echo "── Env: AimlyFrontend ──"
-	cd AimlyFrontend && python3 env_generator.py
 
 
 # ── BUILD ────────────────────────────────────────────────────
@@ -110,9 +93,13 @@ build-microservices:
 
 
 # ── UP ───────────────────────────────────────────────────────
-up: up-backend up-frontend up-microservices
+up: up-microservices up-backend up-frontend
 	@echo ""
 	@echo "  ✅  All Docker containers started!"
+
+up-microservices:
+	@echo "── Up: AimlyMicroservices ──"
+	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml up -d email-microservice
 
 up-backend:
 	@echo "── Up: AimlyBackend ──"
@@ -121,10 +108,6 @@ up-backend:
 up-frontend:
 	@echo "── Up: AimlyFrontend ──"
 	cd AimlyFrontend && docker compose -f docker/docker-compose.yml up -d
-
-up-microservices:
-	@echo "── Up: AimlyMicroservices ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml up -d email-microservice
 
 
 # ── DOWN ─────────────────────────────────────────────────────
@@ -183,8 +166,8 @@ run:
 	@sleep 1
 	@echo "  Ctrl+C to stop all services"
 	@echo ""
-	(cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py 2>&1 | sed 's/^/[backend]       /') &
 	(cd AimlyMicroservices && ./venv/bin/python3 main.py 2>&1 | sed 's/^/[microservices] /') &
+	(cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py 2>&1 | sed 's/^/[backend]       /') &
 	(cd AimlyFrontend && npm run dev -- --port 8501 2>&1 | sed 's/^/[frontend]      /') &
 	wait
 
