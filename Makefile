@@ -35,18 +35,19 @@ help:
 
 
 # ── INTERNAL ─────────────────────────────────────────────────
-# Start microservice in background so backend env_generator can call it.
-# Requires AimlyMicroservices/venv to already exist.
+# Start microservice via Docker so backend env_generator can call it.
+# Requires Docker image to already be built (setup-microservices handles this).
 _start-microservices:
-	@echo "── Starting microservice for credential generation ──"
-	cd AimlyMicroservices && ./venv/bin/python3 main.py > /tmp/microservice-setup.log 2>&1 &
+	@echo "── Starting microservice (Docker) for credential generation ──"
+	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml up -d email-microservice
 	@echo "  Waiting for microservice to boot..."
 	@sleep 8
 
-# Stop microservice and wait for full shutdown before continuing
+# Stop and remove the temporary microservice container
 _stop-microservices:
-	@echo "── Stopping temporary microservice process ──"
-	@-pkill -f "main.py" 2>/dev/null || true
+	@echo "── Stopping temporary microservice container ──"
+	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml stop email-microservice
+	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml rm -f email-microservice
 	@sleep 3
 
 
@@ -59,8 +60,7 @@ setup: setup-microservices _start-microservices setup-backend _stop-microservice
 setup-microservices:
 	@echo "── Setup: AimlyMicroservices ──"
 	cd AimlyMicroservices && python3 env_generator.py
-	cd AimlyMicroservices && python3 -m venv venv
-	cd AimlyMicroservices && ./venv/bin/pip install -r requirements.txt
+	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml build email-microservice
 
 setup-backend:
 	@echo "── Setup: AimlyBackend ──"
@@ -134,8 +134,8 @@ restart: restart-backend restart-frontend restart-microservices
 	@echo ""
 	@echo "  ✅  All services restarted!"
 
-restart-backend:      down-backend      build-backend      up-backend
-restart-frontend:     down-frontend     build-frontend     up-frontend
+restart-backend:       down-backend       build-backend       up-backend
+restart-frontend:      down-frontend      build-frontend      up-frontend
 restart-microservices: down-microservices build-microservices up-microservices
 
 
