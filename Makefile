@@ -5,6 +5,7 @@
 
 .PHONY: help \
         setup setup-backend setup-frontend setup-microservices \
+        _start-microservices _stop-microservices \
         build build-backend build-frontend build-microservices \
         up up-backend up-frontend up-microservices \
         down down-backend down-frontend down-microservices \
@@ -19,7 +20,7 @@ help:
 	@echo ""
 	@echo "  AIMLY Makefile Commands"
 	@echo "  ────────────────────────────────────────────────────"
-	@echo "  make setup    → Install ALL dependencies (run once)"
+	@echo "  make setup    → Configure + install ALL projects (run once)"
 	@echo "  make build    → Build ALL Docker images"
 	@echo "  make up       → Start ALL services via Docker"
 	@echo "  make down     → Stop  ALL Docker containers"
@@ -34,31 +35,39 @@ help:
 
 
 # ── SETUP ────────────────────────────────────────────────────
-# NOTE: Stop any running local processes before running setup.
-#       uvicorn --reload watches file changes and will crash
-#       if you create a new venv while it is running.
-#       Run 'make stop' first if services are already running.
-setup: setup-backend setup-frontend setup-microservices
+# NOTE: Run 'make stop' first if services are already running.
+setup: setup-microservices _start-microservices setup-backend _stop-microservices setup-frontend
 	@echo ""
-	@echo "  ✅  All projects set up!"
-	@echo "      Each service has its own venv:"
-	@echo "      AimlyBackend/venv"
-	@echo "      AimlyMicroservices/venv"
-	@echo "      AimlyFrontend uses node_modules"
+	@echo "  ✅  All projects configured and set up!"
+
+# Internal: start microservice in background so backend env_generator can call it
+_start-microservices:
+	@echo "── Starting microservice for credential generation ──"
+	cd AimlyMicroservices && ./venv/bin/python3 main.py &
+	@sleep 3
+
+# Internal: stop microservice after backend setup is done
+_stop-microservices:
+	@echo "── Stopping temporary microservice process ──"
+	@-pkill -f "AimlyMicroservices/main.py" 2>/dev/null || true
+	@-pkill -f "main.py" 2>/dev/null || true
+
+setup-microservices:
+	@echo "── Setup: AimlyMicroservices ──"
+	cd AimlyMicroservices && python3 env_generator.py
+	cd AimlyMicroservices && python3 -m venv venv
+	cd AimlyMicroservices && ./venv/bin/pip install -r requirements.txt
 
 setup-backend:
-	@echo "── Setup: AimlyBackend → AimlyBackend/venv ──"
+	@echo "── Setup: AimlyBackend ──"
+	cd AimlyBackend && python3 env_generator.py
 	cd AimlyBackend && python3 -m venv venv
 	cd AimlyBackend && ./venv/bin/pip install -r requirements.txt
 
 setup-frontend:
-	@echo "── Setup: AimlyFrontend → AimlyFrontend/node_modules ──"
+	@echo "── Setup: AimlyFrontend ──"
+	cd AimlyFrontend && python3 env_generator.py
 	cd AimlyFrontend && npm install
-
-setup-microservices:
-	@echo "── Setup: AimlyMicroservices → AimlyMicroservices/venv ──"
-	cd AimlyMicroservices && python3 -m venv venv
-	cd AimlyMicroservices && ./venv/bin/pip install -r requirements.txt
 
 
 # ── BUILD ────────────────────────────────────────────────────
@@ -121,12 +130,12 @@ restart: restart-backend restart-frontend restart-microservices
 	@echo ""
 	@echo "  ✅  All services restarted!"
 
-restart-backend:   down-backend   build-backend   up-backend
-restart-frontend:  down-frontend  build-frontend  up-frontend
+restart-backend:      down-backend      build-backend      up-backend
+restart-frontend:     down-frontend     build-frontend     up-frontend
 restart-microservices: down-microservices build-microservices up-microservices
 
 
-# ── LOGS ─────────────────────────────────────────────────────
+# ── LOGS (Docker) ────────────────────────────────────────────
 logs:
 	@echo "  Tailing logs for all services (Ctrl+C to stop)..."
 	@$(MAKE) logs-backend       > /dev/null 2>&1 &
