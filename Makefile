@@ -45,14 +45,15 @@ setup: setup-microservices _start-microservices setup-backend _stop-microservice
 # Internal: start microservice in background so backend env_generator can call it
 _start-microservices:
 	@echo "── Starting microservice for credential generation ──"
-	cd AimlyMicroservices && ./venv/bin/python3 main.py &
-	@sleep 3
+	cd AimlyMicroservices && ./venv/bin/python3 main.py > /tmp/microservice-setup.log 2>&1 &
+	@echo "  Waiting for microservice to boot..."
+	@sleep 8
 
 # Internal: stop microservice after backend setup is done
 _stop-microservices:
 	@echo "── Stopping temporary microservice process ──"
-	@-pkill -f "AimlyMicroservices/main.py" 2>/dev/null || true
 	@-pkill -f "main.py" 2>/dev/null || true
+	@sleep 3
 
 setup-microservices:
 	@echo "── Setup: AimlyMicroservices ──"
