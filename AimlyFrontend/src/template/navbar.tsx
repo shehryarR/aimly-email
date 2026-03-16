@@ -39,13 +39,6 @@ const LogoImage = styled.img`
   width: auto;
 `;
 
-const AppName = styled.h1<{ theme: any }>`
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  color: ${props => props.theme.colors.base.content};
-  letter-spacing: -0.025em;
-`;
 
 const PageTitle = styled.span<{ theme: any }>`
   font-size: 0.875rem;

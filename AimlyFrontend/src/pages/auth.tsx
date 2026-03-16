@@ -3,7 +3,7 @@
  * Handles login and registration with backend integration
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { EyeIcon, EyeOffIcon } from '../theme/icons';

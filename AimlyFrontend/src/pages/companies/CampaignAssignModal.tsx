@@ -4,7 +4,7 @@
 // EnrollRow list, section headers, remove toggle, save diff
 // ============================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import {
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
@@ -74,10 +74,6 @@ const SIconWrap = styled.div`
   svg { width: 13px; height: 13px; }
 `;
 const EnrollSearch = styled(FI)`padding-left: 2rem !important;`;
-const PulseRow = styled.div`
-  padding: 2rem; text-align: center; font-size: 0.8125rem; opacity: 0.45;
-  animation: ${pulse} 1.5s ease infinite;
-`;
 const Banner = styled.div<{ theme: any; $t: 'success' | 'warning' | 'error' | 'info' }>`
   padding: 0.625rem 0.875rem;
   border-radius: ${p => p.theme.radius.field};

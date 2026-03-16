@@ -12,7 +12,7 @@ import { apiFetch } from '../../App';
 import {
   PageContainer, MainContent, HeaderCard, HeaderRow, BackButton,
   HeaderCenter, HeaderTitle, HeaderSubtitle,
-  UploadCard, UploadZone, UploadText, UploadSubtext, ProgressBar, ProgressFill,
+  UploadZone, UploadText, UploadSubtext, ProgressBar, ProgressFill,
   ListSection, SectionHeader, SectionTitle, CountBadge, AddButton,
   BulkActionsBar, BulkLeft, BulkRight,
   AttachmentCard, AttachmentRow, FileIconWrap, FileInfo, FileName,
@@ -26,9 +26,9 @@ import {
   ConfirmOverlay, ConfirmBox, ConfirmHeader, ConfirmIconWrap, ConfirmContent,
   ConfirmTitle, ConfirmMessage, ConfirmActions, CancelButton, DangerButton, PrimaryButton,
   PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
-  FilterBar, FilterChip,
+  FilterChip,
   DropdownWrap, DropdownTrigger, DropdownBadge, DropdownMenu,
-  DropdownSearch, DropdownItem, DropdownDivider,
+  DropdownSearch, DropdownItem,
   EditInput,
 } from './attachments.styles';
 

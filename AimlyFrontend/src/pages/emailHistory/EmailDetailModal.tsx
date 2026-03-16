@@ -11,7 +11,7 @@
 //   companyHistory    → email.campaign_name
 // ============================================================
 
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
   ModalBody, ModalFooter,
@@ -218,8 +218,6 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const filteredAtts    = allAttachments.filter(a => a.filename.toLowerCase().includes(attachSearch.toLowerCase()));
   const attachedFiles   = filteredAtts.filter(a =>  linkedAttachIds.has(a.id));
   const unattachedFiles = filteredAtts.filter(a => !linkedAttachIds.has(a.id));
-
-  const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv'];
 
   return (
     <>

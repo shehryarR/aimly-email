@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import {
   CampaignsSection, SectionHeader, SectionTitle, AddButton,
-  SearchWrapper, SearchIconWrap, SearchClearBtn, SearchInput, SearchContainer, BulkActionsBar, BulkActionsLeft, BulkActionsRight,
+  SearchWrapper, SearchIconWrap, SearchClearBtn, SearchInput, BulkActionsBar, BulkActionsLeft, BulkActionsRight,
   Checkbox, CampaignCard, CampaignHeader, CampaignInfo, CampaignName,
   CampaignMeta, CampaignDate, StatsContainer, CampaignStatBox,
   CampaignStatValue, CampaignStatLabel, CampaignStatSubtext,
@@ -17,15 +17,6 @@ import {
 } from './campaigns.styles.ts';
 import { TrashIcon } from '../../theme/icons.tsx';
 
-const CampaignIcon = () => (
-  <svg width="14" height="13" viewBox="0 0 38 34" fill="none" stroke="currentColor"
-    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-    style={{ flexShrink: 0, opacity: 0.5 }}>
-    <path d="M5 11H13L28 3V31L13 23H5C3.9 23 3 22.1 3 21V13C3 11.9 3.9 11 5 11Z"/>
-    <path d="M32 9C34.5 11.5 35.5 14.5 35.5 17C35.5 19.5 34.5 22.5 32 25"/>
-    <path d="M13 23L15 31H20L18 23"/>
-  </svg>
-);
 import type { CampaignStats } from './campaigns.types.ts';
 
 type CampaignSortKey = 'name' | 'companies' | 'sent' | 'read' | 'scheduled';

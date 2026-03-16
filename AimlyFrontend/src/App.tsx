@@ -3,7 +3,7 @@
  * Handles routing with React Router and server health monitoring
  */
 
-import React, { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useContext, createContext, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './theme/styles';
 import Navbar from './template/navbar';
@@ -310,7 +310,6 @@ const CampaignWrapper: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 const AppRouter: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('loading');
   const [showSettings, setShowSettings] = useState(false);
-  const [hasSettingsErrors, setHasSettingsErrors] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, login, logout } = useAuth();
@@ -350,8 +349,6 @@ const AppRouter: React.FC = () => {
     }
   }, [appState]);
 
-  const handleSettingsStatus = (hasErrors: boolean) => setHasSettingsErrors(hasErrors);
-
   // After login: redirect back to the page the user was trying to reach
   const handleLoginSuccess = (userData: User) => {
     login(userData);
@@ -362,7 +359,6 @@ const AppRouter: React.FC = () => {
   const handleLogout = () => {
     logout();
     setShowSettings(false);
-    setHasSettingsErrors(null);
     navigate('/auth');
   };
 
@@ -445,7 +441,6 @@ const AppRouter: React.FC = () => {
           onClose={() => setShowSettings(false)}
           user={{ username: user.username }}
           onLogout={handleLogout}
-          onSettingsStatus={handleSettingsStatus}
         />
       )}
 
