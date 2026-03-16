@@ -146,6 +146,13 @@ smtp_tls     = ask("SMTP Use TLS?     (true/false)", default="true")
 smtp_user    = ask("SMTP Email")
 smtp_pass    = ask_secret("SMTP Password")
 
+# ── reCAPTCHA ─────────────────────────────────────────────────
+print()
+print("  ── reCAPTCHA v3 ─────────────────────────────────")
+print("  ℹ️   Get your secret key from https://www.google.com/recaptcha/admin")
+print("      This is the PRIVATE key — never share it or put it in the frontend.")
+recaptcha_secret = ask_secret("reCAPTCHA Secret Key")
+
 # ── Advanced ──────────────────────────────────────────────────
 print()
 print("  ── Advanced ─────────────────────────────────────")
@@ -166,6 +173,7 @@ data = {
     "EMAIL_USE_TLS": smtp_tls.lower() != "false",
     "EMAIL_HOST_USER": smtp_user,
     "EMAIL_HOST_PASSWORD": smtp_pass,
+    "RECAPTCHA_SECRET_KEY": recaptcha_secret,
     "ATTACHMENT_STORAGE_PATH": "./data/uploads/attachments",
     "INTERNAL_API_KEY": internal_key,
     "COOKIE_SECRET": cookie_secret,

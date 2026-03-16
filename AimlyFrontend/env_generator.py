@@ -34,9 +34,16 @@ print("      e.g. URL=https://myapp.com        → set port 8000")
 print("      e.g. URL=https://myapp.com:8000   → leave blank")
 vite_port = input("  Backend Port (leave blank to skip) : ").strip()
 
+print()
+print("  ── reCAPTCHA v3 ─────────────────────────────────")
+print("  ℹ️   Get your site key from https://www.google.com/recaptcha/admin")
+print("      Choose reCAPTCHA v3 when registering your site.")
+recaptcha_site_key = ask("reCAPTCHA Site Key (public)")
+
 lines = [f"VITE_BACKEND_URL={vite_url}"]
 if vite_port:
     lines.append(f"VITE_BACKEND_PORT={vite_port}")
+lines.append(f"VITE_RECAPTCHA_SITE_KEY={recaptcha_site_key}")
 
 out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 with open(out_path, "w") as f:

@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, validator
 import jwt
+import httpx
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import re
@@ -26,6 +27,11 @@ JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
 # Internal API Key for scheduler/server-to-server calls
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "internal-secret-key")
 
+# reCAPTCHA v3
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")
+RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
+RECAPTCHA_MIN_SCORE = 0.5
+
 # Password hashing — passlib handles bcrypt version differences cleanly
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -35,6 +41,7 @@ class LoginRequest(BaseModel):
     identifier: str  # username or email
     password: str
     keep_me_logged_in: bool = False
+    captcha_token: str
 
     @validator('identifier')
     def strip_identifier(cls, v):
@@ -49,6 +56,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     confirm_password: str
+    captcha_token: str
 
     @validator('username')
     def validate_username(cls, v):
@@ -89,6 +97,7 @@ class RegisterRequest(BaseModel):
 
 class ForgetPasswordRequest(BaseModel):
     email: str
+    captcha_token: str
 
     @validator('email')
     def strip_email(cls, v):
@@ -226,14 +235,32 @@ def get_current_user(
 # POST /auth/login - Authenticate user and return JWT tokens
 # ==================================================================================
 @auth_router.post("/login/", response_model=TokenResponse)
-def login(request: LoginRequest):
+async def login(request: LoginRequest):
     """
     Authenticate user and return JWT tokens.
     identifier can be username or email.
     If keep_me_logged_in is true, longer access token is issued.
+    Verifies reCAPTCHA v3 token before proceeding.
     """
     if not request.identifier or not request.password:
         raise HTTPException(status_code=400, detail="Username/email and password are required")
+
+    # ── reCAPTCHA verification ────────────────────────────────────────────────
+    if not RECAPTCHA_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="reCAPTCHA not configured on server")
+
+    async with httpx.AsyncClient() as client:
+        captcha_response = await client.post(
+            RECAPTCHA_VERIFY_URL,
+            data={
+                "secret": RECAPTCHA_SECRET_KEY,
+                "response": request.captcha_token,
+            },
+        )
+        captcha_result = captcha_response.json()
+
+    if not captcha_result.get("success") or captcha_result.get("score", 0) < RECAPTCHA_MIN_SCORE:
+        raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -267,12 +294,31 @@ def login(request: LoginRequest):
 # POST /auth/register - Register a new user account
 # ==================================================================================
 @auth_router.post("/register/", response_model=MessageResponse)
-def register(request: RegisterRequest):
+async def register(request: RegisterRequest):
     """
     Register a new user account.
     Creates entries for users, user_keys, and global_settings when the user is registered.
     Both username and email must be unique.
+    Verifies reCAPTCHA v3 token before proceeding.
     """
+    # ── reCAPTCHA verification ────────────────────────────────────────────────
+    if not RECAPTCHA_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="reCAPTCHA not configured on server")
+
+    async with httpx.AsyncClient() as client:
+        captcha_response = await client.post(
+            RECAPTCHA_VERIFY_URL,
+            data={
+                "secret": RECAPTCHA_SECRET_KEY,
+                "response": request.captcha_token,
+            },
+        )
+        captcha_result = captcha_response.json()
+
+    if not captcha_result.get("success") or captcha_result.get("score", 0) < RECAPTCHA_MIN_SCORE:
+        raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
+
+    # ── Database operations ───────────────────────────────────────────────────
     with get_connection() as conn:
         cursor = conn.cursor()
         
@@ -381,10 +427,28 @@ async def forget_password(request: ForgetPasswordRequest):
     """
     Generate a new random password for the user.
     Takes the user's email as payload and sends the new password via email.
+    Verifies reCAPTCHA v3 token before proceeding.
     """
     import secrets
     import string
     from services.email_service import send_email
+
+    # ── reCAPTCHA verification ────────────────────────────────────────────────
+    if not RECAPTCHA_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="reCAPTCHA not configured on server")
+
+    async with httpx.AsyncClient() as client:
+        captcha_response = await client.post(
+            RECAPTCHA_VERIFY_URL,
+            data={
+                "secret": RECAPTCHA_SECRET_KEY,
+                "response": request.captcha_token,
+            },
+        )
+        captcha_result = captcha_response.json()
+
+    if not captcha_result.get("success") or captcha_result.get("score", 0) < RECAPTCHA_MIN_SCORE:
+        raise HTTPException(status_code=400, detail="Captcha verification failed. Please try again.")
 
     with get_connection() as conn:
         cursor = conn.cursor()

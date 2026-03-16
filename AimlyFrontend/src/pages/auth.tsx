@@ -3,10 +3,11 @@
  * Handles login and registration with backend integration
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
-import { EyeIcon,EyeOffIcon } from '../theme/icons';
+import { EyeIcon, EyeOffIcon } from '../theme/icons';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 // Styled Components using theme
 const AuthContainer = styled.div<{ theme: any }>`
   min-height: 100vh;
@@ -292,6 +293,7 @@ const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const { theme } = useTheme();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'neutral'; text: string } | null>(null);
@@ -413,10 +415,17 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (!executeRecaptcha) {
+      setMessage({ type: 'error', text: 'reCAPTCHA not ready. Please try again.' });
+      return;
+    }
+
     setForgotPasswordLoading(true);
     setMessage(null);
 
     try {
+      const captchaToken = await executeRecaptcha('forgot_password');
+
       const response = await fetch(`${API_BASE}/auth/forget_password/`, {
         method: 'POST',
         headers: {
@@ -424,6 +433,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         },
         body: JSON.stringify({
           email: forgotPasswordEmail,
+          captcha_token: captchaToken,
         }),
       });
 
@@ -468,11 +478,18 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       setMessage({ type: 'error', text: 'Username/email and password are required' });
       return;
     }
+
+    if (!executeRecaptcha) {
+      setMessage({ type: 'error', text: 'reCAPTCHA not ready. Please try again.' });
+      return;
+    }
     
     setLoading(true);
     setMessage(null);
 
     try {
+      const captchaToken = await executeRecaptcha('login');
+
       const response = await fetch(`${API_BASE}/auth/login/`, {
         method: 'POST',
         headers: {
@@ -481,7 +498,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         body: JSON.stringify({
           identifier: loginData.identifier,
           password: loginData.password,
-          keep_me_logged_in: loginData.keep_me_logged_in, // Updated field name
+          keep_me_logged_in: loginData.keep_me_logged_in,
+          captcha_token: captchaToken,
         }),
       });
 
@@ -540,10 +558,18 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (!executeRecaptcha) {
+      setMessage({ type: 'error', text: 'reCAPTCHA not ready. Please try again.' });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
     try {
+      // Execute reCAPTCHA v3 silently — no user interaction needed
+      const captchaToken = await executeRecaptcha('register');
+
       const response = await fetch(`${API_BASE}/auth/register/`, {
         method: 'POST',
         headers: {
@@ -553,7 +579,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           username: registerData.username,
           email: registerData.email,
           password: registerData.password,
-          confirm_password: registerData.confirm_password, // Updated field name
+          confirm_password: registerData.confirm_password,
+          captcha_token: captchaToken,
         }),
       });
 
@@ -610,7 +637,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       <AuthContainer theme={theme}>
         <AuthCard theme={theme}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
-            <img src="/favicon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
+            <img src="/icon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
           </div>
           <AuthSubtitle>Email campaign dashboard</AuthSubtitle>
           
