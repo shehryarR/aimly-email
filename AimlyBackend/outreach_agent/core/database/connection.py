@@ -280,6 +280,21 @@ def create_tables() -> None:
         """)
 
         # ------------------------------------------------------------------
+        # Failed Emails — reason log for every status = 'failed' write
+        # ------------------------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS failed_emails (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                email_id   INTEGER NOT NULL,
+                reason     TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email_id)
+                    REFERENCES emails (id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        # ------------------------------------------------------------------
         # Campaign Preference-Attachment Junction Table
         # ------------------------------------------------------------------
         cursor.execute("""

@@ -13,7 +13,6 @@ import time
 import traceback
 import httpx
 from datetime import datetime, timezone
-from core.database.connection import get_connection
 
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "internal-secret-key")
 APP_PORT         = int(os.getenv("APP_PORT", 8000))
@@ -79,10 +78,6 @@ class EmailScheduler:
             except Exception as exc:
                 print(f"❌ Error processing email {email['id']}: {exc}")
                 traceback.print_exc()
-                with get_connection() as conn:
-                    conn.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (email["id"],))
-                    conn.commit()
-                print(f"🔴 Email {email['id']} marked as failed due to exception")
 
     def _dispatch_email(self, email_id: int, user_id: int):
         """Call the send endpoint internally using the internal API key."""
@@ -103,10 +98,6 @@ class EmailScheduler:
             print(f"✅ Email {email_id} dispatched successfully")
         else:
             print(f"❌ Email {email_id} dispatch failed: {response.status_code} — {response.text}")
-            with get_connection() as conn:
-                conn.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (email_id,))
-                conn.commit()
-            print(f"🔴 Email {email_id} marked as failed")
 
 
 # =============================================================================

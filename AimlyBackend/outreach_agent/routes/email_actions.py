@@ -567,6 +567,10 @@ def send_email(
         except Exception as e:
             with get_connection() as conn:
                 conn.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (new_email_id,))
+                conn.execute(
+                    "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                    (new_email_id, f"SMTP exception: {e}"),
+                )
                 conn.commit()
             raise HTTPException(status_code=500, detail=f"SMTP error: {str(e)}")
 
@@ -578,6 +582,10 @@ def send_email(
                 """, (new_email_id,))
             else:
                 cursor.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (new_email_id,))
+                cursor.execute(
+                    "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                    (new_email_id, f"Send failed: {send_result.message}"),
+                )
             conn.commit()
 
         if not send_result.success:
