@@ -637,7 +637,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       <AuthContainer theme={theme}>
         <AuthCard theme={theme}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
-            <img src="/icon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
+            <img src="/favicon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
           </div>
           <AuthSubtitle>Email campaign dashboard</AuthSubtitle>
           
