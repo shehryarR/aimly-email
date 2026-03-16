@@ -122,6 +122,7 @@ def get_campaign_emails(
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN companies co        ON cc.company_id = co.id
             JOIN campaigns camp      ON cc.campaign_id = camp.id
+            LEFT JOIN failed_emails fe ON fe.email_id = e.id
         """
 
         # ── ORDER BY ──────────────────────────────────────────────────────────
@@ -147,7 +148,8 @@ def get_campaign_emails(
                 e.id, e.email_subject, e.email_content, e.recipient_email,
                 e.status, e.sent_at, e.created_at,
                 co.id   AS company_id,
-                co.name AS company_name
+                co.name AS company_name,
+                fe.reason AS failed_reason
             {join_clause}
             WHERE {where_clause}
             {order_clause}
@@ -230,6 +232,7 @@ def get_company_emails(
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns camp      ON cc.campaign_id = camp.id
+            LEFT JOIN failed_emails fe ON fe.email_id = e.id
         """
 
         sort_dir_sql = "ASC" if sort_order and sort_order.lower() == "asc" else "DESC"
@@ -252,7 +255,8 @@ def get_company_emails(
                 e.id, e.email_subject, e.email_content, e.recipient_email,
                 e.status, e.sent_at, e.created_at,
                 camp.id   AS campaign_id,
-                camp.name AS campaign_name
+                camp.name AS campaign_name,
+                fe.reason AS failed_reason
             {join_clause}
             WHERE {where_clause}
             {order_clause}
@@ -706,6 +710,7 @@ def get_all_emails(
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN companies co        ON cc.company_id = co.id
             JOIN campaigns camp      ON cc.campaign_id = camp.id
+            LEFT JOIN failed_emails fe ON fe.email_id = e.id
         """
 
         # ── ORDER BY ──────────────────────────────────────────────────────────
@@ -734,7 +739,8 @@ def get_all_emails(
                 co.id     AS company_id,
                 co.name   AS company_name,
                 camp.id   AS campaign_id,
-                camp.name AS campaign_name
+                camp.name AS campaign_name,
+                fe.reason AS failed_reason
             {join_clause}
             WHERE {where_clause}
             {order_clause}

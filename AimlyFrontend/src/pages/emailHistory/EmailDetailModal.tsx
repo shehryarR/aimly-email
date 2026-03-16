@@ -37,6 +37,8 @@ export interface EmailRecord {
   campaign_name?: string;
   company_id?: number;
   campaign_id?: number;
+  /** populated when status === 'failed' */
+  failed_reason?: string;
 }
 
 export interface AttachOption {
@@ -336,6 +338,23 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                       </FormGroup>
                     )
                 }
+
+                {isFailed && activeEmail.failed_reason && (
+                  <FormGroup>
+                    <FormLabel theme={theme} style={{ color: theme.colors.error?.main || '#ef4444', opacity: 1 }}>
+                      Failure Reason
+                    </FormLabel>
+                    <ReadBlock theme={theme} style={{
+                      fontSize: '0.825rem',
+                      borderColor: (theme.colors.error?.main || '#ef4444') + '40',
+                      background: (theme.colors.error?.main || '#ef4444') + '0d',
+                      color: theme.colors.error?.main || '#ef4444',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {activeEmail.failed_reason}
+                    </ReadBlock>
+                  </FormGroup>
+                )}
               </ModalBody>
 
               <ModalFooter theme={theme}>
