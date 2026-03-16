@@ -28,25 +28,6 @@ const AuthCard = styled.div<{ theme: any }>`
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 `;
 
-const AuthTitle = styled.h1<{ theme: any }>`
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  text-align: center;
-  margin-bottom: 0.25rem;
-  line-height: 1;
-`;
-
-const AuthWordmarkLight = styled.span<{ theme: any }>`
-  font-weight: 300;
-  letter-spacing: -0.025em;
-  color: ${props => props.theme.colors.primary.main};
-`;
-
-const AuthWordmarkDot = styled.span<{ theme: any }>`
-  font-weight: 800;
-  color: ${props => props.theme.colors.primary.main};
-`;
 
 const AuthSubtitle = styled.p`
   font-size: 0.7rem;
@@ -628,7 +609,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     <>
       <AuthContainer theme={theme}>
         <AuthCard theme={theme}>
-          <AuthTitle theme={theme}>Aim<AuthWordmarkLight theme={theme}>ly</AuthWordmarkLight><AuthWordmarkDot theme={theme}>.</AuthWordmarkDot></AuthTitle>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            <img src="/favicon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
+          </div>
           <AuthSubtitle>Email campaign dashboard</AuthSubtitle>
           
           <TabContainer>

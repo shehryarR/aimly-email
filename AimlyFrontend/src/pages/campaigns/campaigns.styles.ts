@@ -69,51 +69,82 @@ export const HeroCard = styled.div<{ theme: any }>`
   }
 `;
 
-export const HeroTop = styled.div`
+export const HeroCommandBar = styled.div<{ theme: any }>`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 1.75rem 2rem 1.5rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   gap: 1rem;
 `;
 
-export const HeroLogoBlock = styled.div`
+export const HeroBarLeft = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 0.75rem;
 `;
 
-export const HeroWordmark = styled.div`
+export const HeroBarTitle = styled.span<{ theme: any }>`
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: ${p => p.theme.colors.base.content};
+  letter-spacing: -0.01em;
+`;
+
+export const HeroBarSep = styled.div<{ theme: any }>`
+  width: 1px;
+  height: 14px;
+  background-color: ${p => p.theme.colors.base[300]};
+`;
+
+export const HeroBarDate = styled.span<{ theme: any }>`
+  font-size: 0.75rem;
+  color: ${p => p.theme.colors.base.content};
+  opacity: 0.45;
+  font-weight: 400;
+`;
+
+export const HeroBarRight = styled.div`
   display: flex;
-  align-items: baseline;
-  line-height: 1;
+  align-items: center;
+  gap: 0.375rem;
 `;
 
-export const HeroWordmarkHeavy = styled.span`
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.045em;
+export const HeroNavBtn = styled.button<{ theme: any }>`
+  height: 28px;
+  padding: 0 0.625rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background-color: ${p => p.theme.colors.base[400]};
+  color: ${p => p.theme.colors.base.content};
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0.75;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  &:hover {
+    border-color: ${p => p.theme.colors.primary.main};
+    color: ${p => p.theme.colors.primary.main};
+    opacity: 1;
+  }
 `;
 
-export const HeroWordmarkLight = styled.span<{ theme: any }>`
-  font-size: 2rem;
-  font-weight: 300;
-  letter-spacing: -0.025em;
-  color: ${p => p.theme.colors.primary.main};
-`;
-
-export const HeroWordmarkDot = styled.span<{ theme: any }>`
-  font-size: 2rem;
-  font-weight: 800;
-  color: ${p => p.theme.colors.primary.main};
-`;
-
-export const HeroTagline = styled.p`
+export const HeroNavBtnCount = styled.span<{ theme: any }>`
   font-size: 0.7rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.4;
-  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background-color: ${p => p.theme.colors.base[300]};
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 16px;
 `;
 
 export const HeroStatsStrip = styled.div<{ theme: any }>`
@@ -215,40 +246,7 @@ export const CompaniesButton = styled.button<{ theme: any }>`
   }
 `;
 
-// Nav icon buttons sit inside HeroCard (base[200]) — use base[400] to match entries
-export const NavIconButton = styled.button<{ theme: any }>`
-  position: relative;
-  height: 32px;
-  padding: 0 0.6rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: ${p => p.theme.radius.field};
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  background-color: ${p => p.theme.colors.base[400]};
-  color: ${p => p.theme.colors.base.content};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0.75;
-  flex-shrink: 0;
-
-  svg { width: 15px; height: 15px; flex-shrink: 0; }
-
-  &:hover {
-    border-color: ${p => p.theme.colors.primary.main};
-    color: ${p => p.theme.colors.primary.main};
-    background-color: ${p => p.theme.colors.base[400]};
-    opacity: 1;
-  }
-`;
-
-export const NavIconCount = styled.span`
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  opacity: 0.8;
-  line-height: 1;
-`;
+// NavIconButton / NavIconCount removed — replaced by HeroNavBtn / HeroNavBtnCount
 
 export const StatsGrid = styled.div`
   display: grid;
