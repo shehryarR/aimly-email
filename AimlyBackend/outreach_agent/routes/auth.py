@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, validator
 import jwt
-import bcrypt
+from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import re
 import os
@@ -22,10 +22,13 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_HOURS = 24
 JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
-BCRYPT_ROUNDS = 12
 
 # Internal API Key for scheduler/server-to-server calls
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "internal-secret-key")
+
+# Password hashing — passlib handles bcrypt version differences cleanly
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 # Pydantic Models
 class LoginRequest(BaseModel):
@@ -111,21 +114,18 @@ class MessageResponse(BaseModel):
     message: str
     success: bool = True
 
+
+# ==================================================================================
 # Utility Functions
+# ==================================================================================
+
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    if isinstance(password, str):
-        password = password.encode('utf-8')
-    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
-    return bcrypt.hashpw(password, salt).decode('utf-8')
+    """Hash a password using bcrypt via passlib."""
+    return pwd_context.hash(password)
 
 def verify_password(password: str, hashed: str) -> bool:
     """Verify a password against its hashed version."""
-    if isinstance(password, str):
-        password = password.encode('utf-8')
-    if isinstance(hashed, str):
-        hashed = hashed.encode('utf-8')
-    return bcrypt.checkpw(password, hashed)
+    return pwd_context.verify(password, hashed)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token."""
