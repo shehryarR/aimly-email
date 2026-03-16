@@ -229,7 +229,7 @@ interface AddCompanyModalProps {
   apiBase: string;
   initialTab?: ModalTab;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (active: number) => void;
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -339,7 +339,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   const showResult = (r: AddResult) => {
     setResult(r);
     if (r.type === 'success') {
-      setTimeout(() => { resetAll(); onSuccess(); onClose(); }, 1400);
+      setTimeout(() => { resetAll(); onSuccess(0); onClose(); }, 1400);
     }
   };
 
@@ -378,7 +378,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   // ── Submit CSV — close immediately, fire in background ──────
   const submitCsv = () => {
     if (!csvFile) { setResult({ type: 'error', text: 'Select a CSV file first' }); return; }
-    resetAll(); onSuccess(); onClose();
+    resetAll(); onSuccess(0); onClose();
     const formData = new FormData();
     formData.append('file', csvFile);
     apiFetch(`${apiBase}/company/`, { method: 'POST', body: formData })
@@ -388,7 +388,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   // ── Submit AI — close immediately, fire in background ───────
   const submitAi = () => {
     if (!aiQuery.trim()) { setResult({ type: 'error', text: 'Enter a search query' }); return; }
-    resetAll(); onSuccess(); onClose();
+    resetAll(); onSuccess(0); onClose();
     const formData = new FormData();
     formData.append('ai_search', JSON.stringify({
       query: aiQuery.trim(),

@@ -139,7 +139,7 @@ interface Props {
 
 // ════════════════════════════════════════════════════════════
 const AddCompaniesToCategoryModal: React.FC<Props> = ({
-  isOpen, category, existingCompanyIds, theme, onSave, onClose,
+  isOpen, category, theme, onSave, onClose,
 }) => {
   const [enrollSearch,  setEnrollSearch]  = useState('');
   const [enrollList,    setEnrollList]    = useState<Company[]>([]);

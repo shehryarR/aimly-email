@@ -209,21 +209,6 @@ const PanelSubtitle = styled.p<{ theme: any }>`
   line-height: 1.5;
 `;
 
-const SectionContent = styled.div<{ theme: any; $isExpanded: boolean }>`
-  overflow: hidden;
-  max-height: ${p => p.$isExpanded ? '1000px' : '0'};
-  opacity: ${p => p.$isExpanded ? 1 : 0};
-  transition: max-height 0.28s ease, opacity 0.2s ease;
-  padding: ${p => p.$isExpanded ? '1.25rem' : '0 1.25rem'};
-  margin-top: -1px;
-  border: 1px solid ${p => p.$isExpanded ? p.theme.colors.base[300] : 'transparent'};
-  border-top: none;
-  border-radius: 0 0 ${p => p.theme.radius.field} ${p => p.theme.radius.field};
-  background: ${p => p.$isExpanded ? p.theme.colors.base[400] : 'transparent'};
-  margin-bottom: ${p => p.$isExpanded ? '1rem' : '0'};
-  pointer-events: ${p => p.$isExpanded ? 'auto' : 'none'};
-`;
-
 const Msg = styled.div<{ theme: any; $type: 'success'|'error'|'info'|'checking'|'warning' }>`
   padding: 0.5rem 0.75rem;
   border-radius: ${p => p.theme.radius.field};
@@ -236,79 +221,6 @@ const Msg = styled.div<{ theme: any; $type: 'success'|'error'|'info'|'checking'|
     warning:  `color:${p.theme.colors.warning?.main||'#F59E0B'}; background:${p.theme.colors.base[200]}; border:1px solid ${p.theme.colors.warning?.main||'#F59E0B'};`,
     info:     `color:${p.theme.colors.info.main}; background:${p.theme.colors.base[200]}; border:1px solid ${p.theme.colors.info.main};`,
   }[p.$type])}
-`;
-
-const HelpTooltip = styled.div<{ theme: any }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: ${p => p.theme.colors.base[300]};
-  color: ${p => p.theme.colors.base.content};
-  font-size: 0.7rem;
-  cursor: help;
-  position: relative;
-  
-  &:hover {
-    background: ${p => p.theme.colors.primary.main};
-    color: ${p => p.theme.colors.primary.content};
-  }
-`;
-
-// ── PER-COMPANY INHERIT ROW STYLES (for bulk actions) ────────
-const InheritRowStyle = styled.div<{ theme: any; $active: boolean }>`
-  display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem;
-  border: 1px solid ${p => p.$active ? p.theme.colors.primary.main + '80' : p.theme.colors.base[300]};
-  border-radius: ${p => p.theme.radius.field};
-  background: ${p => p.$active ? p.theme.colors.primary.main + '08' : p.theme.colors.base[200]};
-  cursor: pointer; transition: all 0.2s;
-  &:hover {
-    border-color: ${p => p.theme.colors.primary.main};
-    background: ${p => p.theme.colors.primary.main + '0d'};
-  }
-`;
-
-const InheritCheckboxStyle = styled.div<{ theme: any; $checked: boolean; $mixed?: boolean }>`
-  width: 18px; height: 18px; min-width: 18px; border-radius: 4px; margin-top: 1px; flex-shrink: 0;
-  border: 2px solid ${p => 
-    p.$checked ? p.theme.colors.primary.main : 
-    p.$mixed ? (p.theme.colors.warning?.main || '#f59e0b') : 
-    p.theme.colors.base[300]
-  };
-  background: ${p => p.$checked ? p.theme.colors.primary.main : 'transparent'};
-  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
-  svg { width: 10px; height: 10px; color: white; display: block; }
-`;
-
-const InheritContentStyle = styled.div`
-  flex: 1; min-width: 0;
-`;
-
-const InheritLabelStyle = styled.div`
-  font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-`;
-
-const InheritDescriptionStyle = styled.div`
-  font-size: 0.775rem; opacity: 0.55; margin-top: 0.1rem; line-height: 1.4;
-`;
-
-const MixedBadgeStyle = styled.span<{ theme: any }>`
-  font-size: 0.67rem; font-weight: 600; padding: 1px 6px; border-radius: 999px;
-  background: ${p => (p.theme.colors.warning?.main || '#f59e0b')}20;
-  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
-  border: 1px solid ${p => (p.theme.colors.warning?.main || '#f59e0b')}40;
-  margin-left: 0.5rem;
-`;
-
-// ── ORIGINAL BULK COMPONENTS ─────────────────────────────────
-const BulkCheckbox = styled.div<{ theme: any; $on: boolean; $mixed?: boolean }>`
-  width:18px;height:18px;min-width:18px;border-radius:4px;flex-shrink:0;
-  border:2px solid ${p => p.$on ? p.theme.colors.primary.main : p.$mixed ? (p.theme.colors.warning?.main||'#f59e0b') : p.theme.colors.base[300]};
-  background:${p => p.$on ? p.theme.colors.primary.main : 'transparent'};
-  display:flex;align-items:center;justify-content:center;transition:all 0.15s;
-  svg{width:10px;height:10px;stroke:white;display:${p => p.$on ? 'block' : 'none'};}
 `;
 
 // Warning / info banners
@@ -344,6 +256,13 @@ const LoadBox = styled.div`
 const FieldLbl = styled.div<{ theme: any }>`
   font-size:0.72rem;font-weight:600;opacity:0.5;margin-bottom:0.3rem;
   text-transform:uppercase;letter-spacing:0.04em;
+`;
+const MixedBadgeStyle = styled.span<{ theme: any }>`
+  font-size: 0.67rem; font-weight: 600; padding: 1px 6px; border-radius: 999px;
+  background: ${p => (p.theme.colors.warning?.main || '#f59e0b')}20;
+  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
+  border: 1px solid ${p => (p.theme.colors.warning?.main || '#f59e0b')}40;
+  margin-left: 0.5rem;
 `;
 const SubjectIn = styled.input<{ theme: any }>`
   width:100%;padding:0.65rem 0.9rem;
@@ -458,16 +377,6 @@ const LogoRemoveButton = styled.button<{ theme: any }>`
   }
 `;
 
-const LogoPlaceholder = styled.div`
-  display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
-  pointer-events: none; opacity: 0.4;
-  font-size: 0.75rem;
-`;
-
-const SaveRow = styled.div`
-  display: flex; justify-content: flex-end; margin-top: 1rem;
-`;
-
 // Misc
 const SaveBtn = styled.button<{ theme: any }>`
   padding:0.55rem 1.3rem;border-radius:${p => p.theme.radius.field};
@@ -561,7 +470,6 @@ const SplitMenuItem = styled.button<{ theme: any }>`
 const IcoEmail     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const IcoClip      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
 const IcoBrand     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-const IcoSettings  = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
 const IcoRegen     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>;
 const IcoPersonal  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>;
 const IcoTemplate  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
@@ -571,7 +479,6 @@ const IcoCheck     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IcoUpload    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 const IcoSearch    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IcoWarn      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-const IcoInfo      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const IcoLogoPlaceholder = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
 
 const ConfirmOverlay = styled.div<{ $open: boolean }>`
@@ -1096,6 +1003,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const genPct      = genProg.total>0 ? Math.round(genProg.done/genProg.total*100) : 0;
   const allSettled  = entries.length > 0 && entries.every(e => e.phase === 'ready' || e.phase === 'error');
   const doneCount   = entries.filter(e => e.phase === 'ready' || e.phase === 'error').length;
+  const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv'];
 
   if (!isOpen) return null;
 

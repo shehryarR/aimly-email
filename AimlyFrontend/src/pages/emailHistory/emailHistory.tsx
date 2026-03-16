@@ -333,7 +333,7 @@ interface EmailDetailModalProps {
   isDragOver: boolean;
   onDragOver: () => void; onDragLeave: () => void;
   onDrop: (file: File) => void; onClearUploadFile: () => void;
-  uploadInputRef: React.RefObject<HTMLInputElement>;
+  uploadInputRef: React.RefObject<HTMLInputElement | null>;
   brandSignature: string;
   onBrandSignatureChange: (v: string) => void;
   brandLogoData: string | null;
@@ -343,7 +343,7 @@ interface EmailDetailModalProps {
   onSaveBranding: () => void;
   brandSaving: boolean;
   brandMsg: { type: 'success' | 'error'; text: string } | null;
-  brandLogoInputRef: React.RefObject<HTMLInputElement>;
+  brandLogoInputRef: React.RefObject<HTMLInputElement | null>;
   formatDT: (s?: string) => string;
   minDT: string;
   theme: any;

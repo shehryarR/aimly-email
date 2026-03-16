@@ -15,7 +15,6 @@ import type { CampaignOption, Company } from './companies.types';
 // ── Animations ─────────────────────────────────────────────
 const spin      = keyframes`from{transform:rotate(0deg)}to{transform:rotate(360deg)}`;
 const fadeSlide = keyframes`from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}`;
-const pulse     = keyframes`0%,100%{opacity:1}50%{opacity:0.5}`;
 
 // ── Styled components (mirrors AddCompaniesToCategoryModal) ─
 const FL = styled.label<{ theme: any }>`

@@ -608,15 +608,6 @@ const FTA = styled.textarea<{ theme: any }>`
   &:focus { outline: none; border-color: ${p => p.theme.colors.primary.main}; background: ${p => p.theme.colors.base[100]}; box-shadow: 0 0 0 3px ${p => p.theme.colors.primary.main}18; }
   &::placeholder { opacity: 0.4; }
 `;
-const CountSel = styled.select<{ theme: any }>`
-  width: 100%; padding: 0.625rem 0.875rem;
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  border-radius: ${p => p.theme.radius.field};
-  background: ${p => p.theme.colors.base[200]};
-  color: ${p => p.theme.colors.base.content};
-  font-size: 0.875rem; box-sizing: border-box; transition: all 0.2s;
-  &:focus { outline: none; border-color: ${p => p.theme.colors.primary.main}; }
-`;
 const SubmitBtn = styled.button<{ theme: any }>`
   display: inline-flex; align-items: center; gap: 0.5rem;
   padding: 0.65rem 1.5rem;
@@ -1129,12 +1120,6 @@ const UploadIcon = () => (
     <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
   </svg>
 );
-const RefreshIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 4 23 10 17 10"/>
-    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-  </svg>
-);
 const MagnifyIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -1159,11 +1144,6 @@ const CheckSmallIcon = () => (
 const PaperclipIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-  </svg>
-);
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
   </svg>
 );
 const InheritIcon = () => (
@@ -2316,7 +2296,7 @@ interface AddCompaniesModalProps {
   theme: any;
   apiBase: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (active: number) => void;
   onToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) => void;
 }
 
@@ -2509,10 +2489,6 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   };
   useEffect(() => { if (tab === 'ai' && tvStatus === 'idle') checkTavily(); }, [tab]);
 
-  const showResult = (r: AddModalResult) => {
-    setResult(r);
-  };
-
   const submitEnroll = async () => {
     const toEnroll = Array.from(selectedIds).filter(id => !enrolledIds.has(id));
     const toUnenroll = Array.from(toRemoveIds);
@@ -2563,7 +2539,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   const submitCsv = async () => {
     if (!csvFile) { setResult({ type: 'error', text: 'Select a CSV file first' }); return; }
     // Close modal and show spinner immediately, then fire request in background
-    resetAll(); onSuccess(); onClose();
+    resetAll(); onSuccess(0); onClose();
     const fd = new FormData(); fd.append('file', csvFile); fd.append('campaign_id', String(campaignId));
     apiFetch(`${apiBase}/company/`, { method: 'POST', body: fd })
       .catch(() => { /* silent — polling will stop naturally */ });
@@ -2572,14 +2548,14 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   const submitAi = async () => {
     if (!aiQuery.trim()) { setResult({ type: 'error', text: 'Enter a search query' }); return; }
     // Close modal and show spinner immediately, then fire request in background
-    resetAll(); onSuccess(); onClose();
+    resetAll(); onSuccess(0); onClose();
     const fd = new FormData(); fd.append('ai_search', JSON.stringify({ query: aiQuery.trim(), limit: aiLimit, include_phone: aiIncludePhone, include_address: aiIncludeAddress, include_company_info: aiIncludeInfo })); fd.append('campaign_id', String(campaignId));
     apiFetch(`${apiBase}/company/`, { method: 'POST', body: fd })
       .catch(() => { /* silent — polling will stop naturally */ });
   };
 
   const handleSubmit = () => {
-    onSuccess(); onClose();
+    onSuccess(0); onClose();
     if (tab === 'enroll') submitEnroll();
     else if (tab === 'manual') submitManual();
     else if (tab === 'csv') submitCsv();

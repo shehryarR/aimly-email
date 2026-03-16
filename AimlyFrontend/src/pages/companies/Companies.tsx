@@ -11,13 +11,13 @@ import {
   PageContainer, MainContent,
   HeaderCard, HeaderRow, HeaderCenter, HeaderTitle, HeaderSubtitle,
   ListSection, SectionHeader, SectionTitle, CountBadge, AddButton,
-  SearchWrapper, SearchIconWrap, SearchClearBtn, SearchInput, FilterBar, FilterChip,
+  SearchWrapper, SearchIconWrap, SearchClearBtn, SearchInput,
   DropdownWrap, DropdownTrigger, DropdownBadge, DropdownMenu,
   DropdownSearch, DropdownItem,
   BulkActionsBar, BulkLeft, BulkRight,
-  Checkbox, CompanyCard, CompanyRow, CompanyAvatar,
+  Checkbox, CompanyCard, CompanyRow,
   CompanyInfo, CompanyName, CompanyEmail, CompanyMeta, MetaItem,
-  CampaignTagsRow, CampaignTag, CategoryTag, CompanyActionButtons, IconButton,
+  CampaignTag, CategoryTag, CompanyActionButtons, IconButton,
   EmptyState, EmptyIcon, EmptyTitle, EmptySubtitle,
   PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
   ToastContainer, ToastItem, ToastMsg,
@@ -173,12 +173,6 @@ const EyeIcon = () => (
     <circle cx="12" cy="12" r="3"/>
   </svg>
 );
-const MailHistoryIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-    <polyline points="22,6 12,13 2,6"/>
-  </svg>
-);
 const ChevronDown = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="11" height="11">
     <polyline points="6 9 12 15 18 9"/>
@@ -204,12 +198,9 @@ const FilterIcon = () => (
 );
 
 // ── Helpers ──────────────────────────────────────────────────
-const getInitials = (name: string) =>
-  name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-
 const downloadCompaniesCSV = (
   companies: CompanyWithCampaigns[],
-  campaignNameMap: Map<number, string>,
+  _campaignNameMap: Map<number, string>,
   filename: string
 ) => {
   const headers = ['company_name', 'email', 'company_info', 'phone_number', 'address'];
@@ -247,7 +238,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
   const { authReady } = useAuth();
 
   const [allCampaigns,        setAllCampaigns]        = useState<CampaignOption[]>([]);
-  const [campaignCompanyMap,  setCampaignCompanyMap]  = useState<Map<number, Set<number>>>(new Map());
+  const [campaignCompanyMap,  setCampaignCompanyMap]  = useState<Map<number, Set<number>>>(new Map()); void campaignCompanyMap;
   const [allCategories,       setAllCategories]       = useState<CampaignOption[]>([]);
   const [categoryCompanyMap,  setCategoryCompanyMap]  = useState<Map<number, Set<number>>>(new Map());
   const [pageCompanies,      setPageCompanies]      = useState<CompanyWithCampaigns[]>([]);
@@ -418,7 +409,6 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     if (!authReady) return;
     const load = async () => {
       try {
-        const h = {};
         const list: CampaignOption[] = [];
         let page = 1;
         while (true) {
@@ -463,7 +453,6 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     if (!allCampaigns.length) return;
     const build = async () => {
       try {
-        const h = {};
         const map = new Map<number, Set<number>>();
         await Promise.allSettled(allCampaigns.map(async (c) => {
           const ids = new Set<number>();
@@ -764,8 +753,6 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     const allIds = selectAllPages ? await fetchAllIds() : Array.from(selectedIds);
     const selectedCompanyIds = selectAllPages ? allIds : pageCompanies.filter(c => selectedIds.has(c.id) && !c.optedOut).map(c => c.id);
     try {
-      const h: Record<string, string> = { 'Content-Type': 'application/json',
-      };
       for (const cid of toEnroll) {
         const res = await apiFetch(`${API_BASE}/campaign/${cid}/company/`, {
           method: 'POST', body: JSON.stringify(selectedCompanyIds),
