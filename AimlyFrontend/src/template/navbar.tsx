@@ -215,7 +215,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       <LeftSection>
         <LogoContainer>
           <LogoImage src="/logo.png" alt="Aimly" />
-          <AppName theme={theme}>Aimly</AppName>
         </LogoContainer>
         {!isAuthPage && pageTitle && pageTitle !== 'Dashboard' && (
           <PageTitle theme={theme}>{pageTitle}</PageTitle>

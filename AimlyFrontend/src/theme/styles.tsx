@@ -104,42 +104,42 @@ const darkTheme: Theme = {
   colorScheme: 'dark',
   colors: {
     primary: {
-      main: 'oklch(41.703% 0.099 251.473)', // Your perfect blue - keep as is
-      content: 'oklch(88.34% 0.019 251.473)',
+      main: '#164562',              // logo navy
+      content: '#e1eeea',          // logo mint — readable on navy
     },
     secondary: {
-      main: 'oklch(64.092% 0.027 229.389)',
-      content: 'oklch(12.818% 0.005 229.389)',
+      main: '#0f3347',              // navy darkened for secondary surfaces
+      content: '#e1eeea',
     },
     accent: {
-      main: 'oklch(67.271% 0.167 35.791)',
-      content: 'oklch(13.454% 0.033 35.791)',
+      main: '#1bb596',              // logo teal
+      content: '#0a1f1b',          // dark teal for text on accent
     },
     neutral: {
-      main: '#28282c',
-      content: '#f4f4f5',
+      main: '#1c2a30',              // navy-tinted dark neutral
+      content: '#e1eeea',
     },
     base: {
-      100: '#09090b', // Page background — pure OLED black (outermost, darkest)
-      200: '#111113', // Sections/cards — one step lighter
-      300: '#1c1c1f', // Borders
-      400: '#1e1e22', // Sub-items inside cards — lightest layer
-      content: '#f4f4f5', // Primary text
+      100: '#09090b',               // OLED black (unchanged — pure dark bg)
+      200: '#0d1a22',               // navy-tinted dark surface
+      300: '#122030',               // borders
+      400: '#1a2e3a',               // sub-items inside cards
+      content: '#e1eeea',          // logo mint — primary text
     },
     info: {
-      main: 'oklch(62.616% 0.143 240.033)',
-      content: 'oklch(98% 0.02 240.033)',
+      main: '#1490b8',              // teal-shifted blue
+      content: '#e1eeea',
     },
     success: {
-      main: 'oklch(70.226% 0.094 156.596)',
-      content: 'oklch(98% 0.02 156.596)',
+      main: '#1bb596',              // logo teal doubles as success
+      content: '#051a14',
     },
     warning: {
-      main: 'oklch(77.482% 0.115 81.519)',
+      main: 'oklch(77.482% 0.115 81.519)',  // keep amber as-is
       content: 'oklch(98% 0.02 81.519)',
     },
     error: {
-      main: 'oklch(51.61% 0.146 29.674)',
+      main: 'oklch(51.61% 0.146 29.674)',   // keep red as-is
       content: 'oklch(98% 0.02 29.674)',
     },
   },
@@ -150,15 +150,15 @@ const darkTheme: Theme = {
   },
   emailStatus: {
     sent: {
-      color: '#22c55e',
-      background: '#0b1a10',
-      border: '#163d20',
+      color: '#1bb596',
+      background: '#051a14',
+      border: '#0a2e22',
       icon: '✅',
     },
     read: {
-      color: '#60a5fa',
-      background: '#0b0f1a',
-      border: '#131c33',
+      color: '#1490b8',
+      background: '#061520',
+      border: '#0e2535',
       icon: '👁️',
     },
     failed: {
@@ -174,60 +174,58 @@ const darkTheme: Theme = {
       icon: '📝',
     },
     scheduled: {
-      color: '#fb923c',
-      background: '#1a110b',
-      border: '#331e0e',
+      color: '#e1eeea',
+      background: '#0d1a22',
+      border: '#1a2e3a',
       icon: '🕐',
     },
     untouched: {
-      color: '#71717a',
-      background: '#0f0f11',
-      border: '#1c1c1f',
+      color: '#5a7a85',
+      background: '#0d1a22',
+      border: '#1a2e3a',
       icon: '⚪',
     },
   },
   toggleIcon: '☀️',
 };
 
-
-// Light Theme
 const lightTheme: Theme = {
   name: 'light',
   colorScheme: 'light',
   colors: {
     primary: {
-      main: 'oklch(90% 0.15 50.934)',
-      content: 'oklch(12% 0.042 264.695)',
+      main: '#164562',              // logo navy — strong CTA color
+      content: '#e1eeea',          // logo mint — text on navy buttons
     },
     secondary: {
-      main: 'oklch(80% 0.19 30)',
-      content: 'oklch(100% 0 0)',
+      main: '#2a6b8a',              // navy lightened for secondary
+      content: '#e1eeea',
     },
     accent: {
-      main: 'oklch(70.616% 0.143 240.033)',
-      content: 'oklch(12% 0.042 264.695)',
+      main: '#1bb596',              // logo teal
+      content: '#ffffff',
     },
     neutral: {
-      main: 'oklch(76.662% 0.135 153.45)',
-      content: 'oklch(98.462% 0.001 247.838)',
+      main: '#c8dbd5',              // muted mint-grey neutral
+      content: '#164562',          // navy text on neutral
     },
     base: {
-      100: '#d8dce5', // Page background — least white (outermost canvas)
-      200: '#e8ebf0', // Sections/cards — noticeably lighter
-      300: '#c4c9d4', // Borders
-      400: '#f5f6f8', // Sub-items inside cards — near white (innermost, lightest)
-      content: 'oklch(35.519% 0.032 262.988)', // Primary text — unchanged
+      100: '#e1eeea',               // logo mint — outermost canvas bg
+      200: '#edf4f1',               // cards/sections — lighter mint
+      300: '#c8dbd5',               // borders — slightly deeper mint
+      400: '#f5faf8',               // sub-items — near white
+      content: '#164562',          // logo navy — primary text
     },
     info: {
-      main: 'oklch(72.06% 0.191 231.6)',
-      content: 'oklch(0% 0 0)',
+      main: '#1490b8',
+      content: '#ffffff',
     },
     success: {
-      main: 'oklch(64.8% 0.15 160)',
-      content: 'oklch(0% 0 0)',
+      main: '#1bb596',              // logo teal
+      content: '#ffffff',
     },
     warning: {
-      main: 'oklch(65% 0.18 65)', // Deep amber - strong contrast on light bg
+      main: 'oklch(65% 0.18 65)',
       content: 'oklch(0% 0 0)',
     },
     error: {
@@ -242,15 +240,15 @@ const lightTheme: Theme = {
   },
   emailStatus: {
     sent: {
-      color: 'oklch(64.8% 0.15 160)',
-      background: 'oklch(95% 0.05 160)',
-      border: 'oklch(80% 0.12 160)',
+      color: '#0e7a5e',
+      background: '#cce8e1',
+      border: '#9dd3c7',
       icon: '✅',
     },
     read: {
-      color: 'oklch(72.06% 0.191 231.6)',
-      background: 'oklch(95% 0.08 231.6)',
-      border: 'oklch(85% 0.15 231.6)',
+      color: '#1490b8',
+      background: '#cce5f0',
+      border: '#99ccde',
       icon: '👁️',
     },
     failed: {
@@ -260,21 +258,21 @@ const lightTheme: Theme = {
       icon: '❌',
     },
     draft: {
-      color: 'oklch(65% 0.18 65)',        // Deep amber - matches warning color
+      color: 'oklch(65% 0.18 65)',
       background: 'oklch(95% 0.06 65)',
       border: 'oklch(82% 0.13 65)',
       icon: '📝',
     },
     scheduled: {
-      color: 'oklch(70.616% 0.143 240.033)',
-      background: 'oklch(95% 0.05 240.033)',
-      border: 'oklch(85% 0.12 240.033)',
+      color: '#164562',
+      background: '#d4e4ee',
+      border: '#a8c8db',
       icon: '🕐',
     },
     untouched: {
-      color: 'oklch(76.662% 0.135 153.45)',
-      background: 'oklch(95% 0.05 153.45)',
-      border: 'oklch(88% 0.11 153.45)',
+      color: '#4a7a70',
+      background: '#d8ece7',
+      border: '#b0d4cc',
       icon: '⚪',
     },
   },
