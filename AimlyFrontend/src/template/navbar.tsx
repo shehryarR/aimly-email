@@ -39,7 +39,6 @@ const LogoImage = styled.img`
   width: auto;
 `;
 
-
 const PageTitle = styled.span<{ theme: any }>`
   font-size: 0.875rem;
   color: ${props => props.theme.colors.base.content};
@@ -56,34 +55,7 @@ const PageTitle = styled.span<{ theme: any }>`
 const RightSection = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-`;
-
-const IconButton = styled.button<{ theme: any }>`
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: ${props => props.theme.radius.field};
-  border: 1px solid ${props => props.theme.colors.base[300]};
-  background: ${props => props.theme.colors.base[100]};
-  color: ${props => props.theme.colors.base.content};
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 1.125rem;
-
-  &:hover {
-    background-color: ${props => props.theme.colors.base[200]};
-    border-color: ${props => props.theme.colors.primary.main};
-    color: ${props => props.theme.colors.primary.main};
-  }
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
+  gap: 0.75rem;
 `;
 
 const ToggleSwitch = styled.button<{ theme: any; isDark: boolean }>`
@@ -130,43 +102,27 @@ const ToggleThumb = styled.div<{ theme: any; isDark: boolean }>`
   }
 `;
 
-const UserInfo = styled.div<{ theme: any }>`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: ${props => props.theme.radius.field};
-  background-color: ${props => props.theme.colors.base[200]};
-  border: 1px solid ${props => props.theme.colors.base[300]};
-`;
-
 const UserAvatar = styled.div<{ theme: any }>`
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background-color: ${props => props.theme.colors.primary.main};
   color: ${props => props.theme.colors.primary.content};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-`;
-
-const Username = styled.span<{ theme: any }>`
-  color: ${props => props.theme.colors.base.content};
   font-size: 0.875rem;
   font-weight: 500;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 0 0 2px ${props => props.theme.colors.base[100]},
+                0 0 0 4px ${props => props.theme.colors.primary.main};
+  }
 `;
 
 // SVG Icons
-const SettingsIcon = () => (
-  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
-
 const SunIcon = () => (
   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -215,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </LeftSection>
 
       <RightSection>
-        <ToggleSwitch 
+        <ToggleSwitch
           theme={theme}
           isDark={themeMode === 'dark'}
           onClick={handleThemeToggle}
@@ -227,23 +183,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </ToggleThumb>
         </ToggleSwitch>
 
-        {!isAuthPage && user && onSettingsClick && (
-          <IconButton 
+        {!isAuthPage && user && (
+          <UserAvatar
             theme={theme}
             onClick={onSettingsClick}
-            title="Settings"
+            title={user.username}
           >
-            <SettingsIcon />
-          </IconButton>
-        )}
-
-        {!isAuthPage && user && (
-          <UserInfo theme={theme}>
-            <UserAvatar theme={theme}>
-              {user.username.charAt(0).toUpperCase()}
-            </UserAvatar>
-            <Username theme={theme}>{user.username}</Username>
-          </UserInfo>
+            {user.username.charAt(0).toUpperCase()}
+          </UserAvatar>
         )}
       </RightSection>
     </NavbarContainer>
