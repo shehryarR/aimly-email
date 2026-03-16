@@ -30,13 +30,15 @@ const AuthCard = styled.div<{ theme: any }>`
 `;
 
 
-const AuthSubtitle = styled.p`
-  font-size: 0.7rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.4;
+const AuthSubtitle = styled.p<{ theme: any }>`
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: none; // important: allow normal capitalization
+  opacity: 0.7;
   text-align: center;
-  margin: 0 0 2rem 0;
+  margin: 0 0 1.5rem 0;
+  font-weight: 500;
+  color: ${props => props.theme.colors.primary.main};
 `;
 
 const TabContainer = styled.div`
@@ -639,7 +641,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
             <img src="/favicon.png" alt="Aimly" style={{ height: '44px', width: 'auto' }} />
           </div>
-          <AuthSubtitle>Email campaign dashboard</AuthSubtitle>
+        <AuthSubtitle theme={theme}>
+          <span style={{ fontWeight: 600 }}>Aimly Email</span>: email the AI way
+        </AuthSubtitle>
           
           <TabContainer>
             <Tab 
