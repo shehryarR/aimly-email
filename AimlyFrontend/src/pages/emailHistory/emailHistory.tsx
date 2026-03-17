@@ -67,6 +67,9 @@ interface EmailRecord {
   campaign_name: string;
   signature?: string;
   logo_data?: string | null;
+  // FIX: added missing field — backend returns this but it was absent from the type,
+  // which caused the modal to never receive it and therefore never render it.
+  failed_reason?: string;
 }
 
 interface AttachOption {
@@ -169,17 +172,6 @@ const CloseButton = styled.button<{ theme: any }>`
   opacity: 0.6; transition: all 0.2s ease;
   &:hover { opacity: 1; background: ${p => p.theme.colors.base[100]}; }
   svg { width: 20px; height: 20px; }
-`;
-
-const ModalBody = styled.div`
-  padding: 1.5rem; overflow-y: auto; flex: 1;
-  display: flex; flex-direction: column; gap: 1.25rem;
-`;
-
-const ModalFooter = styled.div<{ theme: any }>`
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid ${p => p.theme.colors.base[300]};
-  display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;
 `;
 
 const ModalStatusBadge = styled.span<{ theme: any; $status: EmailStatus }>`
@@ -378,6 +370,16 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const isDraft     = activeEmail.status === 'draft';
   const isScheduled = activeEmail.status === 'scheduled';
   const isSent      = activeEmail.status === 'sent';
+  const isFailed    = activeEmail.status === 'failed';
+
+  // ── DEBUG LOGGING ──────────────────────────────────────────────────────────
+  console.log('[EmailDetailModal] render — activeEmail:', {
+    id:            activeEmail.id,
+    status:        activeEmail.status,
+    isFailed,
+    failed_reason: activeEmail.failed_reason,
+    hasReason:     !!activeEmail.failed_reason,
+  });
 
   const filteredAtts    = allAttachments.filter(a => a.filename.toLowerCase().includes(attachSearch.toLowerCase()));
   const attachedFiles   = filteredAtts.filter(a =>  linkedAttachIds.has(a.id));
@@ -449,6 +451,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                 : <ReadBlock theme={theme}>{activeEmail.email_content}</ReadBlock>
               }
             </FormGroup>
+
             {(activeEmail.status === 'draft' || activeEmail.status === 'failed')
               ? activeEmail.created_at && (
                   <FormGroup>
@@ -463,6 +466,24 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   </FormGroup>
                 )
             }
+
+            {/* ── FIX: render failure reason for failed emails ── */}
+            {isFailed && (
+              <FormGroup>
+                <FormLabel theme={theme} style={{ color: theme.colors.error?.main || '#ef4444', opacity: 1 }}>
+                  Failure Reason
+                </FormLabel>
+                <ReadBlock theme={theme} style={{
+                  fontSize: '0.825rem',
+                  borderColor: (theme.colors.error?.main || '#ef4444') + '40',
+                  background:  (theme.colors.error?.main || '#ef4444') + '0d',
+                  color:        theme.colors.error?.main || '#ef4444',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {activeEmail.failed_reason || 'No reason provided'}
+                </ReadBlock>
+              </FormGroup>
+            )}
           </ModalBody>
 
           <ModalFooter theme={theme}>
@@ -516,7 +537,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               </PrimaryButton>
             </>)}
 
-            {activeEmail.status === 'failed' && (
+            {isFailed && (
               <DangerButton theme={theme} disabled={actionLoading} onClick={() => onDelete(activeEmail.id, `"${activeEmail.email_subject}"`)}>
                 {actionLoading ? <BtnSpinner /> : <TrashIcon />} Delete
               </DangerButton>
@@ -579,12 +600,14 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                     <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', opacity: 0.45 }}>Attached</span>
                     <span style={{ fontSize: '0.67rem', fontWeight: 600, background: theme.colors.primary.main + '20', color: theme.colors.primary.main, borderRadius: '999px', padding: '1px 6px' }}>{attachedFiles.length}</span>
                   </div>
-                  <div style={{ maxHeight: 140, overflowY: 'auto', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[400] }}>
+                  <div style={{ maxHeight: 160, overflowY: 'auto', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[400] }}>
                     {attachedFiles.length === 0
-                      ? <div style={{ padding: '0.85rem', textAlign: 'center', fontSize: '0.8rem', opacity: 0.5 }}>{attachSearch ? `No attached files match "${attachSearch}"` : 'No files attached — select below to attach'}</div>
+                      ? <div style={{ padding: '0.85rem', textAlign: 'center', fontSize: '0.8rem', opacity: 0.5 }}>{attachSearch ? `No attached files match "${attachSearch}"` : 'No files attached yet'}</div>
                       : attachedFiles.map(att => { const ext = getExt(att.filename); return (
-                          <div key={att.id} onClick={() => onToggleAttachment(att.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', cursor: 'pointer', background: theme.colors.primary.main + '10', borderBottom: `1px solid ${theme.colors.base[300]}` }}>
-                            <div style={{ width: 16, height: 16, borderRadius: 4, border: `1.5px solid ${theme.colors.primary.main}`, background: theme.colors.primary.main, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+                          <div key={att.id} onClick={() => onToggleAttachment(att.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: `1px solid ${theme.colors.base[300]}` }}>
+                            <div style={{ width: 16, height: 16, borderRadius: 4, background: theme.colors.primary.main, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
                             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, height: 18, padding: '0 4px', borderRadius: 4, fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, background: EXT_BG[ext] || '#64748b20', color: EXT_COLOR[ext] || '#64748b' }}>{ext || '?'}</span>
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8125rem', fontWeight: 500 }}>{att.filename}</span>
                             {att.file_size != null && <span style={{ fontSize: '0.7rem', opacity: 0.4, flexShrink: 0 }}>{(att.file_size / 1024).toFixed(0)} KB</span>}
@@ -595,7 +618,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Not attached */}
+                {/* Not Attached */}
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -645,7 +668,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8375rem', fontWeight: 500 }}>{att.filename}</span>
                             {att.file_size != null && <span style={{ fontSize: '0.75rem', opacity: 0.4, flexShrink: 0 }}>{(att.file_size / 1024).toFixed(0)} KB</span>}
                           </div>
-                        );})}\
+                        );})}
                       </div>
                     </div>;
               })()
@@ -752,6 +775,18 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
     </>
   );
 };
+
+// ── ModalBody helper (needs to be after styled components) ────────────────────
+const ModalBody = styled.div`
+  padding: 1.5rem; overflow-y: auto; flex: 1;
+  display: flex; flex-direction: column; gap: 1.25rem;
+`;
+
+const ModalFooter = styled.div<{ theme: any }>`
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid ${p => p.theme.colors.base[300]};
+  display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;
+`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EMBEDDED: DualTagEmailListItem  — shows company + campaign tags on one card
@@ -903,7 +938,7 @@ const EmailHistory: React.FC = () => {
 
   // selection
   const [selectedIds,  setSelectedIds]  = useState<Set<number>>(new Set());
-  const [allSelected,  setAllSelected]  = useState(false);  // true = fetched all IDs via /email/ids/
+  const [allSelected,  setAllSelected]  = useState(false);
 
   // modal
   type ModalTab = 'email' | 'attachments' | 'branding';
@@ -916,7 +951,6 @@ const EmailHistory: React.FC = () => {
   const [autoSaving,    setAutoSaving]    = useState(false);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved     = useRef('');
-  // snapshots for dirty tracking (set on openModal, updated on save)
   const snapSubject   = useRef('');
   const snapContent   = useRef('');
   const snapRecipient = useRef('');
@@ -1036,6 +1070,10 @@ const EmailHistory: React.FC = () => {
       const r = await apiFetch(`${API_BASE}/email/?${qp}`);
       if (!r.ok) throw new Error();
       const d = await r.json();
+      // DEBUG: log raw API response to verify failed_reason is present
+      console.log('[fetchEmails] raw emails from API:', d.emails?.map((e: any) => ({
+        id: e.id, status: e.status, failed_reason: e.failed_reason,
+      })));
       setEmails(d.emails ?? []); setServerTotal(d.total ?? 0);
     } catch { showToast('Error', 'Failed to load emails', 'error'); }
     finally { setLoading(false); }
@@ -1098,10 +1136,10 @@ const EmailHistory: React.FC = () => {
 
   const fetchAllIds = async (): Promise<number[]> => {
     const qp = new URLSearchParams();
-    if (statusFilter)             qp.set('status',       statusFilter);
+    if (statusFilter)              qp.set('status',       statusFilter);
     if (companyDD.filter.size > 0) qp.set('company_ids',  Array.from(companyDD.filter).join(','));
     if (campaignDD.filter.size > 0) qp.set('campaign_ids', Array.from(campaignDD.filter).join(','));
-    if (search.trim())            qp.set('search',       search.trim());
+    if (search.trim())             qp.set('search',       search.trim());
     const r = await apiFetch(`${API_BASE}/email/ids/?${qp}`);
     if (!r.ok) throw new Error('Failed to fetch IDs');
     const d = await r.json();
@@ -1123,10 +1161,16 @@ const EmailHistory: React.FC = () => {
     setSelectedIds(p => { const s = new Set(p); s.has(id) ? s.delete(id) : s.add(id); return s; });
   };
 
-
-
   // ── modal ─────────────────────────────────────────────────────────────────
   const openModal = (email: EmailRecord) => {
+    // DEBUG: log the full email record when opening the modal
+    console.log('[openModal] email record:', {
+      id:            email.id,
+      status:        email.status,
+      failed_reason: email.failed_reason,
+      full:          email,
+    });
+
     setActiveEmail(email); setEditSubject(email.email_subject);
     setEditContent(email.email_content); setEditRecipient(email.recipient_email);
     setModalTab('email'); setAttachSearch(''); setAttachMsg(null);
@@ -1213,7 +1257,6 @@ const EmailHistory: React.FC = () => {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       setAttachMsg({ type: 'success', text: 'Attachments saved' });
-      // update snapshot so modal no longer considers attachments dirty
       snapAttachIds.current = JSON.stringify([...linkedAttachIds].sort((a, b) => a - b));
     } catch (err) { setAttachMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' }); }
     finally { setAttachSaving(false); }
@@ -1437,7 +1480,6 @@ const EmailHistory: React.FC = () => {
       </ConfirmOverlay>
 
       {/* Detail modal */}
-      {/* Detail modal */}
       <EmailDetailModal
         isOpen={modalOpen} onClose={closeModal} activeEmail={activeEmail}
         titleLabel={activeEmail ? `${activeEmail.company_name} · ${activeEmail.campaign_name}` : ''}
@@ -1558,7 +1600,6 @@ const EmailHistory: React.FC = () => {
               {renderDD(companyDD,  'Companies', BuildingIcon)}
               {renderDD(campaignDD, 'Campaigns', CampaignIcon)}
             </div>
-
           </FilterBar>
 
           {/* Bulk bar */}
@@ -1567,7 +1608,6 @@ const EmailHistory: React.FC = () => {
               <BulkLeft>
                 <CountBadge theme={theme}>{effectiveSelectedCount}</CountBadge>
                 <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{selectedIds.size} selected</span>
-
               </BulkLeft>
               <BulkRight>
                 <IconButton theme={theme} $variant="danger" $size="md" title="Delete selected" onClick={handleBulkDelete} disabled={actionLoading}><TrashIcon /></IconButton>
