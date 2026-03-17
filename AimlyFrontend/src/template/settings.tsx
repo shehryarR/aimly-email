@@ -171,6 +171,12 @@ const StatusDot = styled.div<{ $status: 'green'|'orange'|'red'|'gray'|'checking'
   ${p => p.$status === 'checking' ? css`animation: ${fadeIn} 1s ease-in-out infinite alternate;` : ''}
 `;
 
+const DirtyAsterisk = styled.span<{ theme: any; $active: boolean }>`
+  font-size: 0.85rem; font-weight: 700; flex-shrink: 0; line-height: 1;
+  color: ${p => p.$active ? p.theme.colors.primary.main : '#F59E0B'};
+  opacity: 0.9;
+`;
+
 // ── Tab content panel ──────────────────────────────────────────────────────────
 
 const TabPanel = styled.div<{ theme: any }>`
@@ -531,7 +537,7 @@ interface AttachmentOption {
 }
 
 const VALID_TONES = ['Professional', 'Professional but friendly', 'Enthusiastic', 'Concise', 'Formal', 'Casual'];
-const ALLOWED_ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv'];
+const ALLOWED_ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
 const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL  || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
@@ -637,7 +643,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [globalLoaded,     setGlobalLoaded]     = useState(false);
   const [globalMsg,        setGlobalMsg]        = useState<{ type:'success'|'error'; text:string }|null>(null);
   const [globalSettingsId, setGlobalSettingsId] = useState<number | null>(null);
-  const [logoUploading,    setLogoUploading]    = useState(false);
+  const [pendingLogo,      setPendingLogo]      = useState<File | 'remove' | null>(null);
+  const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
 
   // ── Attachment state ──────────────────────────────────────────
   const [allAttachments,      setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -654,12 +661,41 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [isDragOver,    setIsDragOver]    = useState(false);
   const uploadFileInputRef                 = useRef<HTMLInputElement>(null);
 
-  // ── Dirty tracking ────────────────────────────────────────────
-  const [isDirty,      setIsDirty]      = useState(false);
+  // ── Per-tab dirty tracking ────────────────────────────────────
+  const [dirtyTabs, setDirtyTabs] = useState<Partial<Record<Tab, boolean>>>({});
   const [confirmClose, setConfirmClose] = useState(false);
-  const savedKeys   = useRef<KeySettings | null>(null);
-  const savedGlobal = useRef<GlobalSettings | null>(null);
-  const markDirty = () => setIsDirty(true);
+  const savedKeys              = useRef<KeySettings | null>(null);
+  const savedGlobal            = useRef<GlobalSettings | null>(null);
+  const savedLinkedIds         = useRef<Set<number>>(new Set());
+  const isDirty = Object.values(dirtyTabs).some(Boolean);
+  const clearDirty = (tab: Tab) => setDirtyTabs(p => ({ ...p, [tab]: false }));
+
+  // Smart dirty check: re-evaluate a tab after every change and auto-clear if
+  // the current values match the last-saved snapshot.
+  const recheckKeys = (next: typeof keys, tab: Tab) => {
+    const saved = savedKeys.current;
+    if (!saved) return;
+    const same = (Object.keys(next) as (keyof typeof next)[]).every(k => next[k] === saved[k]);
+    setDirtyTabs(p => ({ ...p, [tab]: !same }));
+  };
+  const recheckGlobal = (next: typeof global) => {
+    const saved = savedGlobal.current;
+    if (!saved) return;
+    const same = (Object.keys(next) as (keyof typeof next)[]).every(k => next[k] === saved[k]);
+    const logoSame = pendingLogo === null; // pending logo change always means dirty
+    setDirtyTabs(p => ({ ...p, global: !(same && logoSame) }));
+  };
+  const recheckAttachments = (next: Set<number>) => {
+    const saved = savedLinkedIds.current;
+    const same = saved.size === next.size && [...next].every(id => saved.has(id));
+    setDirtyTabs(p => ({ ...p, attachments: !same }));
+  };
+  const recheckAccount = (nextAcc: typeof accForm, nextPwd: typeof pwdForm) => {
+    // Account fields start empty; any non-empty value means unsaved changes
+    const accClean = !nextAcc.username && !nextAcc.email && !nextAcc.password;
+    const pwdClean = !nextPwd.current && !nextPwd.next && !nextPwd.confirm;
+    setDirtyTabs(p => ({ ...p, account: !(accClean && pwdClean) }));
+  };
   const handleClose = () => {
     if (isDirty) { setConfirmClose(true); return; }
     onClose();
@@ -723,7 +759,9 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         const linkRes = await apiFetch(`${API_BASE}/global-settings/${id}/attachments/`);
         if (linkRes.ok) {
           const d = await linkRes.json();
-          setLinkedAttachmentIds(new Set((d.attachments ?? []).map((a: any) => a.id)));
+          const loadedIds = new Set<number>((d.attachments ?? []).map((a: any) => a.id as number));
+          setLinkedAttachmentIds(loadedIds);
+          savedLinkedIds.current = loadedIds;
         }
       }
     } catch (e) {
@@ -752,6 +790,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         throw new Error(e.detail || 'Failed to save');
       }
       setAttachMsg({ type: 'success', text: 'Attachments saved to global settings' });
+      savedLinkedIds.current = new Set(linkedAttachmentIds);
+      clearDirty('attachments');
     } catch (err) {
       setAttachMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save attachments' });
     } finally {
@@ -763,6 +803,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     setLinkedAttachmentIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      recheckAttachments(next);
       return next;
     });
     setAttachMsg(null);
@@ -802,18 +843,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       const uploadData = await uploadRes.json();
       const newId: number = uploadData.id;
 
-      // 2. If global settings exist, immediately attach the new file
-      if (globalSettingsId) {
-        const newIds = Array.from(new Set([...Array.from(linkedAttachmentIds), newId]));
-        const attachRes = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newIds),
-        });
-        if (attachRes.ok) {
-          setLinkedAttachmentIds(new Set(newIds));
-        }
-      }
+      // 2. Add to local linked set — linking is deferred to "Save Attachments" button
+      setLinkedAttachmentIds(prev => new Set([...Array.from(prev), newId]));
 
       // 3. Refresh the full list
       await loadAttachments(globalSettingsId);
@@ -821,7 +852,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
       setUploadMsg({
         type: 'success',
-        text: `"${uploadData.filename}" uploaded${globalSettingsId ? ' and attached' : ' — save Global Settings to enable auto-attach'}`,
+        text: `"${uploadData.filename}" uploaded — click "Save Attachments" to link it`,
       });
     } catch (err) {
       setUploadMsg({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' });
@@ -831,7 +862,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   };
 
   // ── Logo handling ───────────────────────────────────────────────
-  const handleLogoFile = async (file: File) => {
+  const handleLogoFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       setGlobalMsg({ type: 'error', text: 'Please select a valid image file' });
       return;
@@ -840,56 +871,22 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       setGlobalMsg({ type: 'error', text: 'File size must be less than 5MB' });
       return;
     }
-    setLogoUploading(true);
+    // Store file locally and show preview — API call deferred to saveGlobal
+    setPendingLogo(file);
+    const reader = new FileReader();
+    reader.onload = e => setPendingLogoPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    setDirtyTabs(p => ({ ...p, global: true }));
     setGlobalMsg(null);
-    try {
-      const formData = new FormData();
-      formData.append('logo', file);
-      const res = await apiFetch(`${API_BASE}/global_setting/`, {
-        method: 'PUT',
-        body: formData,
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.detail || 'Failed to upload logo');
-      }
-      const result = await res.json();
-      if (result.success) {
-        await loadGlobal();
-        setGlobalMsg({ type: 'success', text: result.message || 'Logo uploaded successfully' });
-      }
-    } catch (error) {
-      setGlobalMsg({ type: 'error', text: error instanceof Error ? error.message : 'Failed to upload logo' });
-    } finally {
-      setLogoUploading(false);
-    }
   };
 
-  const handleLogoRemove = async (e: React.MouseEvent) => {
+  const handleLogoRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setLogoUploading(true);
+    // Mark removal locally — API call deferred to saveGlobal
+    setPendingLogo('remove');
+    setPendingLogoPreview(null);
+    setDirtyTabs(p => ({ ...p, global: true }));
     setGlobalMsg(null);
-    try {
-      const formData = new FormData();
-      formData.append('logo', new File([], ''));
-      const res = await apiFetch(`${API_BASE}/global_setting/`, {
-        method: 'PUT',
-        body: formData,
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.detail || 'Failed to remove logo');
-      }
-      const result = await res.json();
-      if (result.success) {
-        setGlobal(p => ({ ...p, logo_data: undefined }));
-        setGlobalMsg({ type: 'success', text: result.message || 'Logo removed successfully' });
-      }
-    } catch (error) {
-      setGlobalMsg({ type: 'error', text: error instanceof Error ? error.message : 'Failed to remove logo' });
-    } finally {
-      setLogoUploading(false);
-    }
   };
 
   // ── Initial status ──────────────────────────────────────────
@@ -936,8 +933,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         type: 'neutral',
       });
       setMatchValidation({ message: '', type: 'neutral' });
-      setLogoUploading(false);
-      setIsDirty(false); setConfirmClose(false);
+      setDirtyTabs({}); setConfirmClose(false);
+      setPendingLogo(null); setPendingLogoPreview(null);
       savedKeys.current = null; savedGlobal.current = null;
     }
   }, [isOpen]);
@@ -1021,7 +1018,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       if (isClearKey) { setLlmMasked(false); llmWasMasked.current = false; }
       await refreshStatuses(false);
       setKeyMsg({ tab:'llm', type:'success', text: isClearKey ? 'LLM key removed' : 'LLM settings saved' });
-      savedKeys.current = { ...keys }; setIsDirty(false);
+      savedKeys.current = { ...keys }; clearDirty('llm');
     } catch (err) { setKeyMsg({ tab:'llm', type:'error', text: err instanceof Error ? err.message : 'Failed to save LLM settings' }); }
     finally { setKeysLoading(false); }
   };
@@ -1037,7 +1034,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       }
       await refreshStatuses(false);
       setKeyMsg({ tab:'email', type:'success', text:'Email settings saved' });
-      savedKeys.current = { ...keys }; setIsDirty(false);
+      savedKeys.current = { ...keys }; clearDirty('email');
     } catch (err) { setKeyMsg({ tab:'email', type:'error', text: err instanceof Error ? err.message : 'Failed to save email settings' }); }
     finally { setKeysLoading(false); }
   };
@@ -1064,7 +1061,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       if (isClearKey) { setTavilyMasked(false); tavilyWasMasked.current = false; }
       await refreshStatuses(false);
       setKeyMsg({ tab:'tavily', type:'success', text: isClearKey ? 'Tavily key removed' : 'Tavily key saved' });
-      savedKeys.current = { ...keys }; setIsDirty(false);
+      savedKeys.current = { ...keys }; clearDirty('tavily');
     } catch (err) { setKeyMsg({ tab:'tavily', type:'error', text: err instanceof Error ? err.message : 'Failed to save Tavily key' }); }
     finally { setKeysLoading(false); }
   };
@@ -1110,6 +1107,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         const value = (global[k] as string).trim();
         formData.append(k, value);
       });
+      // Include pending logo change
+      if (pendingLogo === 'remove') {
+        formData.append('logo', new File([], ''));
+      } else if (pendingLogo instanceof File) {
+        formData.append('logo', pendingLogo);
+      }
       const res = await apiFetch(`${API_BASE}/global_setting/`, {
         method:'PUT',
         body: formData
@@ -1120,8 +1123,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       }
       const result = await res.json();
       if (result.id) setGlobalSettingsId(result.id);
+      // Clear pending logo state and reload to get fresh logo_data from server
+      if (pendingLogo) {
+        setPendingLogo(null);
+        setPendingLogoPreview(null);
+        await loadGlobal();
+      }
       setGlobalMsg({ type:'success', text: result.message || 'Global settings saved' });
-      savedGlobal.current = { ...global }; setIsDirty(false);
+      savedGlobal.current = { ...global }; clearDirty('global'); clearDirty('attachments');
     } catch (err) {
       setGlobalMsg({ type:'error', text: err instanceof Error ? err.message : 'Failed to save' });
     } finally { setGlobalLoading(false); }
@@ -1139,6 +1148,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail||'Update failed'); }
       setAccMsg({ section:'profile', type:'success', text:'Account updated. Re-login if you changed your username.' });
       setAccForm({ username:'', email:'', password:'' });
+      clearDirty('account');
     } catch (err) {
       setAccMsg({ section:'profile', type:'error', text: err instanceof Error ? err.message : 'Failed to update' });
     } finally { setAccLoading(false); }
@@ -1165,6 +1175,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       setPwdForm({ current:'', next:'', confirm:'' });
       setPasswordValidation({ message: '', type: 'neutral' });
       setMatchValidation({ message: '', type: 'neutral' });
+      clearDirty('account');
     } catch (err) {
       setAccMsg({ section:'password', type:'error', text: err instanceof Error ? err.message : 'Failed to update password' });
     } finally { setPwdLoading(false); }
@@ -1313,6 +1324,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
                     {t.icon}
                     <TabLabel>{t.label}</TabLabel>
+                    {dirtyTabs[t.id] && <DirtyAsterisk theme={theme} $active={activeTab === t.id} title="Unsaved changes">*</DirtyAsterisk>}
                     {t.status && <StatusDot $status={t.status} title={statusLabel(t.status)} />}
                   </TabButton>
                 ))}
@@ -1323,6 +1335,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
                     {t.icon}
                     <TabLabel>{t.label}</TabLabel>
+                    {dirtyTabs[t.id] && <DirtyAsterisk theme={theme} $active={activeTab === t.id} title="Unsaved changes">*</DirtyAsterisk>}
                   </TabButton>
                 ))}
               </NavGroup>
@@ -1338,7 +1351,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   <Label theme={theme}>AI Model <RequiredStar>*</RequiredStar>
                     <HelpTooltip theme={theme} instructions={<div><strong>Gemini Flash Models:</strong><ul style={{paddingLeft:'1.2rem',marginTop:'5px'}}><li><code>gemini-2.5-flash</code> — recommended, best quality.</li><li><code>gemini-2.0-flash</code> — faster, lower cost.</li></ul></div>} />
                   </Label>
-                  <Select theme={theme} value={keys.llmModel} onChange={e => { setKeys(p => ({ ...p, llmModel: e.target.value })); markDirty(); }}>
+                  <Select theme={theme} value={keys.llmModel} onChange={e => { setKeys(p => { const n = { ...p, llmModel: e.target.value }; recheckKeys(n, 'llm'); return n; }); }}>
                     <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                   </Select>
@@ -1354,11 +1367,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                       placeholder="AIza..."
                       value={keys.llmApiKey}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        if (llmMasked) { setLlmMasked(false); setShowLlmKey(false); setKeys(p => ({ ...p, llmApiKey:'' })); }
-                        else setKeys(p => ({ ...p, llmApiKey: e.target.value }));
-                        markDirty();
+                        if (llmMasked) { setLlmMasked(false); setShowLlmKey(false); setKeys(p => { const n = { ...p, llmApiKey:'' }; recheckKeys(n, 'llm'); return n; }); }
+                        else setKeys(p => { const n = { ...p, llmApiKey: e.target.value }; recheckKeys(n, 'llm'); return n; });
                       }}
-                    />
+                    
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                     {!llmMasked && <EyeButton theme={theme} type="button" onClick={() => setShowLlmKey(p=>!p)}>{showLlmKey ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>}
                   </PasswordWrapper>
                 </FormGroup>
@@ -1385,15 +1400,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
 
                 <FormGroup>
                   <Label theme={theme}>Email Provider <RequiredStar>*</RequiredStar></Label>
-                  <Select theme={theme} value={keys.selectedProvider} onChange={e => { handleProviderChange(e.target.value); markDirty(); }}>
+                  <Select theme={theme} value={keys.selectedProvider} onChange={e => { handleProviderChange(e.target.value); setDirtyTabs(p => ({ ...p, email: true })); }}>
                     {Object.keys(emailProviders).map(p => <option key={p} value={p}>{p}</option>)}
                   </Select>
                 </FormGroup>
 
                 <FormGroup>
                   <Label theme={theme}>Email Address <RequiredStar>*</RequiredStar></Label>
-                  <Input theme={theme} type="email" placeholder="you@example.com" value={keys.emailAddress}
-                    onChange={e => { setKeys(p => ({ ...p, emailAddress: e.target.value })); markDirty(); }} />
+                  <Input theme={theme} type="email" placeholder="you@example.com" autoComplete="off" value={keys.emailAddress}
+                    onChange={e => { setKeys(p => { const n = { ...p, emailAddress: e.target.value }; recheckKeys(n, 'email'); return n; }); }} />
                 </FormGroup>
 
                 <FormGroup>
@@ -1406,11 +1421,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                       placeholder="App-specific password"
                       value={keys.emailPassword}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        if (emailPwdMasked) { setEmailPwdMasked(false); setShowEmailPwd(false); setKeys(p => ({ ...p, emailPassword:'' })); }
-                        else setKeys(p => ({ ...p, emailPassword: e.target.value }));
-                        markDirty();
+                        if (emailPwdMasked) { setEmailPwdMasked(false); setShowEmailPwd(false); setKeys(p => { const n = { ...p, emailPassword:'' }; recheckKeys(n, 'email'); return n; }); }
+                        else setKeys(p => { const n = { ...p, emailPassword: e.target.value }; recheckKeys(n, 'email'); return n; });
                       }}
-                    />
+                    
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                     {!emailPwdMasked && <EyeButton theme={theme} type="button" onClick={() => setShowEmailPwd(p=>!p)}>{showEmailPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>}
                   </PasswordWrapper>
                 </FormGroup>
@@ -1420,16 +1437,16 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     <Label theme={theme}>SMTP Host <RequiredStar>*</RequiredStar>
                       <HelpTooltip theme={theme} instructions="Gmail: smtp.gmail.com · Outlook: smtp.office365.com" />
                     </Label>
-                    <Input theme={theme} type="text" placeholder="smtp.gmail.com" value={keys.smtpHost}
-                      onChange={e => { setKeys(p => ({ ...p, smtpHost: e.target.value })); markDirty(); }}
+                    <Input theme={theme} type="text" placeholder="smtp.gmail.com" autoComplete="off" value={keys.smtpHost}
+                      onChange={e => { setKeys(p => { const n = { ...p, smtpHost: e.target.value }; recheckKeys(n, 'email'); return n; }); }}
                       disabled={keys.selectedProvider !== 'Custom'} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>SMTP Port <RequiredStar>*</RequiredStar>
                       <HelpTooltip theme={theme} instructions="587 for TLS (recommended) · 465 for SSL" />
                     </Label>
-                    <Input theme={theme} type="text" placeholder="587" value={keys.smtpPort}
-                      onChange={e => { setKeys(p => ({ ...p, smtpPort: e.target.value })); markDirty(); }}
+                    <Input theme={theme} type="text" placeholder="587" autoComplete="off" value={keys.smtpPort}
+                      onChange={e => { setKeys(p => { const n = { ...p, smtpPort: e.target.value }; recheckKeys(n, 'email'); return n; }); }}
                       disabled={keys.selectedProvider !== 'Custom'} />
                   </FormGroup>
                 </FormRow>
@@ -1464,11 +1481,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                       placeholder="tvly-xxxxxxxxxx"
                       value={keys.tavilyApiKey}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        if (tavilyMasked) { setTavilyMasked(false); setShowTavilyKey(false); setKeys(p => ({ ...p, tavilyApiKey:'' })); }
-                        else setKeys(p => ({ ...p, tavilyApiKey: e.target.value }));
-                        markDirty();
+                        if (tavilyMasked) { setTavilyMasked(false); setShowTavilyKey(false); setKeys(p => { const n = { ...p, tavilyApiKey:'' }; recheckKeys(n, 'tavily'); return n; }); }
+                        else setKeys(p => { const n = { ...p, tavilyApiKey: e.target.value }; recheckKeys(n, 'tavily'); return n; });
                       }}
-                    />
+                    
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                     {!tavilyMasked && <EyeButton theme={theme} type="button" onClick={() => setShowTavilyKey(p=>!p)}>{showTavilyKey ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>}
                   </PasswordWrapper>
                 </FormGroup>
@@ -1529,15 +1548,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                 <SectionContent $isExpanded={expandedSections.company}>
                   <FormGroup>
                     <Label theme={theme}>Business Name</Label>
-                    <Input theme={theme} type="text" placeholder="Acme Corp" value={global.business_name}
-                      onChange={e => { setGlobal(p => ({ ...p, business_name: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                    <Input theme={theme} type="text" placeholder="Acme Corp" autoComplete="off" value={global.business_name}
+                      onChange={e => { setGlobal(p => { const n = { ...p, business_name: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>Business Info <HelpTooltip theme={theme} instructions="Brief description of your business. The AI uses this to tailor every email." /></Label>
                     <Textarea theme={theme} rows={3}
                       placeholder="We help B2B SaaS companies grow their pipeline through hyper-personalized outreach…"
                       value={global.business_info}
-                      onChange={e => { setGlobal(p => ({ ...p, business_info: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                      onChange={e => { setGlobal(p => { const n = { ...p, business_info: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 
@@ -1555,12 +1574,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   <FormRow>
                     <FormGroup>
                       <Label theme={theme}>Goal <HelpTooltip theme={theme} instructions="What action do you want the recipient to take?" /></Label>
-                      <Input theme={theme} type="text" placeholder="Book a 15-min discovery call" value={global.goal}
-                        onChange={e => { setGlobal(p => ({ ...p, goal: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                      <Input theme={theme} type="text" placeholder="Book a 15-min discovery call" autoComplete="off" value={global.goal}
+                        onChange={e => { setGlobal(p => { const n = { ...p, goal: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                     </FormGroup>
                     <FormGroup>
                       <Label theme={theme}>Tone</Label>
-                      <Select theme={theme} value={global.tone} onChange={e => { setGlobal(p => ({ ...p, tone: e.target.value })); clearSuccessMessage('global'); markDirty(); }}>
+                      <Select theme={theme} value={global.tone} onChange={e => { setGlobal(p => { const n = { ...p, tone: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }}>
                         <option value="">— Select —</option>
                         {VALID_TONES.map(t => <option key={t} value={t}>{t}</option>)}
                       </Select>
@@ -1568,8 +1587,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   </FormRow>
                   <FormGroup>
                     <Label theme={theme}>Value Proposition <HelpTooltip theme={theme} instructions="The core benefit you offer — one punchy sentence." /></Label>
-                    <Input theme={theme} type="text" placeholder="We reduce churn by 30% in 90 days — guaranteed" value={global.value_prop}
-                      onChange={e => { setGlobal(p => ({ ...p, value_prop: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                    <Input theme={theme} type="text" placeholder="We reduce churn by 30% in 90 days — guaranteed" autoComplete="off" value={global.value_prop}
+                      onChange={e => { setGlobal(p => { const n = { ...p, value_prop: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 
@@ -1589,22 +1608,22 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     <Textarea theme={theme} rows={3}
                       placeholder="Start with a genuine compliment about the company. Use short paragraphs. Never use 'I hope this email finds you well'…"
                       value={global.email_instruction}
-                      onChange={e => { setGlobal(p => ({ ...p, email_instruction: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                      onChange={e => { setGlobal(p => { const n = { ...p, email_instruction: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>Call to Action <HelpTooltip theme={theme} instructions="The closing ask for every email." /></Label>
-                    <Input theme={theme} type="text" placeholder="Would you be open to a quick call this week?" value={global.cta}
-                      onChange={e => { setGlobal(p => ({ ...p, cta: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                    <Input theme={theme} type="text" placeholder="Would you be open to a quick call this week?" autoComplete="off" value={global.cta}
+                      onChange={e => { setGlobal(p => { const n = { ...p, cta: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>Extra Instructions <HelpTooltip theme={theme} instructions="Additional rules for the AI. e.g. 'Never mention competitors.'" /></Label>
                     <Textarea theme={theme} rows={2} placeholder="Never mention price. Keep emails under 150 words." value={global.extras}
-                      onChange={e => { setGlobal(p => ({ ...p, extras: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                      onChange={e => { setGlobal(p => { const n = { ...p, extras: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>BCC Address <HelpTooltip theme={theme} instructions="Silently BCC'd on every email — e.g. HubSpot BCC for CRM logging." /></Label>
-                    <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" value={global.bcc}
-                      onChange={e => { setGlobal(p => ({ ...p, bcc: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                    <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" autoComplete="off" value={global.bcc}
+                      onChange={e => { setGlobal(p => { const n = { ...p, bcc: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 
@@ -1620,37 +1639,44 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                 </SectionHeader>
                 <SectionContent $isExpanded={expandedSections.branding}>
                   <FormGroup>
-                    <Label theme={theme}>Logo <HelpTooltip theme={theme} instructions="PNG, JPG, GIF, or WebP. Max 5MB. Upload happens immediately." /></Label>
-                    <LogoArea theme={theme} $hasLogo={!!global.logo_data}
-                      onClick={() => !logoUploading && !globalLoading && (document.getElementById('logo-upload') as HTMLInputElement)?.click()}
+                    <Label theme={theme}>Logo <HelpTooltip theme={theme} instructions="PNG, JPG, GIF, or WebP. Max 5MB. Saved when you click Save Settings." /></Label>
+                    <LogoArea theme={theme} $hasLogo={!!(pendingLogoPreview || (pendingLogo !== 'remove' && global.logo_data))}
+                      onClick={() => !globalLoading && (document.getElementById('logo-upload') as HTMLInputElement)?.click()}
                       onDragOver={e => e.preventDefault()}
-                      onDrop={e => { e.preventDefault(); if (!logoUploading && !globalLoading) { const f = e.dataTransfer.files[0]; if (f) handleLogoFile(f); } }}
-                      style={{ cursor: logoUploading || globalLoading ? 'not-allowed' : 'pointer', opacity: logoUploading || globalLoading ? 0.6 : 1 }}
+                      onDrop={e => { e.preventDefault(); if (!globalLoading) { const f = e.dataTransfer.files[0]; if (f) handleLogoFile(f); } }}
+                      style={{ cursor: globalLoading ? 'not-allowed' : 'pointer', opacity: globalLoading ? 0.6 : 1 }}
                     >
-                      {global.logo_data ? (
+                      {pendingLogoPreview ? (
+                        <>
+                          <LogoImg src={pendingLogoPreview} alt="Logo preview" />
+                          <LogoRemove theme={theme} type="button" onClick={handleLogoRemove}
+                            disabled={globalLoading} title="Remove logo">✕</LogoRemove>
+                          <div style={{ position:'absolute', bottom:4, left:0, right:0, textAlign:'center', fontSize:'0.65rem', opacity:0.6 }}>Unsaved — click Save Settings</div>
+                        </>
+                      ) : pendingLogo !== 'remove' && global.logo_data ? (
                         <>
                           <LogoImg src={global.logo_data} alt="Logo" />
                           <LogoRemove theme={theme} type="button" onClick={handleLogoRemove}
-                            disabled={logoUploading || globalLoading} title={logoUploading || globalLoading ? 'Please wait...' : 'Remove logo'}>✕</LogoRemove>
+                            disabled={globalLoading} title="Remove logo">✕</LogoRemove>
                         </>
                       ) : (
                         <LogoPlaceholder>
                           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                           </svg>
-                          <span>{logoUploading ? 'Uploading...' : globalLoading ? 'Loading...' : 'Click or drag to upload'}</span>
+                          <span>{globalLoading ? 'Loading...' : pendingLogo === 'remove' ? 'Logo removed — click Save Settings' : 'Click or drag to upload'}</span>
                         </LogoPlaceholder>
                       )}
                     </LogoArea>
                     <input id="logo-upload" type="file" accept="image/*" style={{ display: 'none' }}
-                      onChange={e => { const f = e.target.files?.[0]; if (f && !logoUploading && !globalLoading) handleLogoFile(f); e.target.value = ''; }}
-                      disabled={logoUploading || globalLoading} />
+                      onChange={e => { const f = e.target.files?.[0]; if (f && !globalLoading) handleLogoFile(f); e.target.value = ''; }}
+                      disabled={globalLoading} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>Email Signature</Label>
                     <Textarea theme={theme} rows={4} placeholder={'Best,\nJohn Smith\nHead of Sales | Acme Corp\n+1 (555) 000-0000'}
                       value={global.signature}
-                      onChange={e => { setGlobal(p => ({ ...p, signature: e.target.value })); clearSuccessMessage('global'); markDirty(); }} />
+                      onChange={e => { setGlobal(p => { const n = { ...p, signature: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 
@@ -1980,21 +2006,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   <FormRow>
                     <FormGroup>
                       <Label theme={theme}>New Username</Label>
-                      <Input theme={theme} type="text" placeholder={user?.username || 'Leave blank to keep current'}
+                      <Input theme={theme} type="text" placeholder={user?.username || 'Leave blank to keep current'} autoComplete="off"
                         value={accForm.username}
-                        onChange={e => { setAccForm(p => ({ ...p, username: e.target.value })); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }}
-                        autoComplete="new-password"
-                        readOnly
-                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                        onChange={e => { setAccForm(p => { const n = { ...p, username: e.target.value }; recheckAccount(n, pwdForm); return n; }); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }} />
                     </FormGroup>
                     <FormGroup>
                       <Label theme={theme}>New Email</Label>
-                      <Input theme={theme} type="text" placeholder="Leave blank to keep current"
+                      <Input theme={theme} type="text" placeholder="Leave blank to keep current" autoComplete="off"
                         value={accForm.email}
-                        onChange={e => { setAccForm(p => ({ ...p, email: e.target.value })); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }}
-                        autoComplete="new-password"
-                        readOnly
-                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                        onChange={e => { setAccForm(p => { const n = { ...p, email: e.target.value }; recheckAccount(n, pwdForm); return n; }); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }} />
                     </FormGroup>
                   </FormRow>
                   <FormGroup>
@@ -2002,7 +2022,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     <PasswordWrapper>
                       <PasswordInput theme={theme} type={showAccPwd ? 'text' : 'password'} placeholder="Required to save changes"
                         value={accForm.password}
-                        onChange={e => { setAccForm(p => ({ ...p, password: e.target.value })); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }}
+                        onChange={e => { setAccForm(p => { const n = { ...p, password: e.target.value }; recheckAccount(n, pwdForm); return n; }); if (accMsg?.section === 'profile' && accMsg.type === 'success') setAccMsg(null); }} 
                         autoComplete="new-password"
                         readOnly
                         onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
@@ -2031,7 +2051,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     <PasswordWrapper>
                       <PasswordInput theme={theme} type={showCurrPwd ? 'text' : 'password'} placeholder="Your current password"
                         value={pwdForm.current}
-                        onChange={e => { setPwdForm(p => ({ ...p, current: e.target.value })); if (accMsg?.section === 'password' && accMsg.type === 'success') setAccMsg(null); }}
+                        onChange={e => { setPwdForm(p => { const n = { ...p, current: e.target.value }; recheckAccount(accForm, n); return n; }); if (accMsg?.section === 'password' && accMsg.type === 'success') setAccMsg(null); }} 
                         autoComplete="new-password"
                         readOnly
                         onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
@@ -2046,12 +2066,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                           value={pwdForm.next}
                           onChange={e => {
                             const v = e.target.value;
-                            setPwdForm(p => ({ ...p, next: v }));
+                            setPwdForm(p => { const n = { ...p, next: v }; recheckAccount(accForm, n); return n; });
                             if (accMsg?.section === 'password' && accMsg.type === 'success') setAccMsg(null);
                             if (v) validatePassword(v); else setPasswordValidation({ message: 'Password must contain: uppercase, lowercase, number, special character (8+ chars)', type: 'neutral' });
                             if (pwdForm.confirm) validateMatch(v, pwdForm.confirm);
-                          }}
-                          autoComplete="new-password" />
+                          }} 
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                         <EyeButton theme={theme} type="button" onClick={() => setShowNewPwd(v=>!v)}>{showNewPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>
                       </PasswordWrapper>
                     </FormGroup>
@@ -2062,11 +2084,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                           value={pwdForm.confirm}
                           onChange={e => {
                             const v = e.target.value;
-                            setPwdForm(p => ({ ...p, confirm: v }));
+                            setPwdForm(p => { const n = { ...p, confirm: v }; recheckAccount(accForm, n); return n; });
                             if (accMsg?.section === 'password' && accMsg.type === 'success') setAccMsg(null);
                             if (v || pwdForm.next) validateMatch(pwdForm.next, v);
-                          }}
-                          autoComplete="new-password" />
+                          }} 
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                         <EyeButton theme={theme} type="button" onClick={() => setShowConfPwd(v=>!v)}>{showConfPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>
                       </PasswordWrapper>
                     </FormGroup>
@@ -2118,10 +2142,10 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                         <PasswordWrapper>
                           <PasswordInput theme={theme} type={showDeletePwd ? 'text' : 'password'} placeholder="Current password required"
                             value={deleteAccountForm.password}
-                            onChange={e => { setDeleteAccountForm(p => ({ ...p, password: e.target.value })); if (accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning')) setAccMsg(null); }}
-                            autoComplete="new-password"
-                            readOnly
-                            onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                            onChange={e => { setDeleteAccountForm(p => ({ ...p, password: e.target.value })); if (accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning')) setAccMsg(null); }} 
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
                           <EyeButton theme={theme} type="button" onClick={() => setShowDeletePwd(v=>!v)}>
                             {showDeletePwd ? <EyeOffIcon /> : <EyeIcon />}
                           </EyeButton>
@@ -2150,7 +2174,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         open={confirmClose}
         theme={theme}
         onKeep={() => setConfirmClose(false)}
-        onDiscard={() => { setConfirmClose(false); setIsDirty(false); onClose(); }}
+        onDiscard={() => { setConfirmClose(false); setDirtyTabs({}); onClose(); }}
       />
     </>,
     document.body
