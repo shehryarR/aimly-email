@@ -1043,7 +1043,7 @@ const AttachEmpty = styled.div<{ theme: any }>`
 `;
 
 const VALID_TONES = ['Professional', 'Professional but friendly', 'Enthusiastic', 'Concise', 'Formal', 'Casual'];
-const ALLOWED_ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv'];
+const ALLOWED_ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const getExt = (filename: string) => filename.split('.').pop()?.toLowerCase() || '';
 
 // ─────────────────────────────────────────────────────────────
@@ -1181,13 +1181,25 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [prefs, setPrefs]         = useState<CampaignPreferences>(defaultPrefs());
   const [loading, setLoading]     = useState(false);
   const [saving, setSaving]       = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
   const [preferenceId, setPreferenceId]   = useState<number | null>(null);
 
   // ── Dirty-check snapshot ────────────────────────────────────
   const savedPrefs    = useRef<CampaignPreferences>(defaultPrefs());
   const savedTemplate = useRef({ subject: '', body: '', enabled: false });
+  const savedLinkedIds = useRef<Set<number>>(new Set());
   const [confirmClose, setConfirmClose] = useState(false);
+
+  // ── Per-tab dirty tracking ────────────────────────────────
+  const [dirtyTabs, setDirtyTabs] = useState<Partial<Record<CsTab, boolean>>>({});
+  const markDirty  = (tab: CsTab) => setDirtyTabs(p => ({ ...p, [tab]: true }));
+  const clearDirty = (tab: CsTab) => setDirtyTabs(p => ({ ...p, [tab]: false }));
+
+  // ── Inherit snapshot (for dirty-check only) ─────────────
+  const savedInherit = useRef({ settings: 1, attachments: 1 });
+
+  // ── Pending logo (deferred until Save, like Settings.tsx) ─
+  const [pendingLogo,        setPendingLogo]        = useState<File | 'remove' | null>(null);
+  const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
 
   // ── Template Email state ────────────────────────────────────
   const [templateEnabled,    setTemplateEnabled]    = useState(false);
@@ -1227,6 +1239,9 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       setUploadFile(null);
       setIsDragOver(false);
       setAttachSearch('');
+      setDirtyTabs({});
+      setPendingLogo(null);
+      setPendingLogoPreview(null);
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
       loadPrefs();
     }
@@ -1240,12 +1255,12 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const d = await res.json();
         setPreferenceId(d.id ?? null);
         setPrefs({
-          bcc: d.bcc || '', business_name: d.business_name || '',
-          business_info: d.business_info || '', goal: d.goal || '',
-          value_prop: d.value_prop || '', tone: d.tone || '',
-          cta: d.cta || '', extras: d.extras || '',
-          email_instruction: d.email_instruction || '', signature: d.signature || '',
-          logo_data: d.logo_data || undefined,
+          bcc: d.bcc ?? '', business_name: d.business_name ?? '',
+          business_info: d.business_info ?? '', goal: d.goal ?? '',
+          value_prop: d.value_prop ?? '', tone: d.tone ?? '',
+          cta: d.cta ?? '', extras: d.extras ?? '',
+          email_instruction: d.email_instruction ?? '', signature: d.signature ?? '',
+          logo_data: d.logo_data ?? undefined,
           inherit_global_settings: d.inherit_global_settings ?? 1,
           inherit_global_attachments: d.inherit_global_attachments ?? 1,
         });
@@ -1266,14 +1281,18 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const loadedBody = loadedSubj ? tmpl.split('\n').slice(1).join('\n').trimStart() : tmpl;
         savedTemplate.current = { subject: loadedSubj, body: loadedBody, enabled: !!tmpl.trim() };
         savedPrefs.current = {
-          bcc: d.bcc || '', business_name: d.business_name || '',
-          business_info: d.business_info || '', goal: d.goal || '',
-          value_prop: d.value_prop || '', tone: d.tone || '',
-          cta: d.cta || '', extras: d.extras || '',
-          email_instruction: d.email_instruction || '', signature: d.signature || '',
-          logo_data: d.logo_data || undefined,
+          bcc: d.bcc ?? '', business_name: d.business_name ?? '',
+          business_info: d.business_info ?? '', goal: d.goal ?? '',
+          value_prop: d.value_prop ?? '', tone: d.tone ?? '',
+          cta: d.cta ?? '', extras: d.extras ?? '',
+          email_instruction: d.email_instruction ?? '', signature: d.signature ?? '',
+          logo_data: d.logo_data ?? undefined,
           inherit_global_settings: d.inherit_global_settings ?? 1,
           inherit_global_attachments: d.inherit_global_attachments ?? 1,
+        };
+        savedInherit.current = {
+          settings: d.inherit_global_settings ?? 1,
+          attachments: d.inherit_global_attachments ?? 1,
         };
         await loadAttachments(d.id ?? undefined);
         await loadGlobalSettings();
@@ -1333,7 +1352,9 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const linkRes = await apiFetch(`${apiBase}/campaign-preference/${resolvedPrefId}/attachments/`);
         if (linkRes.ok) {
           const d = await linkRes.json();
-          setLinkedAttachmentIds(new Set((d.attachments ?? []).map((a: any) => a.id)));
+          const ids = new Set<number>((d.attachments ?? []).map((a: any) => a.id as number));
+          setLinkedAttachmentIds(ids);
+          savedLinkedIds.current = new Set(ids);
         }
       }
     } catch (e) { console.error('Failed to load attachments', e); }
@@ -1349,6 +1370,8 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         body: JSON.stringify(Array.from(linkedAttachmentIds)),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
+      savedLinkedIds.current = new Set(linkedAttachmentIds);
+      clearDirty('attachments');
       onToast('success', 'Attachments', 'Attachments saved to campaign');
     } catch (err) {
       onToast('error', 'Attachments', err instanceof Error ? err.message : 'Failed to save attachments');
@@ -1359,6 +1382,10 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     setLinkedAttachmentIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      // Dirty if different from last-saved set
+      const saved = savedLinkedIds.current;
+      const isDiff = saved.size !== next.size || [...next].some(i => !saved.has(i));
+      setDirtyTabs(p => ({ ...p, attachments: isDiff }));
       return next;
     });
   };
@@ -1391,42 +1418,70 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       const uploadData = await uploadRes.json();
       const newId: number = uploadData.id;
 
-      // Auto-attach to campaign preference
-      if (preferenceId) {
-        const newIds = Array.from(new Set([...Array.from(linkedAttachmentIds), newId]));
-        const attachRes = await apiFetch(`${apiBase}/campaign-preference/${preferenceId}/attachments/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newIds),
-        });
-        if (attachRes.ok) setLinkedAttachmentIds(new Set(newIds));
-      }
+      // Add to the full list and mark as linked locally (not saved to backend yet).
+      // The user must click "Save Attachments" to persist the link.
+      setAllAttachments(prev => {
+        if (prev.some(a => a.id === newId)) return prev;
+        return [...prev, { id: newId, filename: uploadData.filename, file_size: uploadData.file_size ?? 0 }];
+      });
+      setLinkedAttachmentIds(prev => {
+        const next = new Set(prev);
+        next.add(newId);
+        setDirtyTabs(p => ({ ...p, attachments: true }));
+        return next;
+      });
 
-      await loadAttachments();
       setUploadFile(null);
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
-      onToast('success', 'Uploaded', `"${uploadData.filename}" uploaded and attached`);
+      onToast('info', 'Uploaded', `"${uploadData.filename}" uploaded — click Save Attachments to link it`);
     } catch (err) {
       onToast('error', 'Upload Failed', err instanceof Error ? err.message : 'Upload failed');
     } finally { setUploading(false); }
   };
 
   // ── Save preferences ────────────────────────────────────────
-  const save = async () => {
+  const save = async (triggerTab: CsTab = 'brand') => {
     setSaving(true);
     try {
       const fd = new FormData();
+      // Always send ALL text fields so backend clears them to NULL when empty
       const textFields: (keyof CampaignPreferences)[] = [
         'bcc', 'business_name', 'business_info', 'goal', 'value_prop',
         'tone', 'cta', 'extras', 'email_instruction', 'signature',
       ];
-      textFields.forEach(k => fd.append(k as string, prefs[k] as string));
+      textFields.forEach(k => fd.append(k as string, (prefs[k] as string | undefined) ?? ''));
+
+      // Pending logo: deferred upload/remove
+      if (pendingLogo === 'remove') {
+        fd.append('logo', new File([], ''));
+      } else if (pendingLogo instanceof File) {
+        fd.append('logo', pendingLogo);
+      }
+
       fd.append('inherit_global_settings',    String(prefs.inherit_global_settings));
       fd.append('inherit_global_attachments', String(prefs.inherit_global_attachments));
-      fd.append('template_email', templateEnabled ? `SUBJECT: ${templateSubject}\n\n${templateBody}` : '');
+
       const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, {
         method: 'PUT', body: fd,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
+
+      // Update snapshots
+      savedPrefs.current = { ...prefs };
+      savedInherit.current = {
+        settings:    prefs.inherit_global_settings,
+        attachments: prefs.inherit_global_attachments,
+      };
+      clearDirty(triggerTab);
+      if (triggerTab !== 'inherit') clearDirty('inherit');
+
+      // Reload if logo changed to get fresh logo_data from server
+      if (pendingLogo) {
+        setPendingLogo(null);
+        setPendingLogoPreview(null);
+        await loadPrefs();
+      }
+
       onToast('success', 'Saved', 'Campaign preferences saved');
       onSaved();
     } catch (err) {
@@ -1434,8 +1489,14 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     } finally { setSaving(false); }
   };
 
-  const set = (k: keyof CampaignPreferences, v: string | number) =>
+  const set = (k: keyof CampaignPreferences, v: string | number, tab?: CsTab) => {
     setPrefs(p => ({ ...p, [k]: v }));
+    if (tab) markDirty(tab);
+    // Changing inherit flags makes the inherit tab dirty AND invalidates the saved state
+    if (k === 'inherit_global_settings' || k === 'inherit_global_attachments') {
+      markDirty('inherit');
+      }
+  };
 
 
   // ── Template Email handlers ─────────────────────────────────
@@ -1467,6 +1528,8 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         method: 'PUT', body: fd,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
+      savedTemplate.current = { subject: templateSubject, body: templateBody, enabled: templateEnabled };
+      clearDirty('template');
       onToast('success', 'Template', templateEnabled ? 'Template saved' : 'Template disabled');
       onSaved();
     } catch (err) {
@@ -1474,37 +1537,22 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     } finally { setTemplateSaving(false); }
   };
 
-  // ── Logo handlers ───────────────────────────────────────────
-  const handleLogoFile = async (file: File) => {
+  // ── Logo handlers — deferred until Save (like Settings.tsx) ────
+  const handleLogoFile = (file: File) => {
     if (!file.type.startsWith('image/')) { onToast('error', 'Logo', 'Please select a valid image file'); return; }
     if (file.size > 5 * 1024 * 1024) { onToast('error', 'Logo', 'File size must be less than 5 MB'); return; }
-    setLogoUploading(true);
-    try {
-      const fd = new FormData(); fd.append('logo', file);
-      const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, {
-        method: 'PUT', body: fd,
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Upload failed'); }
-      await loadPrefs();
-      onToast('success', 'Logo', 'Logo uploaded');
-    } catch (err) {
-      onToast('error', 'Logo', err instanceof Error ? err.message : 'Upload failed');
-    } finally { setLogoUploading(false); }
+    setPendingLogo(file);
+    const reader = new FileReader();
+    reader.onload = e => setPendingLogoPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    markDirty('branding');
   };
 
-  const handleLogoRemove = async () => {
-    setLogoUploading(true);
-    try {
-      const fd = new FormData(); fd.append('logo', new File([], ''));
-      const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, {
-        method: 'PUT', body: fd,
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Remove failed'); }
-      setPrefs(p => ({ ...p, logo_data: undefined }));
-      onToast('success', 'Logo', 'Logo removed');
-    } catch (err) {
-      onToast('error', 'Logo', err instanceof Error ? err.message : 'Remove failed');
-    } finally { setLogoUploading(false); }
+  const handleLogoRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPendingLogo('remove');
+    setPendingLogoPreview(null);
+    markDirty('branding');
   };
 
   // ── Derived attachment lists ────────────────────────────────
@@ -1527,13 +1575,13 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
 
 
-  const isCsDirty = (() => {
-    const sp = savedPrefs.current;
-    const st = savedTemplate.current;
-    const prefsChanged = (Object.keys(sp) as (keyof CampaignPreferences)[]).some(k => prefs[k] !== sp[k]);
-    const tmplChanged = templateSubject !== st.subject || templateBody !== st.body || templateEnabled !== st.enabled;
-    return prefsChanged || tmplChanged;
-  })();
+  const isCsDirty = Object.values(dirtyTabs).some(Boolean) || pendingLogo !== null;
+
+  // Use SAVED inherit values to drive inherited-vs-editable view in tabs.
+  // This prevents tabs from flipping to editable fields just because the user
+  // toggled the checkbox — the view only changes after Save is clicked.
+  const viewInheritSettings     = !!savedInherit.current.settings;
+  const viewInheritAttachments  = !!savedInherit.current.attachments;
   const handleCsClose = () => {
     if (isCsDirty) { setConfirmClose(true); return; }
     onClose();
@@ -1558,6 +1606,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
             <CsNav theme={theme}>
               <CsNavGroupLabel theme={theme}>Settings</CsNavGroupLabel>
               {csTabs.map(t => {
+                const isDirty = dirtyTabs[t.id] || (t.id === 'branding' && pendingLogo !== null);
                 return (
                   <CsNavBtn
                     key={t.id}
@@ -1567,6 +1616,12 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   >
                     {t.icon}
                     <CsNavLabel>{t.label}</CsNavLabel>
+                    {isDirty && (
+                      <span style={{
+                        fontSize: '0.85rem', fontWeight: 700, lineHeight: 1, flexShrink: 0,
+                        color: activeTab === t.id ? theme.colors.primary.main : '#F59E0B',
+                      }}>*</span>
+                    )}
                   </CsNavBtn>
                 );
               })}
@@ -1580,7 +1635,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Control whether this campaign falls back to your global settings and attachments.
                 </CsPanelSubtitle>
 
-                <InheritRow theme={theme} onClick={() => set('inherit_global_settings', prefs.inherit_global_settings ? 0 : 1)}>
+                <InheritRow theme={theme} onClick={() => set('inherit_global_settings', prefs.inherit_global_settings ? 0 : 1, 'inherit')}>
                   <InheritCheckbox theme={theme} $on={!!prefs.inherit_global_settings}>
                     <CheckSmallIcon />
                   </InheritCheckbox>
@@ -1590,7 +1645,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   </InheritText>
                 </InheritRow>
 
-                <InheritRow theme={theme} onClick={() => set('inherit_global_attachments', prefs.inherit_global_attachments ? 0 : 1)}>
+                <InheritRow theme={theme} onClick={() => set('inherit_global_attachments', prefs.inherit_global_attachments ? 0 : 1, 'inherit')}>
                   <InheritCheckbox theme={theme} $on={!!prefs.inherit_global_attachments}>
                     <CheckSmallIcon />
                   </InheritCheckbox>
@@ -1601,7 +1656,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                 </InheritRow>
 
                 <SSaveRow>
-                  <SBtn theme={theme} onClick={save} disabled={saving || loading}>
+                  <SBtn theme={theme} onClick={() => save('inherit')} disabled={saving || loading}>
                     {saving ? 'Saving…' : 'Save'}
                   </SBtn>
                 </SSaveRow>
@@ -1616,7 +1671,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Override your business name and description for this campaign.
                 </CsPanelSubtitle>
 
-                {prefs.inherit_global_settings ? (
+                {viewInheritSettings ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1640,15 +1695,15 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                     <SFG>
                       <SLabel theme={theme}>Business Name</SLabel>
                       <SInput theme={theme} placeholder="Acme Corp" value={prefs.business_name}
-                        onChange={e => set('business_name', e.target.value)} />
+                        onChange={e => set('business_name', e.target.value, 'brand')} />
                     </SFG>
                     <SFG style={{ marginBottom: 0 }}>
                       <SLabel theme={theme}>Business Info</SLabel>
                       <STextarea theme={theme} rows={3} placeholder="Brief description of your business…"
-                        value={prefs.business_info} onChange={e => set('business_info', e.target.value)} />
+                        value={prefs.business_info} onChange={e => set('business_info', e.target.value, 'brand')} />
                     </SFG>
                     <SSaveRow>
-                      <SBtn theme={theme} onClick={save} disabled={saving || loading}>
+                      <SBtn theme={theme} onClick={() => save('brand')} disabled={saving || loading}>
                         {saving ? 'Saving…' : 'Save'}
                       </SBtn>
                     </SSaveRow>
@@ -1665,7 +1720,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Define the goal, tone, and value proposition specific to this campaign.
                 </CsPanelSubtitle>
 
-                {prefs.inherit_global_settings ? (
+                {viewInheritSettings ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1698,11 +1753,11 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                       <SFG>
                         <SLabel theme={theme}>Goal</SLabel>
                         <SInput theme={theme} placeholder="Book a 15-min call" value={prefs.goal}
-                          onChange={e => set('goal', e.target.value)} />
+                          onChange={e => set('goal', e.target.value, 'strategy')} />
                       </SFG>
                       <SFG>
                         <SLabel theme={theme}>Tone</SLabel>
-                        <SSelect theme={theme} value={prefs.tone} onChange={e => set('tone', e.target.value)}>
+                        <SSelect theme={theme} value={prefs.tone} onChange={e => set('tone', e.target.value, 'strategy')}>
                           <option value="">— Select —</option>
                           {VALID_TONES.map(t => <option key={t} value={t}>{t}</option>)}
                         </SSelect>
@@ -1711,10 +1766,10 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                     <SFG style={{ marginBottom: 0 }}>
                       <SLabel theme={theme}>Value Proposition</SLabel>
                       <SInput theme={theme} placeholder="We reduce churn by 30% in 90 days"
-                        value={prefs.value_prop} onChange={e => set('value_prop', e.target.value)} />
+                        value={prefs.value_prop} onChange={e => set('value_prop', e.target.value, 'strategy')} />
                     </SFG>
                     <SSaveRow>
-                      <SBtn theme={theme} onClick={save} disabled={saving || loading}>
+                      <SBtn theme={theme} onClick={() => save('strategy')} disabled={saving || loading}>
                         {saving ? 'Saving…' : 'Save'}
                       </SBtn>
                     </SSaveRow>
@@ -1731,7 +1786,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Writing instructions, CTA, and extras specific to this campaign's emails.
                 </CsPanelSubtitle>
 
-                {prefs.inherit_global_settings ? (
+                {viewInheritSettings ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1768,25 +1823,25 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                       <SLabel theme={theme}>Writing Instructions</SLabel>
                       <STextarea theme={theme} rows={3}
                         placeholder="Start with a genuine compliment… never use 'I hope this finds you well'…"
-                        value={prefs.email_instruction} onChange={e => set('email_instruction', e.target.value)} />
+                        value={prefs.email_instruction} onChange={e => set('email_instruction', e.target.value, 'email')} />
                     </SFG>
                     <SFG>
                       <SLabel theme={theme}>Call to Action</SLabel>
                       <SInput theme={theme} placeholder="Would you be open to a quick call this week?"
-                        value={prefs.cta} onChange={e => set('cta', e.target.value)} />
+                        value={prefs.cta} onChange={e => set('cta', e.target.value, 'email')} />
                     </SFG>
                     <SFG>
                       <SLabel theme={theme}>Extra Instructions</SLabel>
                       <STextarea theme={theme} rows={2} placeholder="Never mention competitors. Keep emails under 150 words."
-                        value={prefs.extras} onChange={e => set('extras', e.target.value)} />
+                        value={prefs.extras} onChange={e => set('extras', e.target.value, 'email')} />
                     </SFG>
                     <SFG style={{ marginBottom: 0 }}>
                       <SLabel theme={theme}>BCC Address</SLabel>
                       <SInput theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com"
-                        value={prefs.bcc} onChange={e => set('bcc', e.target.value)} />
+                        value={prefs.bcc} onChange={e => set('bcc', e.target.value, 'email')} />
                     </SFG>
                     <SSaveRow>
-                      <SBtn theme={theme} onClick={save} disabled={saving || loading}>
+                      <SBtn theme={theme} onClick={() => save('email')} disabled={saving || loading}>
                         {saving ? 'Saving…' : 'Save'}
                       </SBtn>
                     </SSaveRow>
@@ -1809,6 +1864,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   onClick={() => {
                     const next = !templateEnabled;
                     setTemplateEnabled(next);
+                    markDirty('template');
                     if (next && !templateBody.trim()) {
                       setTimeout(generateTemplate, 0);
                     }
@@ -1851,7 +1907,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         theme={theme}
                         placeholder="A quick idea for {{company_name}}"
                         value={templateSubject}
-                        onChange={e => setTemplateSubject(e.target.value)}
+                        onChange={e => { setTemplateSubject(e.target.value); markDirty('template'); }}
                       />
                     </SFG>
 
@@ -1863,7 +1919,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         rows={10}
                         placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
                         value={templateBody}
-                        onChange={e => setTemplateBody(e.target.value)}
+                        onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
                         style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
                       />
                     </SFG>
@@ -1901,7 +1957,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Campaign-specific logo and email signature.
                 </CsPanelSubtitle>
 
-                {prefs.inherit_global_settings ? (
+                {viewInheritSettings ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1931,43 +1987,56 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         Logo
                         <span style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.5, marginLeft: '0.25rem' }}>PNG, JPG, GIF or WebP · max 5 MB</span>
                       </SLabel>
-                      <LogoArea
-                        theme={theme}
-                        $hasLogo={!!prefs.logo_data}
-                        onClick={() => !logoUploading && (document.getElementById('campaign-logo-upload') as HTMLInputElement)?.click()}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => { e.preventDefault(); if (!logoUploading) { const f = e.dataTransfer.files[0]; if (f) handleLogoFile(f); } }}
-                        style={{ cursor: logoUploading ? 'not-allowed' : 'pointer', opacity: logoUploading ? 0.6 : 1 }}
-                      >
-                        {prefs.logo_data ? (
-                          <>
-                            <LogoImg src={prefs.logo_data} alt="Campaign logo" />
-                            <LogoRemove theme={theme} type="button"
-                              onClick={e => { e.stopPropagation(); handleLogoRemove(); }}
-                              disabled={logoUploading}
-                              title={logoUploading ? 'Please wait…' : 'Remove logo'}
-                            >✕</LogoRemove>
-                          </>
-                        ) : (
-                          <LogoPlaceholder>
-                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                            </svg>
-                            <span>{logoUploading ? 'Uploading…' : 'Click or drag to upload'}</span>
-                          </LogoPlaceholder>
-                        )}
-                      </LogoArea>
+                      {/* Show pending preview, or current saved logo, or placeholder */}
+                      {(() => {
+                        const displaySrc = pendingLogo instanceof File
+                          ? pendingLogoPreview
+                          : pendingLogo === 'remove'
+                          ? null
+                          : (prefs.logo_data ?? null);
+                        const hasLogo = !!displaySrc;
+                        return (
+                          <LogoArea
+                            theme={theme}
+                            $hasLogo={hasLogo}
+                            onClick={() => (document.getElementById('campaign-logo-upload') as HTMLInputElement)?.click()}
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleLogoFile(f); }}
+                          >
+                            {hasLogo ? (
+                              <>
+                                <LogoImg src={displaySrc!} alt="Campaign logo" />
+                                <LogoRemove theme={theme} type="button"
+                                  onClick={handleLogoRemove}
+                                  title="Remove logo (saved when you click Save)"
+                                >✕</LogoRemove>
+                              </>
+                            ) : (
+                              <LogoPlaceholder>
+                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                                <span>Click or drag to upload</span>
+                              </LogoPlaceholder>
+                            )}
+                          </LogoArea>
+                        );
+                      })()}
+                      {pendingLogo && (
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.35rem', color: '#F59E0B', fontWeight: 500 }}>
+                          {pendingLogo === 'remove' ? '⚠ Logo will be removed when you Save' : '⚠ Logo will be uploaded when you Save'}
+                        </div>
+                      )}
                       <input id="campaign-logo-upload" type="file" accept="image/*" style={{ display: 'none' }}
-                        onChange={e => { const f = e.target.files?.[0]; if (f && !logoUploading) handleLogoFile(f); e.target.value = ''; }}
-                        disabled={logoUploading} />
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f); e.target.value = ''; }} />
                     </SFG>
                     <SFG style={{ marginBottom: 0 }}>
                       <SLabel theme={theme}>Email Signature</SLabel>
                       <STextarea theme={theme} rows={4} placeholder={'Best,\nJohn Smith\nAcme Corp'}
-                        value={prefs.signature} onChange={e => set('signature', e.target.value)} />
+                        value={prefs.signature} onChange={e => set('signature', e.target.value, 'branding')} />
                     </SFG>
                     <SSaveRow>
-                      <SBtn theme={theme} onClick={save} disabled={saving || loading}>
+                      <SBtn theme={theme} onClick={() => save('branding')} disabled={saving || loading}>
                         {saving ? 'Saving…' : 'Save'}
                       </SBtn>
                     </SSaveRow>
@@ -1984,7 +2053,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   Files uploaded here will automatically be added to this campaign. You can also select from previously uploaded files below.
                 </CsPanelSubtitle>
 
-                {prefs.inherit_global_attachments ? (
+                {viewInheritAttachments ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>

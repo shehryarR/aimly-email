@@ -180,22 +180,16 @@ async def update_campaign_preferences(
     user_id = current_user["user_id"]
 
     # ────────────────────────────────────────────────────────────────────────────
-    # STEP 1: TRACK WHICH TEXT FIELDS WERE SENT (before normalization)
+    # TRACK FIELDS THAT NEED sent-checks (numerics, template_email)
+    # Text fields are always sent by the frontend on every save, so we always
+    # update them. FastAPI converts empty string "" -> None for Optional[str].
     # ────────────────────────────────────────────────────────────────────────────
-    bcc_sent               = bcc is not None
-    business_name_sent     = business_name is not None
-    business_info_sent     = business_info is not None
-    goal_sent              = goal is not None
-    value_prop_sent        = value_prop is not None
-    tone_sent              = tone is not None
-    cta_sent               = cta is not None
-    extras_sent            = extras is not None
-    email_instruction_sent = email_instruction is not None
-    signature_sent         = signature is not None
-    template_email_sent    = template_email is not None
+    inherit_global_settings_sent    = inherit_global_settings is not None
+    inherit_global_attachments_sent = inherit_global_attachments is not None
+    template_email_sent             = template_email is not None
 
     # ────────────────────────────────────────────────────────────────────────────
-    # STEP 2: NORMALIZE TEXT FIELDS (empty string → None → SQL NULL)
+    # NORMALIZE TEXT FIELDS (empty string -> None -> SQL NULL)
     # ────────────────────────────────────────────────────────────────────────────
     bcc               = normalize_text_field(bcc)
     business_name     = normalize_text_field(business_name)
@@ -292,57 +286,34 @@ async def update_campaign_preferences(
                 update_fields = []
                 update_values = []
 
-                # TEXT FIELDS — use sent-tracking + normalized value
-                if bcc_sent:
-                    update_fields.append("bcc = ?")
-                    update_values.append(bcc)
+                # TEXT FIELDS — always update all (frontend sends every field on save).
+                # None here means the field was cleared (sent as "") -> stored as NULL.
+                for col, val in [
+                    ("bcc",               bcc),
+                    ("business_name",     business_name),
+                    ("business_info",     business_info),
+                    ("goal",              goal),
+                    ("value_prop",        value_prop),
+                    ("tone",              tone),
+                    ("cta",               cta),
+                    ("extras",            extras),
+                    ("email_instruction", email_instruction),
+                    ("signature",         signature),
+                ]:
+                    update_fields.append(f"{col} = ?")
+                    update_values.append(val)
 
-                if business_name_sent:
-                    update_fields.append("business_name = ?")
-                    update_values.append(business_name)
-
-                if business_info_sent:
-                    update_fields.append("business_info = ?")
-                    update_values.append(business_info)
-
-                if goal_sent:
-                    update_fields.append("goal = ?")
-                    update_values.append(goal)
-
-                if value_prop_sent:
-                    update_fields.append("value_prop = ?")
-                    update_values.append(value_prop)
-
-                if tone_sent:
-                    update_fields.append("tone = ?")
-                    update_values.append(tone)
-
-                if cta_sent:
-                    update_fields.append("cta = ?")
-                    update_values.append(cta)
-
-                if extras_sent:
-                    update_fields.append("extras = ?")
-                    update_values.append(extras)
-
-                if email_instruction_sent:
-                    update_fields.append("email_instruction = ?")
-                    update_values.append(email_instruction)
-
-                if signature_sent:
-                    update_fields.append("signature = ?")
-                    update_values.append(signature)
-
+                # TEMPLATE EMAIL — only update if explicitly sent (separate save button)
                 if template_email_sent:
                     update_fields.append("template_email = ?")
                     update_values.append(template_email)
 
-                # NUMERIC FIELDS — standard None check
-                if inherit_global_settings is not None:
+                # NUMERIC FIELDS — only update if sent (0 is a valid value)
+                if inherit_global_settings_sent:
                     update_fields.append("inherit_global_settings = ?")
                     update_values.append(inherit_global_settings)
 
-                if inherit_global_attachments is not None:
+                if inherit_global_attachments_sent:
                     update_fields.append("inherit_global_attachments = ?")
                     update_values.append(inherit_global_attachments)
 
