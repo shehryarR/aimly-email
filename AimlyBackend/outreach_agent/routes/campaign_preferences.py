@@ -31,12 +31,13 @@ INHERIT GLOBAL ATTACHMENTS:
 """
 
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Request
 from pydantic import BaseModel
 from typing import Optional
 import base64
 from core.database.connection import get_connection
 from routes.auth import get_current_user
+from routes.user_keys import _read_cookie_key, _LLM_COOKIE
 from services.email_service import generate_email as svc_generate_email
 
 campaign_preferences_router = APIRouter(tags=["Campaign Preferences"])
@@ -396,6 +397,7 @@ class TemplateEmailResponse(BaseModel):
 )
 def generate_template_email(
     campaign_id: int,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -422,21 +424,20 @@ def generate_template_email(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        # Fetch LLM credentials
-        cursor.execute(
-            "SELECT llm_api_key, llm_model FROM user_keys WHERE user_id = ?",
-            (user_id,),
-        )
-        key_row = cursor.fetchone()
-        if not key_row or not key_row["llm_api_key"]:
+        # Fetch LLM credentials — key from cookie, model from DB
+        llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
+        if not llm_api_key:
             raise HTTPException(
                 status_code=400,
                 detail="No LLM API key configured. Please add one in Settings → API Keys.",
             )
 
+        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+        key_row = cursor.fetchone()
+
         llm_config = {
-            "api_key": key_row["llm_api_key"],
-            "model":   key_row["llm_model"] or "gemini-2.0-flash",
+            "api_key": llm_api_key,
+            "model":   (key_row["llm_model"] if key_row else None) or "gemini-2.0-flash",
         }
 
         # Fetch campaign preferences (includes inherit_global_settings flag)

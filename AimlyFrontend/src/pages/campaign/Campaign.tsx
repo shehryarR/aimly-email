@@ -1508,8 +1508,14 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Generation failed'); }
       const d = await res.json();
-      setTemplateSubject(d.subject || '');
-      setTemplateBody(d.content || '');
+      const newSubject = d.subject || '';
+      const newBody = d.content || '';
+      setTemplateSubject(newSubject);
+      setTemplateBody(newBody);
+      // Mark dirty if the regenerated content differs from the last saved state
+      if (newSubject !== savedTemplate.current.subject || newBody !== savedTemplate.current.body) {
+        markDirty('template');
+      }
       onToast('success', 'Template', 'Template generated');
     } catch (err) {
       onToast('error', 'Template', err instanceof Error ? err.message : 'Failed to generate');
