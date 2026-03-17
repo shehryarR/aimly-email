@@ -554,7 +554,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   {uploadFile && !uploading && (
                     <button onClick={e => { e.stopPropagation(); onClearUploadFile(); }} style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1px solid ${theme.colors.base[300]}`, background: theme.colors.base[400], color: theme.colors.base.content, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', opacity: 0.6 }}>✕</button>
                   )}
-                  <input ref={uploadInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) onFilePick(f); }} disabled={uploading} />
+                  <input ref={uploadInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) onFilePick(f); }} disabled={uploading} />
                 </div>
                 {uploadFile && <div style={{ marginTop: '0.5rem' }}><PrimaryButton theme={theme} onClick={onUpload} disabled={uploading} style={{ padding: '0.45rem 1rem', fontSize: '0.8rem' }}>{uploading ? <BtnSpinner /> : null} {uploading ? 'Uploading…' : 'Upload & Attach'}</PrimaryButton></div>}
                 {uploadMsg && <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', fontWeight: 500, color: uploadMsg.type === 'success' ? (theme.colors.success?.main || '#22c55e') : theme.colors.error.main }}>{uploadMsg.text}</div>}

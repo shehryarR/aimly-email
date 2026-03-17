@@ -2099,7 +2099,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         <input
                           ref={uploadFileInputRef}
                           type="file"
-                          accept=".pdf,.doc,.docx,.txt,.csv"
+                          accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
                           style={{ display: 'none' }}
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleAttachFilePick(f); }}
                           disabled={uploading}
@@ -3828,7 +3828,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
                         onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = theme.colors.base[100]; e.currentTarget.style.color = theme.colors.base.content; e.currentTarget.style.borderColor = theme.colors.base[300]; }}
                       >✕</button>
                     )}
-                    <input ref={uploadFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" style={{ display: 'none' }}
+                    <input ref={uploadFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleAttachFilePick(f); }} disabled={uploading} />
                   </div>
 

@@ -1071,7 +1071,7 @@ const Attachments: React.FC = () => {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.doc,.docx,.txt,.csv"
+                accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
                 style={{ display: 'none' }}
                 onChange={e => { if (e.target.files?.length) uploadFiles(e.target.files); e.target.value = ''; }}
                 disabled={uploading}

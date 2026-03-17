@@ -26,7 +26,7 @@ ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/a
 ATTACHMENT_UPLOAD_DIR = Path(ATTACHMENT_STORAGE_PATH)
 os.makedirs(ATTACHMENT_UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".csv"}
+ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".csv", ".jpg", ".jpeg", ".png", ".gif", ".webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 

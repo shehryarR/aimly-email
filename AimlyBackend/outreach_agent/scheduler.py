@@ -13,6 +13,7 @@ import time
 import traceback
 import httpx
 from datetime import datetime, timezone
+from core.database.connection import get_connection
 
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "internal-secret-key")
 APP_PORT         = int(os.getenv("APP_PORT", 8000))

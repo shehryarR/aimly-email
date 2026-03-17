@@ -495,7 +495,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                         <button onClick={e => { e.stopPropagation(); onClearUploadFile(); }}
                           style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, border: `1px solid ${theme.colors.base[300]}`, background: theme.colors.base[100], color: theme.colors.base.content, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', opacity: 0.6 }}>✕</button>
                       )}
-                      <input ref={uploadInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv" style={{ display: 'none' }}
+                      <input ref={uploadInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }}
                         onChange={e => { const f = e.target.files?.[0]; if (f) onFilePick(f); }} disabled={uploading} />
                     </div>
                     {uploadFile && (
