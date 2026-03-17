@@ -1438,57 +1438,39 @@ const EmailHistory: React.FC = () => {
 
       {/* Detail modal */}
       {/* Detail modal */}
-      {(() => {
-        const isEditableStatus = activeEmail?.status === 'draft' || activeEmail?.status === 'scheduled' || activeEmail?.status === 'failed';
-        const emailDirty = isEditableStatus && (
-          editSubject   !== snapSubject.current   ||
-          editContent   !== snapContent.current   ||
-          editRecipient !== snapRecipient.current
-        );
-        const brandDirty = (activeEmail?.status === 'draft' || activeEmail?.status === 'scheduled') && (
-          brandSignature !== snapSignature.current ||
-          brandLogoData  !== snapLogo.current
-        );
-        const attachDirty = snapAttachIds.current !== '' &&
-          JSON.stringify([...linkedAttachIds].sort((a, b) => a - b)) !== snapAttachIds.current;
-        const isDirty = emailDirty || brandDirty || attachDirty;
-        return (
-          <EmailDetailModal
-            isOpen={modalOpen} onClose={closeModal} activeEmail={activeEmail}
-            titleLabel={activeEmail ? `${activeEmail.company_name} · ${activeEmail.campaign_name}` : ''}
-            editSubject={editSubject} editContent={editContent} editRecipient={editRecipient}
-            onSubjectChange={setEditSubject} onContentChange={setEditContent} onRecipientChange={setEditRecipient}
-            autoSaving={autoSaving}
-            schedOpen={schedOpen} schedTime={schedTime}
-            onSchedOpen={() => { setSchedOpen(true); setSchedTime(''); }}
-            onSchedClose={() => { setSchedOpen(false); setSchedTime(''); }}
-            onSchedTimeChange={setSchedTime} onScheduleSubmit={handleScheduleSubmit}
-            reschedOpen={reschedOpen} reschedTime={reschedTime}
-            onReschedOpen={() => { setReschedOpen(true); setReschedTime(''); }}
-            onReschedClose={() => { setReschedOpen(false); setReschedTime(''); }}
-            onReschedTimeChange={setReschedTime} onRescheduleSubmit={handleRescheduleSubmit}
-            actionLoading={actionLoading} onSend={handleSend} onSaveDraft={handleSaveDraft} onDelete={handleDelete}
-            tab={modalTab} onTabChange={setModalTab}
-            attachLoading={attachLoading} allAttachments={allAttachments} linkedAttachIds={linkedAttachIds}
-            attachSearch={attachSearch} onAttachSearchChange={setAttachSearch}
-            onToggleAttachment={toggleAttachment} onSaveAttachments={saveAttachments}
-            attachSaving={attachSaving} attachMsg={attachMsg}
-            uploadFile={uploadFile} onFilePick={handleFilePick} onUpload={handleUpload}
-            uploading={uploading} uploadMsg={uploadMsg}
-            isDragOver={isDragOver} onDragOver={() => setIsDragOver(true)} onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleFilePick}
-            onClearUploadFile={() => { setUploadFile(null); setUploadMsg(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}
-            uploadInputRef={uploadInputRef}
-            brandSignature={brandSignature} onBrandSignatureChange={v => { setBrandSignature(v); setBrandMsg(null); }}
-            brandLogoData={brandLogoData} onBrandLogoFile={handleBrandLogoFile}
-            onClearBrandLogo={() => { setBrandLogoData(null); setBrandMsg(null); }}
-            brandLogoUploading={brandLogoUploading} onSaveBranding={saveBranding}
-            brandSaving={brandSaving} brandMsg={brandMsg} brandLogoInputRef={brandLogoInputRef}
-            formatDT={formatDT} minDT={minDT} theme={theme}
-            isDirty={isDirty}
-          />
-        );
-      })()}
+      <EmailDetailModal
+        isOpen={modalOpen} onClose={closeModal} activeEmail={activeEmail}
+        titleLabel={activeEmail ? `${activeEmail.company_name} · ${activeEmail.campaign_name}` : ''}
+        editSubject={editSubject} editContent={editContent} editRecipient={editRecipient}
+        onSubjectChange={setEditSubject} onContentChange={setEditContent} onRecipientChange={setEditRecipient}
+        autoSaving={autoSaving}
+        schedOpen={schedOpen} schedTime={schedTime}
+        onSchedOpen={() => { setSchedOpen(true); setSchedTime(''); }}
+        onSchedClose={() => { setSchedOpen(false); setSchedTime(''); }}
+        onSchedTimeChange={setSchedTime} onScheduleSubmit={handleScheduleSubmit}
+        reschedOpen={reschedOpen} reschedTime={reschedTime}
+        onReschedOpen={() => { setReschedOpen(true); setReschedTime(''); }}
+        onReschedClose={() => { setReschedOpen(false); setReschedTime(''); }}
+        onReschedTimeChange={setReschedTime} onRescheduleSubmit={handleRescheduleSubmit}
+        actionLoading={actionLoading} onSend={handleSend} onSaveDraft={handleSaveDraft} onDelete={handleDelete}
+        tab={modalTab} onTabChange={setModalTab}
+        attachLoading={attachLoading} allAttachments={allAttachments} linkedAttachIds={linkedAttachIds}
+        attachSearch={attachSearch} onAttachSearchChange={setAttachSearch}
+        onToggleAttachment={toggleAttachment} onSaveAttachments={saveAttachments}
+        attachSaving={attachSaving} attachMsg={attachMsg}
+        uploadFile={uploadFile} onFilePick={handleFilePick} onUpload={handleUpload}
+        uploading={uploading} uploadMsg={uploadMsg}
+        isDragOver={isDragOver} onDragOver={() => setIsDragOver(true)} onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleFilePick}
+        onClearUploadFile={() => { setUploadFile(null); setUploadMsg(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}
+        uploadInputRef={uploadInputRef}
+        brandSignature={brandSignature} onBrandSignatureChange={v => { setBrandSignature(v); setBrandMsg(null); }}
+        brandLogoData={brandLogoData} onBrandLogoFile={handleBrandLogoFile}
+        onClearBrandLogo={() => { setBrandLogoData(null); setBrandMsg(null); }}
+        brandLogoUploading={brandLogoUploading} onSaveBranding={saveBranding}
+        brandSaving={brandSaving} brandMsg={brandMsg} brandLogoInputRef={brandLogoInputRef}
+        formatDT={formatDT} minDT={minDT} theme={theme}
+      />
 
       {/* Page */}
       <MainContent>
