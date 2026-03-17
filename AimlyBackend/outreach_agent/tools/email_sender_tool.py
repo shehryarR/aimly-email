@@ -13,6 +13,7 @@ UPDATED: Fixed logo alignment for iOS Mail (table-based layout).
 
 import hmac
 import hashlib
+import re
 from pydantic import BaseModel, Field
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -28,6 +29,8 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 
 load_dotenv()
+
+INLINE_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 
 
 # =============================================================================
@@ -47,6 +50,7 @@ class EmailSenderInput(BaseModel):
     email_id: Optional[int]                     = Field(None, description="DB email ID for tracking pixel")
     sender_email: Optional[str]                 = Field(None, description="Sender email address for unsubscribe link")
     attachments: Optional[List[AttachmentInfo]] = Field(None, description="List of attachment info with paths and display names")
+    inline_images: Optional[List[AttachmentInfo]] = Field(None, description="List of images to embed inline via {{filename}} placeholders")
     logo_path: Optional[Path]                   = Field(None, description="Path to inline logo image file on disk")
     logo_blob: Optional[bytes]                  = Field(None, description="Raw logo image bytes (from DB BLOB)")
     signature: Optional[str]                    = Field(None, description="Signature text to append")
@@ -198,6 +202,85 @@ def _logo_html(cid: str) -> str:
 
 
 # =============================================================================
+# INLINE IMAGE REPLACEMENT
+# =============================================================================
+
+def _resolve_inline_images(
+    email_text: str,
+    attachments: Optional[List["AttachmentInfo"]],
+) -> tuple[str, list]:
+    """
+    Scan email_text for {{filename}} placeholders and replace with inline
+    <img> tags if the attachment exists and is an image file.
+
+    Rules:
+      - File must exist in attachments list (matched by display_name)
+      - File extension must be in INLINE_IMAGE_EXTENSIONS
+      - File must exist on disk
+      - Non-image or missing files are left as-is
+
+    Returns:
+        (processed_html, inline_images)
+        processed_html: email_text with replacements applied
+        inline_images:  list of dicts {cid, data, filename} ready to attach
+    """
+    if not attachments:
+        print(f"[InlineImg] No attachments passed — skipping placeholder resolution")
+        return email_text, []
+
+    attachment_map = {a.display_name: a for a in attachments}
+    print(f"[InlineImg] attachment_map keys: {list(attachment_map.keys())}")
+
+    placeholders = re.findall(r'\{\{([^}]+)\}\}', email_text)
+    print(f"[InlineImg] Placeholders found in email text: {placeholders}")
+
+    inline_images = []
+    cid_counter = [0]
+
+    def replace_placeholder(match):
+        filename = match.group(1).strip()
+        ext = Path(filename).suffix.lower()
+        print(f"[InlineImg] Processing placeholder: '{filename}' (ext='{ext}')")
+
+        # Not an image extension — leave as-is
+        if ext not in INLINE_IMAGE_EXTENSIONS:
+            print(f"[InlineImg]   SKIP — '{ext}' not in INLINE_IMAGE_EXTENSIONS {INLINE_IMAGE_EXTENSIONS}")
+            return match.group(0)
+
+        # Not in attachments — leave as-is
+        att = attachment_map.get(filename)
+        if not att:
+            print(f"[InlineImg]   SKIP — '{filename}' not found in attachment_map")
+            return match.group(0)
+
+        # Not on disk — leave as-is
+        file_path = Path(att.file_path)
+        print(f"[InlineImg]   file_path='{file_path}' exists={file_path.exists()}")
+        if not file_path.exists():
+            print(f"[InlineImg]   SKIP — file does not exist on disk")
+            return match.group(0)
+
+        # All checks passed — replace with inline image
+        cid_counter[0] += 1
+        cid = f"inline_img_{cid_counter[0]:03d}"
+        try:
+            data = file_path.read_bytes()
+        except Exception as exc:
+            print(f"[InlineImg]   SKIP — Could not read file: {exc}")
+            return match.group(0)
+
+        inline_images.append({"cid": cid, "data": data, "filename": filename})
+        print(f"[InlineImg]   REPLACED — '{filename}' → cid:{cid}")
+        return (
+            f'<img src="cid:{cid}" alt="{filename}" '
+            f'style="display:block;max-width:100%;height:auto;">'
+        )
+
+    processed = re.sub(r'\{\{([^}]+)\}\}', replace_placeholder, email_text)
+    return processed, inline_images
+
+
+# =============================================================================
 # MAIN TOOL
 # =============================================================================
 
@@ -266,8 +349,15 @@ async def email_sender_tool(
             else:
                 print(f"  Logo not found: {input.logo_path}")
 
+        # ── Inline image placeholders ─────────────────────────────────────────
+        # Replace {{filename}} with <img cid:...> for image attachments only.
+        # Uses dedicated inline_images list — separate from regular attachments.
+        processed_text, inline_images = _resolve_inline_images(
+            input.email_text, input.inline_images
+        )
+
         # ── HTML body ─────────────────────────────────────────────────────────
-        formatted = input.email_text.replace("\n", "<br>")
+        formatted = processed_text.replace("\n", "<br>")
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -304,6 +394,12 @@ async def email_sender_tool(
             img = MIMEImage(logo_data)
             img.add_header("Content-ID", f"<{LOGO_CID}>")
             img.add_header("Content-Disposition", "inline", filename=logo_filename)
+            related.attach(img)
+
+        for inline in inline_images:
+            img = MIMEImage(inline["data"])
+            img.add_header("Content-ID", f"<{inline['cid']}>")
+            img.add_header("Content-Disposition", "inline", filename=inline["filename"])
             related.attach(img)
 
         root.attach(related)

@@ -27,6 +27,7 @@ DRAFTING A SENT or SCHEDULED EMAIL:
 
 import asyncio
 import os
+import re
 import requests
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel
@@ -47,8 +48,76 @@ from .utils.email_helpers import (
     resolve_attachment_ids_for_primary,
     get_own_attachments,
 )
+from tools.email_sender_tool import AttachmentInfo
+
+ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/attachments")
 
 email_actions_router = APIRouter(prefix="/email", tags=["Email Actions"])
+
+
+# =============================================================================
+# INLINE IMAGE HELPER
+# =============================================================================
+
+def _resolve_inline_image_attachments(
+    email_content: str,
+    user_id: int,
+) -> List[AttachmentInfo]:
+    """
+    Scan email_content for {{filename}} placeholders and return AttachmentInfo
+    objects for any that are image files belonging to this user.
+
+    These are passed alongside regular attachments to email_sender_tool,
+    which then replaces the placeholders with inline <img> tags.
+    """
+    from pathlib import Path
+
+    IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+
+    placeholders = re.findall(r'\{\{([^}]+)\}\}', email_content)
+    print(f"[InlineImg] Placeholders in content: {placeholders}")
+
+    if not placeholders:
+        return []
+
+    # Only look up filenames that have image extensions
+    image_placeholders = [
+        p.strip() for p in placeholders
+        if Path(p.strip()).suffix.lower() in IMAGE_EXTENSIONS
+    ]
+    print(f"[InlineImg] Image placeholders to resolve: {image_placeholders}")
+
+    if not image_placeholders:
+        return []
+
+    extra_attachments = []
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        for filename in image_placeholders:
+            cursor.execute(
+                "SELECT id, name FROM attachments WHERE user_id = ? AND name = ?",
+                (user_id, filename),
+            )
+            row = cursor.fetchone()
+            if not row:
+                print(f"[InlineImg]   '{filename}' not found in DB for user {user_id}")
+                continue
+
+            ext = Path(filename).suffix.lower()
+            file_path = Path(ATTACHMENT_STORAGE_PATH) / f"{row['id']}{ext}"
+            print(f"[InlineImg]   '{filename}' → {file_path} exists={file_path.exists()}")
+
+            if not file_path.exists():
+                print(f"[InlineImg]   SKIP — not on disk")
+                continue
+
+            extra_attachments.append(AttachmentInfo(
+                file_path=str(file_path),
+                display_name=filename,
+            ))
+            print(f"[InlineImg]   QUEUED for inline replacement")
+
+    return extra_attachments
 
 
 # =============================================================================
@@ -398,6 +467,27 @@ def send_email(
         recipient_email = email["recipient_email"]
         sender_email    = smtp_row["email_address"]
         if not request.time and _is_opted_out(sender_email, recipient_email):
+            reason = f"Recipient {recipient_email} has unsubscribed from {sender_email}"
+            if email["status"] == "primary":
+                cursor.execute("""
+                    INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                       recipient_email, status, timezone)
+                    VALUES (?, ?, ?, ?, 'failed', 'UTC')
+                """, (
+                    email["campaign_company_id"],
+                    email["email_subject"],
+                    email["email_content"],
+                    email["recipient_email"],
+                ))
+                failed_id = cursor.lastrowid
+            else:
+                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (email_id,))
+                failed_id = email_id
+            cursor.execute(
+                "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                (failed_id, reason),
+            )
+            conn.commit()
             raise HTTPException(
                 status_code=403,
                 detail=f"{recipient_email} has unsubscribed and will not receive emails from {sender_email}."
@@ -549,6 +639,11 @@ def send_email(
             with get_connection() as conn:
                 resolved_attachments = get_own_attachments(new_email_id, conn.cursor())
 
+            # Resolve any {{filename}} inline image placeholders from user's library
+            inline_image_attachments = _resolve_inline_image_attachments(
+                email_data["email_content"], user_id
+            )
+
             loop = asyncio.new_event_loop()
             send_result = loop.run_until_complete(
                 svc_send_email(
@@ -558,6 +653,7 @@ def send_email(
                     email_id=new_email_id,
                     subject=email_data["email_subject"],
                     attachments=resolved_attachments,
+                    inline_images=inline_image_attachments or None,
                     logo_blob=logo_blob,
                     signature=signature,
                     smtp_config=smtp_config,
