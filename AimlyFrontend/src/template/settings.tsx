@@ -1074,17 +1074,17 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         const gsId = d.id ?? null;
         setGlobalSettingsId(gsId);
         const snap: GlobalSettings = {
-          bcc: d.bcc || '',
-          business_name: d.business_name || '',
-          business_info: d.business_info || '',
-          goal: d.goal || '',
-          value_prop: d.value_prop || '',
-          tone: d.tone || '',
-          cta: d.cta || '',
-          extras: d.extras || '',
-          email_instruction: d.email_instruction || '',
-          signature: d.signature || '',
-          logo_data: d.logo_data || undefined,
+          bcc: d.bcc ?? '',
+          business_name: d.business_name ?? '',
+          business_info: d.business_info ?? '',
+          goal: d.goal ?? '',
+          value_prop: d.value_prop ?? '',
+          tone: d.tone ?? '',
+          cta: d.cta ?? '',
+          extras: d.extras ?? '',
+          email_instruction: d.email_instruction ?? '',
+          signature: d.signature ?? '',
+          logo_data: d.logo_data ?? undefined,
         };
         setGlobal(snap);
         savedGlobal.current = snap;
@@ -1103,9 +1103,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         'value_prop', 'tone', 'cta', 'extras',
         'email_instruction', 'signature'
       ];
+      // Always send every field — empty string signals backend to clear (set NULL).
+      // We intentionally do NOT skip empty fields; the backend relies on receiving
+      // them to know the user cleared the value.
       fieldsToSave.forEach(k => {
-        const value = (global[k] as string).trim();
-        formData.append(k, value);
+        const raw = global[k] as string | undefined;
+        const value = (raw ?? '').trim();
+        formData.append(k, value);  // "" sent → FastAPI gets None → stored as NULL
       });
       // Include pending logo change
       if (pendingLogo === 'remove') {

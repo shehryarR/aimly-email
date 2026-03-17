@@ -118,74 +118,24 @@ async def update_global_settings(
     """
     Update global settings for the current user.
     
-    UPDATE BEHAVIOR WITH NULL:
-    ════════════════════════════════════════════════════════════
+    The frontend always sends ALL text fields on every save.
+    FastAPI converts empty string "" → None for Optional[str] = Form(None),
+    so cleared fields arrive as None and are stored as NULL.
     
-    For optional text fields (bcc, business_name, business_info, etc.):
-    
-    1. Field NOT SENT:
-       - Not in form request
-       - Parameter = None
-       - Ignored in UPDATE
-       - Database: UNCHANGED
-    
-    2. Field SENT EMPTY (""):
-       - In form but with empty value
-       - Converted to None (via normalize_text_field)
-       - Added to UPDATE with None
-       - Database: SET TO NULL ✅
-    
-    3. Field SENT WITH VALUE:
-       - In form with actual value
-       - Converted to normalized value (whitespace trimmed)
-       - Added to UPDATE with value
-       - Database: SET TO VALUE ✅
-    
-    Logo handling (stored as BLOB):
-    - If logo file is provided: Save new logo BLOB with mime type
-    - If logo file is empty/zero size: Remove existing logo
-    - If logo file is not sent: Keep current logo unchanged
-    
-    Example Request:
-    ────────────────
-    PUT /global_setting
-    Form data:
-      bcc: ""                 ← EMPTY → SET TO NULL
-      business_name: "Acme"   ← VALUE → SET TO "Acme"
-      business_info: (not sent) ← NOT SENT → UNCHANGED
-      tone: "Professional"    ← VALUE → SET TO "Professional"
-      logo: (file.png)        ← FILE → REPLACE BLOB
-    
-    Result in DB:
-      bcc = NULL (cleared)
-      business_name = "Acme" (updated)
-      business_info = (unchanged - not sent)
-      tone = "Professional" (updated)
-      logo = BLOB, logo_mime_type = "image/png" (updated)
+    Text fields: always updated (None → NULL, value → value)
+    Logo:
+    - File with content → replace stored BLOB
+    - Empty file (size 0) → clear logo (NULL)
+    - Not sent → keep existing logo unchanged
     """
     user_id = current_user["user_id"]
     
     # ────────────────────────────────────────────────────────────────────────────
-    # STEP 1: TRACK WHICH OPTIONAL TEXT FIELDS WERE SENT
+    # NORMALIZE ALL TEXT FIELDS
     # ────────────────────────────────────────────────────────────────────────────
-    # Do this BEFORE normalization to distinguish:
-    # - Not sent (None) vs Sent empty ("" which becomes None after normalization)
-    
-    bcc_sent = bcc is not None
-    business_name_sent = business_name is not None
-    business_info_sent = business_info is not None
-    goal_sent = goal is not None
-    value_prop_sent = value_prop is not None
-    tone_sent = tone is not None
-    cta_sent = cta is not None
-    extras_sent = extras is not None
-    email_instruction_sent = email_instruction is not None
-    signature_sent = signature is not None
-    
-    # ────────────────────────────────────────────────────────────────────────────
-    # STEP 2: NORMALIZE OPTIONAL TEXT FIELDS
-    # ────────────────────────────────────────────────────────────────────────────
-    # Convert empty strings and whitespace to None
+    # FastAPI already converts empty string "" → None for Optional[str] = Form(None).
+    # normalize_text_field handles any remaining whitespace-only strings.
+    # Result: None → stored as NULL, "value" → stored as "value".
     
     bcc = normalize_text_field(bcc)
     business_name = normalize_text_field(business_name)
@@ -254,46 +204,23 @@ async def update_global_settings(
                 update_fields = []
                 update_values = []
                 
-                # OPTIONAL TEXT FIELDS - Use SENT tracking + normalized values
-                if bcc_sent:
-                    update_fields.append("bcc = ?")
-                    update_values.append(bcc)  # None (→ NULL) or "value"
-                    
-                if business_name_sent:
-                    update_fields.append("business_name = ?")
-                    update_values.append(business_name)  # None (→ NULL) or "value"
-                    
-                if business_info_sent:
-                    update_fields.append("business_info = ?")
-                    update_values.append(business_info)  # None (→ NULL) or "value"
-                    
-                if goal_sent:
-                    update_fields.append("goal = ?")
-                    update_values.append(goal)  # None (→ NULL) or "value"
-                    
-                if value_prop_sent:
-                    update_fields.append("value_prop = ?")
-                    update_values.append(value_prop)  # None (→ NULL) or "value"
-                    
-                if tone_sent:
-                    update_fields.append("tone = ?")
-                    update_values.append(tone)  # None (→ NULL) or "value"
-                    
-                if cta_sent:
-                    update_fields.append("cta = ?")
-                    update_values.append(cta)  # None (→ NULL) or "value"
-                    
-                if extras_sent:
-                    update_fields.append("extras = ?")
-                    update_values.append(extras)  # None (→ NULL) or "value"
-                    
-                if email_instruction_sent:
-                    update_fields.append("email_instruction = ?")
-                    update_values.append(email_instruction)  # None (→ NULL) or "value"
-                    
-                if signature_sent:
-                    update_fields.append("signature = ?")
-                    update_values.append(signature)  # None (→ NULL) or "value"
+                # TEXT FIELDS — always update all of them.
+                # Frontend sends every field on each save; None here means "clear to NULL".
+                text_field_map = [
+                    ("bcc", bcc),
+                    ("business_name", business_name),
+                    ("business_info", business_info),
+                    ("goal", goal),
+                    ("value_prop", value_prop),
+                    ("tone", tone),
+                    ("cta", cta),
+                    ("extras", extras),
+                    ("email_instruction", email_instruction),
+                    ("signature", signature),
+                ]
+                for col, val in text_field_map:
+                    update_fields.append(f"{col} = ?")
+                    update_values.append(val)  # None → NULL, "value" → "value"
                 
                 # LOGO FIELD - Added only if sent
                 if logo is not None:
