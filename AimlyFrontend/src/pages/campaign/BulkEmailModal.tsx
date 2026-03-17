@@ -509,24 +509,23 @@ const DiscardBtn = styled.button<{ theme: any }>`
   &:hover{opacity:0.9;}
 `;
 
-const UnsavedDialog: React.FC<{ open: boolean; theme: any; onKeep: () => void; onDiscard: () => void }> = ({ open, theme, onKeep, onDiscard }) => (
+const CloseConfirmDialog: React.FC<{ open: boolean; theme: any; onKeep: () => void; onClose: () => void }> = ({ open, theme, onKeep, onClose }) => (
   <ConfirmOverlay $open={open} onClick={onKeep}>
     <ConfirmDialog theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
       <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
-        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:36, height:36, borderRadius:'50%', background:(theme.colors.warning?.main||'#f59e0b')+'18', color:theme.colors.warning?.main||'#f59e0b', flexShrink:0 }}>
+        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:36, height:36, borderRadius:'50%', background:(theme.colors.primary.main)+'18', color:theme.colors.primary.main, flexShrink:0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
         </span>
         <div>
-          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:'0.2rem' }}>Unsaved changes</div>
-          <div style={{ fontSize:'0.8125rem', opacity:0.6, lineHeight:1.4 }}>You have unsaved changes. Closing will discard them.</div>
+          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:'0.2rem' }}>Close bulk email?</div>
+          <div style={{ fontSize:'0.8125rem', opacity:0.6, lineHeight:1.4 }}>Do you want to close or continue?</div>
         </div>
       </div>
       <ConfirmActions>
-        <KeepBtn theme={theme} onClick={onKeep}>Keep editing</KeepBtn>
-        <DiscardBtn theme={theme} onClick={onDiscard}>Discard changes</DiscardBtn>
+        <KeepBtn theme={theme} onClick={onKeep}>Continue editing</KeepBtn>
+        <DiscardBtn theme={theme} onClick={onClose}>Close</DiscardBtn>
       </ConfirmActions>
     </ConfirmDialog>
   </ConfirmOverlay>
@@ -604,8 +603,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const [confirmClose, setConfirmClose] = useState(false);
   const markDirty = () => setIsDirty(true);
   const handleClose = () => {
-    if (isDirty) { setConfirmClose(true); return; }
-    onClose();
+    setConfirmClose(true);
   };
 
   const upd = (i: number, p: Partial<BulkEmailEntry>) => setEntries(prev => prev.map((e, j) => j===i ? {...e,...p} : e));
@@ -1728,11 +1726,11 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         </Footer>
 
       </ModalBox>
-      <UnsavedDialog
+      <CloseConfirmDialog
         open={confirmClose}
         theme={theme}
         onKeep={() => setConfirmClose(false)}
-        onDiscard={() => { setConfirmClose(false); setIsDirty(false); onClose(); }}
+        onClose={() => { setConfirmClose(false); setIsDirty(false); onClose(); }}
       />
       </>
       )}
