@@ -76,6 +76,18 @@ def create_tables() -> None:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Migrate existing emails table if html_email column doesn't exist
+        try:
+            cursor.execute("ALTER TABLE emails ADD COLUMN html_email INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Migrate existing campaign_preferences table if template_html_email column doesn't exist
+        try:
+            cursor.execute("ALTER TABLE campaign_preferences ADD COLUMN template_html_email INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # ------------------------------------------------------------------
         # User Keys (renamed from user_information)
         # ------------------------------------------------------------------
@@ -203,7 +215,8 @@ def create_tables() -> None:
                 timezone            TEXT DEFAULT 'UTC',
                 sent_at             DATETIME,
                 read_at             DATETIME,
-                
+                html_email          INTEGER DEFAULT 0,   -- 1 = LLM-generated HTML email, 0 = plain text email
+
                 created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (campaign_company_id)
                     REFERENCES campaign_company (id)
@@ -236,6 +249,7 @@ def create_tables() -> None:
                 logo_mime_type           TEXT,        -- Stores MIME type (image/png, image/jpeg, etc.)
                 
                 template_email            TEXT,        -- Reusable email template with placeholders like {{company_name}}
+                template_html_email      INTEGER DEFAULT 0,  -- 1 = template is HTML, 0 = template is plain text
                 inherit_global_settings  INTEGER DEFAULT 1,
                 inherit_global_attachments INTEGER DEFAULT 1,
 

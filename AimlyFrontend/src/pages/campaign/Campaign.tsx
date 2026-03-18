@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
@@ -61,6 +62,7 @@ interface CampaignPreferences {
   signature: string;
   logo_data?: string;
   template_email?: string;
+  template_html_email?: number;
   inherit_global_settings: number;
   inherit_global_attachments: number;
 }
@@ -404,6 +406,63 @@ const IconBtn = styled.button<{ theme: any; $variant?: 'danger' | 'default' }>`
   }
   &:disabled { opacity: 0.4; cursor: not-allowed; }
   svg { width: 16px; height: 16px; }
+`;
+// Single generate button with mode label + dropdown arrow
+// Layout: [✦ icon]  [Plain Text / HTML Email]  [▾]
+const GenBtn = styled.button<{ theme: any; $disabled?: boolean }>`
+  position: relative;
+  display: inline-flex; align-items: center;
+  height: 34px;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  color: ${p => p.theme.colors.base.content};
+  opacity: ${p => p.$disabled ? 0.3 : 1};
+  pointer-events: ${p => p.$disabled ? 'none' : 'auto'};
+  cursor: pointer; overflow: visible;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  padding: 0;
+  &:hover { border-color: ${p => p.theme.colors.primary.main}; background: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.content}; }
+  &:hover .gen-divider { background: ${p => p.theme.colors.primary.content}22; }
+`;
+const GenBtnIcon = styled.span`
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 0.45rem;
+  svg { width: 15px; height: 15px; }
+`;
+const GenBtnLabel = styled.span`
+  font-size: 0.75rem; font-weight: 600;
+  padding: 0 0.3rem 0 0; white-space: nowrap;
+`;
+const GenBtnDivider = styled.span<{ theme: any }>`
+  width: 1px; height: 18px; flex-shrink: 0;
+  background: ${p => p.theme.colors.base[300]};
+  transition: background 0.15s;
+`;
+const GenBtnChevron = styled.span<{ $open: boolean }>`
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 0.4rem;
+  svg { width: 10px; height: 10px; transition: transform 0.15s; transform: ${p => p.$open ? 'rotate(180deg)' : 'none'}; }
+`;
+const GenDropMenu = styled.div<{ theme: any }>`
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 3000;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  border-radius: ${p => p.theme.radius.field};
+  box-shadow: ${p => p.theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)'};
+  min-width: 130px; overflow: hidden;
+  animation: ${fadeSlide} 0.15s ease;
+`;
+const GenDropItem = styled.button<{ theme: any; $active?: boolean }>`
+  width: 100%; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: none; background: ${p => p.$active ? p.theme.colors.primary.main + '12' : 'transparent'};
+  color: ${p => p.$active ? p.theme.colors.primary.main : p.theme.colors.base.content};
+  font-size: 0.8rem; font-weight: ${p => p.$active ? 600 : 500}; cursor: pointer; text-align: left;
+  transition: background 0.1s;
+  svg { width: 13px; height: 13px; opacity: 0.7; flex-shrink: 0; }
+  &:hover { background: ${p => p.theme.colors.primary.main + '15'}; color: ${p => p.theme.colors.primary.main}; }
+  &:hover svg { opacity: 1; }
 `;
 const Pagination = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: center;
@@ -1158,6 +1217,55 @@ const InheritIcon = () => (
 // ─────────────────────────────────────────────────────────────
 type CsTab = 'inherit' | 'brand' | 'strategy' | 'email' | 'branding' | 'attachments' | 'template';
 
+// ─────────────────────────────────────────────────────────────
+// TEMPLATE GENERATE DROPDOWN — mirrors company list GenBtn
+// ─────────────────────────────────────────────────────────────
+const TemplateGenDropdown: React.FC<{
+  theme: any;
+  generating: boolean;
+  htmlEmail: boolean;
+  onGenerate: (htmlEmail: boolean) => void;
+}> = ({ theme, generating, htmlEmail, onGenerate }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <GenBtn theme={theme} $disabled={generating} style={{ opacity: generating ? 0.6 : 1, pointerEvents: generating ? 'none' : 'auto' }}>
+      <GenBtnIcon>
+        {generating
+          ? <ESpinner style={{ width: 13, height: 13, borderWidth: 2 }} />
+          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        }
+      </GenBtnIcon>
+      <GenBtnLabel onClick={() => !generating && onGenerate(htmlEmail)}>
+        {generating ? 'Generating…' : 'Plain Text'}
+      </GenBtnLabel>
+      <GenBtnDivider theme={theme} className="gen-divider" />
+      <GenBtnChevron $open={open}
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </GenBtnChevron>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }}
+            onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <GenDropMenu theme={theme}>
+            <GenDropItem theme={theme} $active={!htmlEmail}
+              onClick={e => { e.stopPropagation(); onGenerate(false); setOpen(false); }}>
+              <PlainIcon />Plain Text
+            </GenDropItem>
+            <GenDropItem theme={theme} $active={htmlEmail}
+              onClick={e => { e.stopPropagation(); onGenerate(true); setOpen(false); }}>
+              <HtmlIcon />HTML Email
+            </GenDropItem>
+          </GenDropMenu>
+        </>
+      )}
+    </GenBtn>
+  );
+};
+
 interface CampaignSettingsModalProps {
   isOpen: boolean;
   campaignId: number;
@@ -1185,7 +1293,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
   // ── Dirty-check snapshot ────────────────────────────────────
   const savedPrefs    = useRef<CampaignPreferences>(defaultPrefs());
-  const savedTemplate = useRef({ subject: '', body: '', enabled: false });
+  const savedTemplate = useRef({ subject: '', body: '' });
   const savedLinkedIds = useRef<Set<number>>(new Set());
   const [confirmClose, setConfirmClose] = useState(false);
 
@@ -1202,9 +1310,9 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
 
   // ── Template Email state ────────────────────────────────────
-  const [templateEnabled,    setTemplateEnabled]    = useState(false);
   const [templateSubject,    setTemplateSubject]    = useState('');
   const [templateBody,       setTemplateBody]       = useState('');
+  const [templateHtmlEmail,  setTemplateHtmlEmail]  = useState(false);
   const [templateGenerating, setTemplateGenerating] = useState(false);
   const [templateSaving,     setTemplateSaving]     = useState(false);
 
@@ -1275,11 +1383,11 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
           setTemplateSubject('');
           setTemplateBody('');
         }
-        setTemplateEnabled(!!tmpl.trim());
+        setTemplateHtmlEmail(!!(d.template_html_email));
         // snapshot for dirty detection
         const loadedSubj = tmpl ? (tmpl.split('\n')[0].startsWith('SUBJECT:') ? tmpl.split('\n')[0].replace('SUBJECT:', '').trim() : '') : '';
         const loadedBody = loadedSubj ? tmpl.split('\n').slice(1).join('\n').trimStart() : tmpl;
-        savedTemplate.current = { subject: loadedSubj, body: loadedBody, enabled: !!tmpl.trim() };
+        savedTemplate.current = { subject: loadedSubj, body: loadedBody };
         savedPrefs.current = {
           bcc: d.bcc ?? '', business_name: d.business_name ?? '',
           business_info: d.business_info ?? '', goal: d.goal ?? '',
@@ -1299,7 +1407,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       } else if (res.status === 404) {
         setPrefs(defaultPrefs());
         savedPrefs.current = defaultPrefs();
-        savedTemplate.current = { subject: '', body: '', enabled: false };
+        savedTemplate.current = { subject: '', body: '' };
         await loadAttachments();
         await loadGlobalSettings();
       }
@@ -1503,9 +1611,10 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const generateTemplate = async () => {
     setTemplateGenerating(true);
     try {
-      const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/generate-template/`, {
-        method: 'POST',
-      });
+      const res = await apiFetch(
+        `${apiBase}/campaign/${campaignId}/campaign_preference/generate-template/?html_email=${templateHtmlEmail}`,
+        { method: 'POST' },
+      );
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Generation failed'); }
       const d = await res.json();
       const newSubject = d.subject || '';
@@ -1526,17 +1635,15 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     setTemplateSaving(true);
     try {
       const fd = new FormData();
-      const templateEmail = templateEnabled
-        ? `SUBJECT: ${templateSubject}\n\n${templateBody}`
-        : '';
-      fd.append('template_email', templateEmail);
+      fd.append('template_email', `SUBJECT: ${templateSubject}\n\n${templateBody}`);
+      fd.append('template_html_email', templateHtmlEmail ? '1' : '0');
       const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, {
         method: 'PUT', body: fd,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
-      savedTemplate.current = { subject: templateSubject, body: templateBody, enabled: templateEnabled };
+      savedTemplate.current = { subject: templateSubject, body: templateBody };
       clearDirty('template');
-      onToast('success', 'Template', templateEnabled ? 'Template saved' : 'Template disabled');
+      onToast('success', 'Template', 'Template saved');
       onSaved();
     } catch (err) {
       onToast('error', 'Template', err instanceof Error ? err.message : 'Failed to save');
@@ -1864,45 +1971,47 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                   A fixed email sent to all companies. Use <code style={{ fontSize: '0.78rem', background: 'rgba(128,128,128,0.15)', padding: '1px 5px', borderRadius: 4 }}>{'{{company_name}}'}</code> as a placeholder.
                 </CsPanelSubtitle>
 
-                {/* Enable / disable toggle */}
-                <InheritRow
-                  theme={theme}
-                  onClick={() => {
-                    const next = !templateEnabled;
-                    setTemplateEnabled(next);
-                    markDirty('template');
-                    if (next && !templateBody.trim()) {
-                      setTimeout(generateTemplate, 0);
-                    }
-                  }}
-                  style={{ marginBottom: '1.5rem' }}
-                >
-                  <InheritCheckbox theme={theme} $on={templateEnabled}>
-                    <CheckSmallIcon />
-                  </InheritCheckbox>
-                  <InheritText>
-                    <InheritTitle>Enable Template Email</InheritTitle>
-                    <InheritDesc>When enabled, emails use this template instead of AI-personalised content</InheritDesc>
-                  </InheritText>
-                </InheritRow>
-
-                {templateEnabled ? (
-                  <>
-                    {/* Toolbar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.65rem' }}>
-                      <SBtn
+                {/* Toolbar */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
+                      <TemplateGenDropdown
                         theme={theme}
-                        onClick={generateTemplate}
-                        disabled={templateGenerating}
-                        style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                      >
-                        {templateGenerating
-                          ? <><ESpinner style={{ width: 13, height: 13, borderWidth: 2 }} />Generating…</>
-                          : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Generate with AI</>
-                        }
-                      </SBtn>
-                      <span style={{ fontSize: '0.72rem', opacity: 0.38, marginLeft: 'auto' }}>
-                        <code style={{ fontSize: '0.72rem' }}>{'{{company_name}}'}</code> is replaced per email
+                        generating={templateGenerating}
+                        htmlEmail={templateHtmlEmail}
+                        onGenerate={(html) => {
+                          setTemplateHtmlEmail(html);
+                          setTimeout(generateTemplate, 0);
+                        }}
+                      />
+                    </div>
+
+                    {/* HTML Template toggle */}
+                    <div
+                      onClick={() => { setTemplateHtmlEmail(v => !v); markDirty('template'); }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none', marginBottom: '1rem' }}
+                    >
+                      <div style={{
+                        width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                        background: templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300],
+                        position: 'relative', transition: 'background 0.2s',
+                        border: `1px solid ${templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 2, left: templateHtmlEmail ? 17 : 2,
+                          width: 14, height: 14, borderRadius: '50%',
+                          background: '#fff', transition: 'left 0.2s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>HTML Template</span>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 500,
+                        color: templateHtmlEmail ? theme.colors.primary.main : theme.colors.base.content,
+                        opacity: templateHtmlEmail ? 1 : 0.4,
+                        background: templateHtmlEmail ? theme.colors.primary.main + '15' : 'transparent',
+                        border: `1px solid ${templateHtmlEmail ? theme.colors.primary.main + '40' : 'transparent'}`,
+                        borderRadius: 999, padding: '1px 7px', transition: 'all 0.2s',
+                      }}>
+                        {templateHtmlEmail ? 'On' : 'Off'}
                       </span>
                     </div>
 
@@ -1935,23 +2044,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         {templateSaving ? 'Saving…' : 'Save Template'}
                       </SBtn>
                     </SSaveRow>
-                  </>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '0.75rem', opacity: 0.42, textAlign: 'center', padding: '2.5rem 1.5rem' }}>
-                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                      <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Template email disabled</div>
-                    <div style={{ fontSize: '0.8rem', lineHeight: 1.55 }}>
-                      Enable above to write or generate a reusable template.<br/>
-                      While disabled, emails are AI-personalised per company.
-                    </div>
-                    <SBtn theme={theme} onClick={saveTemplate} disabled={templateSaving} style={{ marginTop: '0.25rem', padding: '0.45rem 1.1rem', fontSize: '0.8rem' }}>
-                      {templateSaving ? 'Saving…' : 'Save (disable)'}
-                    </SBtn>
-                  </div>
-                )}
               </CsTabPanel>
             )}
 
@@ -3265,6 +3357,82 @@ const TemplateIcon = () => (
     <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
   </svg>
 );
+const HtmlIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+  </svg>
+);
+const PlainIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/>
+  </svg>
+);
+
+// ─────────────────────────────────────────────────────────────
+// REGENERATE DROPDOWN — single button replacing three regen btns
+// ─────────────────────────────────────────────────────────────
+const RegenDropdown: React.FC<{
+  theme: any;
+  acting: boolean;
+  hasTemplateEmail: boolean;
+  onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
+}> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      {/* Main button */}
+      <EGenBtn
+        theme={theme}
+        disabled={acting}
+        style={{ borderRadius: '6px 0 0 6px', borderRight: 'none', paddingRight: '0.65rem' }}
+        onClick={() => !acting && setOpen(v => !v)}
+      >
+        <RegenerateIcon />Regenerate
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+          style={{ width: 11, height: 11, marginLeft: 2, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </EGenBtn>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 3000,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.box,
+            boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)',
+            minWidth: 160, padding: '0.3rem',
+          }}>
+            {([
+              { type: 'plain' as const,    icon: <PlainIcon />,    label: 'Plain Text' },
+              { type: 'html' as const,     icon: <HtmlIcon />,     label: 'HTML Email' },
+              { type: 'template' as const, icon: <TemplateIcon />, label: 'From Template', disabled: !hasTemplateEmail },
+            ] as const).map(item => (
+              <div
+                key={item.type}
+                onClick={() => { if (!('disabled' in item && item.disabled)) { onRegenerate(item.type); setOpen(false); } }}
+                title={'disabled' in item && item.disabled ? 'No template set — configure in Campaign Settings' : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.45rem 0.6rem', borderRadius: theme.radius.field,
+                  cursor: 'disabled' in item && item.disabled ? 'not-allowed' : 'pointer',
+                  opacity: 'disabled' in item && item.disabled ? 0.4 : 1,
+                  fontSize: '0.8rem', fontWeight: 500,
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => { if (!('disabled' in item && item.disabled)) (e.currentTarget as HTMLElement).style.background = theme.colors.base[300]; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                {item.icon}{item.label}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 // ─────────────────────────────────────────────────────────────
 // EMAIL MODAL COMPONENT
@@ -3276,6 +3444,7 @@ interface EmailData {
   recipient_email: string | null;
   status: string;
   attachment_ids?: number[];
+  html_email?: number; // 0 = plain, 1 = html
 }
 
 interface EmailModalProps {
@@ -3287,10 +3456,12 @@ interface EmailModalProps {
   onClose: () => void;
   onToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, msg: string) => void;
   hasTemplateEmail?: boolean;
+  initialHtmlEmail?: boolean;
+  initialQueryType?: 'plain' | 'html' | 'template';
 }
 
 const EmailModal: React.FC<EmailModalProps> = ({
-  isOpen, company, campaignId, theme, apiBase, onClose, onToast, hasTemplateEmail,
+  isOpen, company, campaignId, theme, apiBase, onClose, onToast, hasTemplateEmail, initialHtmlEmail = false, initialQueryType,
 }) => {
   type ETab = 'email' | 'attachments' | 'branding';
   const [activeTab, setActiveTab]   = useState<ETab>('email');
@@ -3300,6 +3471,8 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [subject, setSubject]       = useState('');
   const [body, setBody]             = useState('');
   const [acting, setActing]         = useState<string | null>(null);
+  const [htmlEmail, setHtmlEmail]   = useState(false);
+  const htmlEmailRef = useRef(false);
   const [schedOpen, setSchedOpen]   = useState(false);
   const [schedTime, setSchedTime]   = useState('');
   const [autoSaving, setAutoSaving] = useState(false);
@@ -3342,6 +3515,8 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setSchedOpen(false);
     setSchedTime('');
     setActing(null);
+    setHtmlEmail(initialHtmlEmail);
+    htmlEmailRef.current = initialHtmlEmail;
     setAutoSaving(false);
     lastSaved.current = '';
     setAttachSearch('');
@@ -3421,6 +3596,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setEmail(d);
     setSubject(d.email_subject || '');
     setBody(d.email_content || '');
+    setHtmlEmail(!!(d.html_email));
     setBrandSignature((d as any).signature || '');
     setBrandLogoData((d as any).logo_data || null);
     setInheritedAttachIds(d.attachment_ids ?? []);
@@ -3429,15 +3605,19 @@ const EmailModal: React.FC<EmailModalProps> = ({
     loadEmailLinkedAttachments(d.id);
   };
 
-  const generateEmail = async (personalized: boolean | null) => {
+  const generateEmail = async (queryType: 'plain' | 'html' | 'template' | null) => {
     if (!company) return;
-    const isInitialLoad = personalized === null;
+    const isInitialLoad = queryType === null;
+    // On initial load, derive query_type from initialQueryType prop or htmlEmailRef
+    const resolvedType: 'plain' | 'html' | 'template' = queryType ?? (
+      initialQueryType === 'template' ? 'template' :
+      (initialQueryType === 'html' || htmlEmailRef.current) ? 'html' : 'plain'
+    );
     setPhase('loading');
-    setLoadingMsg(personalized === false ? 'Generating from template…' : 'Generating personalised email…');
+    setLoadingMsg(resolvedType === 'template' ? 'Generating from template…' : `Generating ${resolvedType === 'html' ? 'HTML' : 'plain'} email…`);
     try {
-      const qp = personalized === null ? '/' : `/?personalized=${personalized}`;
       const genRes = await apiFetch(
-        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email${qp}`,
+        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}`,
         { method: 'POST' },
       );
       if (!genRes.ok) {
@@ -3451,7 +3631,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
       if (primRes.ok) {
         const d = await primRes.json();
         populateEmail(d);
-        if (personalized !== null) onToast('success', 'Generated', `Email ${personalized ? 'personalised' : 'from template'} successfully`);
+        if (!isInitialLoad) onToast('success', 'Generated', `Email regenerated (${resolvedType}) successfully`);
       } else {
         if (isInitialLoad) { onClose(); return; }
         setPhase('error');
@@ -3744,28 +3924,16 @@ const EmailModal: React.FC<EmailModalProps> = ({
               </div>
             )}
 
-            {/* ── EMAIL TAB ─────────────────────────────────────────── */}
             {phase === 'ready' && activeTab === 'email' && (
               <>
                 {/* Regenerate row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.45, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Regenerate:</span>
-                  <EGenBtn theme={theme} disabled={!!acting} onClick={() => generateEmail(true)}>
-                    <RegenerateIcon /><PersonalizedIcon />Personalised
-                  </EGenBtn>
-                  <span
-                    title={!hasTemplateEmail ? 'No template email set — configure in Campaign Preferences → Email Content' : undefined}
-                    style={{ display: 'inline-flex' }}
-                  >
-                    <EGenBtn
-                      theme={theme}
-                      disabled={!!acting || !hasTemplateEmail}
-                      onClick={() => hasTemplateEmail && generateEmail(false)}
-                      style={!hasTemplateEmail ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
-                    >
-                      <RegenerateIcon /><TemplateIcon />From Template
-                    </EGenBtn>
-                  </span>
+                  <RegenDropdown
+                    theme={theme}
+                    acting={!!acting}
+                    hasTemplateEmail={!!hasTemplateEmail}
+                    onRegenerate={generateEmail}
+                  />
                   {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
                 </div>
 
@@ -3779,6 +3947,52 @@ const EmailModal: React.FC<EmailModalProps> = ({
                 <div>
                   <EFieldLabel theme={theme}>Body</EFieldLabel>
                   <EBodyTextarea theme={theme} value={body} onChange={e => setBody(e.target.value)} placeholder="Email body…" />
+                </div>
+
+                {/* HTML Email toggle */}
+                <div
+                  onClick={() => {
+                    const next = !htmlEmail;
+                    setHtmlEmail(next);
+                    htmlEmailRef.current = next;
+                    if (email) {
+                      apiFetch(`${apiBase}/email/${email.id}/update/`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ html_email: next }),
+                      }).catch(() => {/* silent */});
+                    }
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.6rem',
+                    cursor: 'pointer', userSelect: 'none', width: 'fit-content',
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                    background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300],
+                    position: 'relative', transition: 'background 0.2s',
+                    border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2, left: htmlEmail ? 17 : 2,
+                      width: 14, height: 14, borderRadius: '50%',
+                      background: '#fff', transition: 'left 0.2s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>
+                    HTML Email
+                  </span>
+                  <span style={{
+                    fontSize: '0.7rem', fontWeight: 500,
+                    color: htmlEmail ? theme.colors.primary.main : theme.colors.base.content,
+                    opacity: htmlEmail ? 1 : 0.4,
+                    background: htmlEmail ? theme.colors.primary.main + '15' : 'transparent',
+                    border: `1px solid ${htmlEmail ? theme.colors.primary.main + '40' : 'transparent'}`,
+                    borderRadius: 999, padding: '1px 7px', transition: 'all 0.2s',
+                  }}>
+                    {htmlEmail ? 'On' : 'Off'}
+                  </span>
                 </div>
               </>
             )}
@@ -4485,6 +4699,86 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({ company, isOpen
 };
 
 // ─────────────────────────────────────────────────────────────
+// COMPANY GEN BUTTON — portal-based dropdown to escape z-index/
+// transform stacking context of CompanyCardItem
+// ─────────────────────────────────────────────────────────────
+const CompanyGenBtn: React.FC<{
+  company: Company;
+  theme: any;
+  disabled: boolean;
+  hasTemplateEmail: boolean;
+  mode: 'plain' | 'html' | 'template';
+  onModeChange: (mode: 'plain' | 'html' | 'template', company: Company) => void;
+  onOpen: (company: Company) => void;
+}> = ({ company, theme, disabled, hasTemplateEmail, mode, onModeChange, onOpen }) => {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const chevronRef = useRef<HTMLSpanElement>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (disabled) return;
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({ top: rect.bottom + 4, left: rect.right });
+    }
+    setOpen(v => !v);
+  };
+
+  return (
+    <GenBtn
+      theme={theme}
+      $disabled={disabled}
+      title={disabled ? (company.optedOut ? 'Company has opted out of emails' : 'Deselect all to use individual actions') : 'Generate / view email'}
+      onClick={e => { e.stopPropagation(); if (!disabled) onOpen(company); }}
+    >
+      <GenBtnIcon><SparkleIcon /></GenBtnIcon>
+      <GenBtnLabel>Plain Text</GenBtnLabel>
+      <GenBtnDivider theme={theme} className="gen-divider" />
+      <GenBtnChevron ref={chevronRef} $open={open} onClick={openMenu}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </GenBtnChevron>
+      {open && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+            onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
+            transform: 'translateX(-100%)',
+            zIndex: 9999,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)',
+            minWidth: 130, overflow: 'hidden',
+          }}>
+            <GenDropItem theme={theme} $active={mode === 'plain'}
+              onClick={e => { e.stopPropagation(); setOpen(false); onModeChange('plain', company); }}>
+              <PlainIcon />Plain Text
+            </GenDropItem>
+            <GenDropItem theme={theme} $active={mode === 'html'}
+              onClick={e => { e.stopPropagation(); setOpen(false); onModeChange('html', company); }}>
+              <HtmlIcon />HTML Email
+            </GenDropItem>
+            <GenDropItem theme={theme} $active={mode === 'template'}
+              onClick={e => { e.stopPropagation(); setOpen(false); if (hasTemplateEmail) onModeChange('template', company); }}
+              style={!hasTemplateEmail ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+              title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
+              <TemplateIcon />Template
+            </GenDropItem>
+          </div>
+        </>,
+        document.body
+      )}
+    </GenBtn>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // DOWNLOAD HELPERS
 // ─────────────────────────────────────────────────────────────
 const companyToCSVRow = (c: Company) => [
@@ -4561,7 +4855,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
   const [cancellingSearch, setCancellingSearch] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [emailModal, setEmailModal] = useState<{ open: boolean; company: Company | null }>({ open: false, company: null });
+  const [emailModal, setEmailModal] = useState<{ open: boolean; company: Company | null; initialHtmlEmail?: boolean; initialQueryType?: 'plain' | 'html' | 'template' }>({ open: false, company: null });
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [hasTemplateEmail, setHasTemplateEmail]   = useState(false);
 
@@ -4589,8 +4883,10 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
     } catch { downloadCSV(selectedCompaniesList, `${campaign?.name || 'campaign'}_companies.csv`); }
   };
 
-  const openEmailModal  = (company: Company) => setEmailModal({ open: true, company });
+  const openEmailModal  = (company: Company, initialHtmlEmail = false, initialQueryType?: 'plain' | 'html' | 'template') => setEmailModal({ open: true, company, initialHtmlEmail, initialQueryType });
   const closeEmailModal = () => setEmailModal(p => ({ ...p, open: false }));
+
+  const [genEmailModes, setGenEmailModes] = useState<Record<number, 'plain' | 'html' | 'template'>>({});
 
   const selectedCompaniesList = Array.from(selectedCompanies)
     .map(id => allSelectedCompanies.current.get(id))
@@ -5294,13 +5590,21 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
                         <line x1="12" y1="15" x2="12" y2="3"/>
                       </svg>
                     </IconBtn>
-                    <IconBtn theme={theme}
+                    <CompanyGenBtn
+                      company={company}
+                      theme={theme}
                       disabled={selectedCompanies.size > 0 || !!company.optedOut}
-                      onClick={e => { e.stopPropagation(); openEmailModal(company); }}
-                      title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : company.optedOut ? 'Company has opted out of emails' : 'Generate / view email'}
-                      style={selectedCompanies.size > 0 || company.optedOut ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
-                      <SparkleIcon />
-                    </IconBtn>
+                      hasTemplateEmail={hasTemplateEmail}
+                      mode={genEmailModes[company.id] ?? 'plain'}
+                      onModeChange={(mode, co) => {
+                        setGenEmailModes(m => ({ ...m, [co.id]: mode }));
+                        openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
+                      }}
+                      onOpen={(co) => {
+                        const mode = genEmailModes[co.id] ?? 'plain';
+                        openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
+                      }}
+                    />
                     <IconBtn theme={theme} $variant="danger"
                       disabled={selectedCompanies.size > 0}
                       onClick={e => handleUnenroll(company, e)}
@@ -5370,6 +5674,8 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         onClose={closeEmailModal}
         onToast={showToast}
         hasTemplateEmail={hasTemplateEmail}
+        initialHtmlEmail={emailModal.initialHtmlEmail ?? false}
+        initialQueryType={emailModal.initialQueryType}
       />
 
       <BulkEmailModal

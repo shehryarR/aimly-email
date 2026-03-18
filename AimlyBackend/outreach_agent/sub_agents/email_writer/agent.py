@@ -18,6 +18,7 @@ class EmailWriterInput(BaseModel):
     company_name:      str = Field(description="Name of the recipient company")
     user_instruction:  str = Field(description="Business context and email requirements")
     company_summary:   Optional[str] = Field(default=None, description="Research summary about the company (optional)")
+    html_email:        bool = Field(default=False, description="Whether to generate a styled HTML email instead of plain text")
     llm_config:       dict = Field(
         description=(
             "Pre-loaded LLM config from the route layer. "
@@ -55,6 +56,49 @@ Create an email that:
 3. Maintains a professional and engaging tone
 4. Follows the tone and style specified in the user's business context
 5. Does NOT attempt to reference specific details about the company since none are available
+"""
+
+# Template for HTML email with research
+PERSONALIZED_HTML_EMAIL_PROMPT = """
+Write a personalized outreach email for "{company_name}" based on:
+User's Business Context: {user_instruction}
+Company Research: {company_summary}
+
+Create a visually appealing HTML email that:
+1. Shows genuine research and understanding of their business
+2. References specific details about their company, industry, or recent developments
+3. Clearly connects how the user's offering solves their potential needs
+4. Uses insights from the research to make the pitch relevant and timely
+5. Follows the tone and style specified in the user's business context
+"""
+
+# Template for HTML email without research
+GENERIC_HTML_EMAIL_PROMPT = """
+Write a professional outreach email for "{company_name}" based on:
+User's Business Context: {user_instruction}
+
+Create a visually appealing HTML email that:
+1. Presents the user's value proposition clearly
+2. Explains how their offering could benefit companies like {company_name}
+3. Maintains a professional and engaging tone
+4. Follows the tone and style specified in the user's business context
+5. Does NOT attempt to reference specific details about the company since none are available
+"""
+
+# Additional instructions appended when html_email=True
+HTML_EMAIL_INSTRUCTIONS = """
+HTML EMAIL FORMATTING RULES:
+- The CONTENT section must be a complete, self-contained HTML snippet (NOT a full <!DOCTYPE> page).
+- Use only inline CSS styles — no <style> blocks, no external stylesheets.
+- Use a clean, professional layout with a readable font (e.g. Arial, sans-serif), font-size 15px, line-height 1.6, color #333333.
+- Structure the email with clearly separated sections using <div> or <p> tags with appropriate spacing (margin-bottom: 16px).
+- You may use a subtle accent color for headings or a CTA button, but keep the design minimal and professional.
+- The CTA (call-to-action) should be a styled <a> button, e.g.:
+  <a href="#" style="display:inline-block;padding:10px 24px;background:#4F46E5;color:#fff;
+     text-decoration:none;border-radius:6px;font-weight:bold;">Book a Call</a>
+- Do NOT include <html>, <head>, <body>, or <style> tags.
+- Do NOT include a signature block — it will be added by the system.
+- Do NOT include placeholder fields like [Name] or [Company].
 """
 
 # Common instructions for both templates
@@ -122,27 +166,41 @@ async def run_email_writer_agent(inputs: EmailWriterInput) -> Dict[str, str]:
     if not model:
         raise ValueError("Missing LLM model. Please configure it in LLM Settings.")
 
-    print(f"[EmailWriter] model={model!r}  company={inputs.company_name!r}")
+    print(f"[EmailWriter] model={model!r}  company={inputs.company_name!r}  html_email={inputs.html_email}")
     
-    # Determine which prompt template to use based on company_summary availability
+    # Determine which prompt template to use based on company_summary and html_email
     has_research = inputs.company_summary and inputs.company_summary.strip()
     
-    if has_research:
-        print(f"[EmailWriter] Using personalized template with research")
-        main_prompt = PERSONALIZED_EMAIL_PROMPT.format(
-            company_name=inputs.company_name,
-            user_instruction=inputs.user_instruction,
-            company_summary=inputs.company_summary,
-        )
+    if inputs.html_email:
+        if has_research:
+            print(f"[EmailWriter] Using personalized HTML template with research")
+            main_prompt = PERSONALIZED_HTML_EMAIL_PROMPT.format(
+                company_name=inputs.company_name,
+                user_instruction=inputs.user_instruction,
+                company_summary=inputs.company_summary,
+            )
+        else:
+            print(f"[EmailWriter] Using generic HTML template (no research available)")
+            main_prompt = GENERIC_HTML_EMAIL_PROMPT.format(
+                company_name=inputs.company_name,
+                user_instruction=inputs.user_instruction,
+            )
+        full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS + "\n" + HTML_EMAIL_INSTRUCTIONS
     else:
-        print(f"[EmailWriter] Using generic template (no research available)")
-        main_prompt = GENERIC_EMAIL_PROMPT.format(
-            company_name=inputs.company_name,
-            user_instruction=inputs.user_instruction,
-        )
-
-    # Combine with common instructions
-    full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS
+        if has_research:
+            print(f"[EmailWriter] Using personalized template with research")
+            main_prompt = PERSONALIZED_EMAIL_PROMPT.format(
+                company_name=inputs.company_name,
+                user_instruction=inputs.user_instruction,
+                company_summary=inputs.company_summary,
+            )
+        else:
+            print(f"[EmailWriter] Using generic template (no research available)")
+            main_prompt = GENERIC_EMAIL_PROMPT.format(
+                company_name=inputs.company_name,
+                user_instruction=inputs.user_instruction,
+            )
+        full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS
 
     try:
         llm = LLMFactory.create_llm(api_key, "gemini")

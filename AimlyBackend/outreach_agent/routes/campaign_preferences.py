@@ -116,6 +116,7 @@ class CampaignPreferencesResponse(BaseModel):
     email_instruction: Optional[str] = None
     signature: Optional[str] = None
     template_email: Optional[str] = None
+    template_html_email: Optional[int] = None
     logo_data: Optional[str] = None
     inherit_global_settings: Optional[int] = None
     inherit_global_attachments: Optional[int] = None
@@ -160,6 +161,7 @@ async def update_campaign_preferences(
     # ════════════════════════════════════════════════════════════════════════════
     inherit_global_settings: Optional[int] = Form(None),
     inherit_global_attachments: Optional[int] = Form(None),
+    template_html_email: Optional[int] = Form(None),
     # ════════════════════════════════════════════════════════════════════════════
     # LOGO FILE
     # ════════════════════════════════════════════════════════════════════════════
@@ -188,6 +190,7 @@ async def update_campaign_preferences(
     inherit_global_settings_sent    = inherit_global_settings is not None
     inherit_global_attachments_sent = inherit_global_attachments is not None
     template_email_sent             = template_email is not None
+    template_html_email_sent        = template_html_email is not None
 
     # ────────────────────────────────────────────────────────────────────────────
     # NORMALIZE TEXT FIELDS (empty string -> None -> SQL NULL)
@@ -223,6 +226,12 @@ async def update_campaign_preferences(
         raise HTTPException(
             status_code=400,
             detail="inherit_global_attachments must be 0 or 1",
+        )
+
+    if template_html_email is not None and template_html_email not in [0, 1]:
+        raise HTTPException(
+            status_code=400,
+            detail="template_html_email must be 0 or 1",
         )
 
     # ────────────────────────────────────────────────────────────────────────────
@@ -309,6 +318,10 @@ async def update_campaign_preferences(
                     update_fields.append("template_email = ?")
                     update_values.append(template_email)
 
+                if template_html_email_sent:
+                    update_fields.append("template_html_email = ?")
+                    update_values.append(template_html_email)
+
                 # NUMERIC FIELDS — only update if sent (0 is a valid value)
                 if inherit_global_settings_sent:
                     update_fields.append("inherit_global_settings = ?")
@@ -344,10 +357,11 @@ async def update_campaign_preferences(
                     INSERT INTO campaign_preferences (
                         campaign_id, bcc, business_name, business_info, goal, value_prop,
                         tone, cta, extras, email_instruction, signature, template_email,
+                        template_html_email,
                         logo, logo_mime_type,
                         inherit_global_settings,
                         inherit_global_attachments
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         campaign_id,
@@ -362,6 +376,7 @@ async def update_campaign_preferences(
                         email_instruction,
                         signature,
                         template_email,
+                        template_html_email,
                         logo_blob,
                         logo_mime_type,
                         inherit_global_settings,
@@ -398,6 +413,7 @@ class TemplateEmailResponse(BaseModel):
 def generate_template_email(
     campaign_id: int,
     http_request: Request,
+    html_email: bool = False,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -581,6 +597,7 @@ starting with SUBJECT:
                 user_instruction=instruction,
                 llm_config=llm_config,
                 company_details=None,
+                html_email=html_email,
             )
         )
         loop.close()

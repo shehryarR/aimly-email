@@ -156,18 +156,17 @@ def generate_email(
     campaign_id: int,
     company_id: int,
     http_request: Request,
-    personalized: Optional[bool] = Query(None, description="True=LLM, False=template, omit=auto (template if exists, else LLM)"),
+    query_type: str = Query("plain", description="Email generation mode: 'plain' = LLM plain text, 'html' = LLM styled HTML, 'template' = use campaign template"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Generate an email for a specific company within a campaign.
 
     Parameters:
-    - personalized (optional boolean):
-        * True:  Use LLM to generate a personalized email from company info
-        * False: Use campaign email template, replace {{company_name}} placeholder
-        * omitted (None): Auto-detect — use template if one exists for this campaign,
-                          otherwise fall back to LLM generation
+    - query_type:
+        * 'plain':    Use LLM to generate a plain text email
+        * 'html':     Use LLM to generate a styled HTML email
+        * 'template': Use campaign email template, replace {{company_name}} placeholder
 
     Stores only core email content (subject, body, recipient). Branding and attachments
     are resolved at send time based on inheritance flags.
@@ -204,15 +203,10 @@ def generate_email(
         company_name  = company["name"]
         company_email = company["email"]
 
-        if personalized is None:
-            cursor.execute("""
-                SELECT template_email FROM campaign_preferences
-                WHERE campaign_id = ?
-            """, (campaign_id,))
-            auto_row = cursor.fetchone()
-            personalized = not (auto_row and auto_row["template_email"])
+        if query_type not in ("plain", "html", "template"):
+            raise HTTPException(status_code=400, detail="query_type must be 'plain', 'html', or 'template'")
 
-        if personalized:
+        if query_type in ("plain", "html"):
             llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
             if not llm_api_key:
                 raise HTTPException(
@@ -298,9 +292,9 @@ def generate_email(
 
             company_details = company["company_info"] or None
 
-        else:
+        else:  # query_type == "template"
             cursor.execute("""
-                SELECT template_email FROM campaign_preferences
+                SELECT template_email, template_html_email FROM campaign_preferences
                 WHERE campaign_id = ?
             """, (campaign_id,))
             template_row = cursor.fetchone()
@@ -311,6 +305,7 @@ def generate_email(
                 )
 
             template_email = template_row["template_email"]
+            template_html_email_flag = int(template_row["template_html_email"]) if template_row["template_html_email"] is not None else 0
             content = template_email.replace("{{company_name}}", company_name)
 
             if content.startswith("SUBJECT:"):
@@ -321,9 +316,8 @@ def generate_email(
                 subject = f"Reaching out to {company_name}"
                 body = content
 
-            email_id = None
-
-    if personalized:
+    # Outside the first connection — now open a second one to write
+    if query_type in ("plain", "html"):
         try:
             loop = asyncio.new_event_loop()
             email_result, _ = loop.run_until_complete(
@@ -332,6 +326,7 @@ def generate_email(
                     user_instruction=user_instruction,
                     llm_config=llm_config,
                     company_details=company_details,
+                    html_email=(query_type == "html"),
                 )
             )
             loop.close()
@@ -353,19 +348,26 @@ def generate_email(
             """, (cc_id,))
             primary_email = cursor.fetchone()
 
+            if query_type == "html":
+                html_email_flag = 1
+            elif query_type == "template":
+                html_email_flag = template_html_email_flag
+            else:
+                html_email_flag = 0
+
             if primary_email:
                 cursor.execute("""
                     UPDATE emails
-                    SET email_subject = ?, email_content = ?, recipient_email = ?
+                    SET email_subject = ?, email_content = ?, recipient_email = ?, html_email = ?
                     WHERE id = ?
-                """, (subject, body, company_email, primary_email["id"]))
+                """, (subject, body, company_email, html_email_flag, primary_email["id"]))
                 email_id = primary_email["id"]
             else:
                 cursor.execute("""
                     INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                       recipient_email, status)
-                    VALUES (?, ?, ?, ?, 'primary')
-                """, (cc_id, subject, body, company_email))
+                                       recipient_email, status, html_email)
+                    VALUES (?, ?, ?, ?, 'primary', ?)
+                """, (cc_id, subject, body, company_email, html_email_flag))
                 email_id = cursor.lastrowid
 
             conn.commit()
@@ -375,7 +377,7 @@ def generate_email(
             raise HTTPException(status_code=500, detail=f"Failed to save generated email: {str(e)}")
 
     return MessageResponse(
-        message=f"Email generated successfully ({'LLM' if personalized else 'template'})",
+        message=f"Email generated successfully ({query_type})",
         email_id=email_id
     )
 
@@ -550,8 +552,8 @@ def send_email(
                     cursor.execute("""
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                           sent_at)
-                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?)
+                                           sent_at, html_email)
+                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?, ?)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -561,6 +563,7 @@ def send_email(
                         logo_blob,
                         logo_mime_type,
                         scheduled_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        email["html_email"],
                     ))
                     new_email_id = cursor.lastrowid
 
@@ -592,8 +595,9 @@ def send_email(
                     # Create new sending email with branding baked in
                     cursor.execute("""
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                           recipient_email, status, timezone, signature, logo, logo_mime_type)
-                        VALUES (?, ?, ?, ?, 'sending', 'UTC', ?, ?, ?)
+                                           recipient_email, status, timezone, signature, logo, logo_mime_type,
+                                           html_email)
+                        VALUES (?, ?, ?, ?, 'sending', 'UTC', ?, ?, ?, ?)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -602,6 +606,7 @@ def send_email(
                         signature,
                         logo_blob,
                         logo_mime_type,
+                        email["html_email"],
                     ))
                     new_email_id = cursor.lastrowid
 
@@ -657,6 +662,7 @@ def send_email(
                     logo_blob=logo_blob,
                     signature=signature,
                     smtp_config=smtp_config,
+                    html_email=bool(email_data.get("html_email", 0)),
                 )
             )
             loop.close()
@@ -779,8 +785,9 @@ def save_as_draft(
         try:
             cursor.execute("""
                 INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                   recipient_email, status, timezone, signature, logo, logo_mime_type)
-                VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+                                   recipient_email, status, timezone, signature, logo, logo_mime_type,
+                                   html_email)
+                VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
             """, (
                 email["campaign_company_id"],
                 email["email_subject"],
@@ -790,6 +797,7 @@ def save_as_draft(
                 signature,
                 logo_blob,
                 logo_mime_type,
+                email["html_email"],
             ))
 
             draft_id = cursor.lastrowid
@@ -978,8 +986,8 @@ def smart_schedule_emails(
                     cursor.execute("""
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                           sent_at)
-                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?)
+                                           sent_at, html_email)
+                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?, ?)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -989,6 +997,7 @@ def smart_schedule_emails(
                         logo_blob,
                         logo_mime_type,
                         scheduled_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        email["html_email"],
                     ))
                     new_email_id = cursor.lastrowid
 

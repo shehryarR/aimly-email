@@ -146,7 +146,7 @@ def get_campaign_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at,
+                e.status, e.sent_at, e.created_at, e.html_email,
                 co.id   AS company_id,
                 co.name AS company_name,
                 fe.reason AS failed_reason
@@ -253,7 +253,7 @@ def get_company_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at,
+                e.status, e.sent_at, e.created_at, e.html_email,
                 camp.id   AS campaign_id,
                 camp.name AS campaign_name,
                 fe.reason AS failed_reason
@@ -326,7 +326,7 @@ def get_primary_email(
 
         cursor.execute("""
             SELECT id, email_subject, email_content, recipient_email, status,
-                   timezone, sent_at, signature, logo, logo_mime_type
+                   timezone, sent_at, signature, logo, logo_mime_type, html_email
             FROM emails
             WHERE campaign_company_id = ? AND status = 'primary'
         """, (cc_id,))
@@ -479,6 +479,10 @@ def update_email(
                 update_values.append(mime_type)
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid logo_data format. Expected base64 data URL.")
+
+        if request.html_email is not None:
+            update_fields.append("html_email = ?")
+            update_values.append(1 if request.html_email else 0)
 
         if not update_fields:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -734,7 +738,7 @@ def get_all_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at,
+                e.status, e.sent_at, e.created_at, e.html_email,
                 e.signature, e.logo, e.logo_mime_type,
                 co.id     AS company_id,
                 co.name   AS company_name,

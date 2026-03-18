@@ -62,6 +62,14 @@ class EmailSenderInput(BaseModel):
             "Falls back to environment variables for any missing keys."
         ),
     )
+    html_email: bool = Field(
+        default=False,
+        description=(
+            "When True, email_text is an HTML snippet produced by the LLM and is embedded "
+            "as-is inside the HTML part. When False (default), email_text is plain text "
+            "and newlines are converted to <br> tags."
+        ),
+    )
 
 
 class EmailSenderOutput(BaseModel):
@@ -357,7 +365,16 @@ async def email_sender_tool(
         )
 
         # ── HTML body ─────────────────────────────────────────────────────────
-        formatted = processed_text.replace("\n", "<br>")
+        # html_email=True  → email_text is already an HTML snippet from the LLM;
+        #                    embed it as-is (no \n→<br> conversion).
+        # html_email=False → email_text is plain text; convert newlines to <br>.
+        if input.html_email:
+            body_html = processed_text          # LLM-generated HTML snippet
+            plain_text = re.sub(r'<[^>]+>', '', processed_text)   # strip tags for plain part
+        else:
+            body_html = processed_text.replace("\n", "<br>")
+            plain_text = input.email_text
+
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -368,7 +385,7 @@ async def email_sender_tool(
 </style>
 </head>
 <body>
-{formatted}
+{body_html}
 {signature_html}
 {logo_html}
 {tracking_html}
@@ -386,7 +403,7 @@ async def email_sender_tool(
 
         related = MIMEMultipart("related")
         alt     = MIMEMultipart("alternative")
-        alt.attach(MIMEText(input.email_text + tracking_plain + unsubscribe_plain, "plain", "utf-8"))
+        alt.attach(MIMEText(plain_text + tracking_plain + unsubscribe_plain, "plain", "utf-8"))
         alt.attach(MIMEText(html_body, "html", "utf-8"))
         related.attach(alt)
 

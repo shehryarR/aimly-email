@@ -20,6 +20,7 @@ async def generate_email(
     user_instruction: str,
     llm_config: dict,
     company_details: str = None,
+    html_email: bool = False,
     progress_callback=None,
 ):
     """
@@ -30,6 +31,7 @@ async def generate_email(
         user_instruction:  LLM prompt / instruction string.
         llm_config:        Pre-loaded dict with keys: api_key, model.
         company_details:   Pre-researched company context (optional).
+        html_email:        If True, the LLM generates a styled HTML snippet instead of plain text.
         progress_callback: Optional callable for streaming status updates.
 
     Returns:
@@ -47,6 +49,7 @@ async def generate_email(
             company_name=company_name,
             user_instruction=user_instruction,
             company_summary=company_details,
+            html_email=html_email,
             llm_config=llm_config,
         )
     )
@@ -74,6 +77,7 @@ async def send_email(
     logo_blob: Optional[bytes] = None,
     signature: str = None,
     smtp_config: dict = None,
+    html_email: bool = False,
 ):
     """
     Send an outreach email via the email-sender tool.
@@ -86,7 +90,7 @@ async def send_email(
     Args:
         company_name:   Display name of the recipient company.
         company_email:  Delivery address.
-        email_body:     HTML or plain-text body.
+        email_body:     HTML snippet (when html_email=True) or plain-text body.
         email_id:       DB row ID forwarded to the tool for the tracking pixel.
         subject:        Subject line. Falls back to "Reaching out - <n>".
         attachments:    List of AttachmentInfo objects with file_path and display_name.
@@ -96,6 +100,8 @@ async def send_email(
         smtp_config:    Pre-loaded SMTP dict with keys:
                             sender_email, sender_password,
                             smtp_host, smtp_port, bcc.
+        html_email:     If True, email_body is treated as an HTML snippet and sent as-is
+                        in the HTML part (no <br> conversion). Plain-text part is stripped.
         progress_callback: Optional callable for streaming status updates.
 
     Returns:
@@ -126,6 +132,7 @@ async def send_email(
                 logo_blob=logo_blob,
                 signature=signature,
                 smtp_config=smtp_config,
+                html_email=html_email,
             ),
         )
 

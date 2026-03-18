@@ -57,6 +57,7 @@ class EmailUpdateRequest(BaseModel):
     logo_data: Optional[str] = None  # base64 data URL — only accepted when inherit_campaign_branding = 0
     logo_clear: Optional[bool] = None  # set True to explicitly clear logo without uploading a new one
     time: Optional[str] = None
+    html_email: Optional[bool] = None  # set True to mark email as HTML, False for plain text
 
 class MessageResponse(BaseModel):
     message: str
