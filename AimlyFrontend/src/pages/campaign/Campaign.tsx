@@ -1324,6 +1324,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [templateHtmlEmail,  setTemplateHtmlEmail]  = useState(false);
   const [templateGenerating, setTemplateGenerating] = useState(false);
   const [templateSaving,     setTemplateSaving]     = useState(false);
+  const [templateEnabled,    setTemplateEnabled]    = useState(false);
 
   // ── Global settings state (for showing inherited content) ───
   const [globalLogoData,       setGlobalLogoData]       = useState<string | null>(null);
@@ -1384,18 +1385,23 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const tmpl = d.template_email || '';
         if (tmpl) {
           const lines = tmpl.split('\n');
-          const subjectLine = lines[0].startsWith('SUBJECT:') ? lines[0].replace('SUBJECT:', '').trim() : '';
-          const body = subjectLine ? lines.slice(1).join('\n').trimStart() : tmpl;
+          const hasSubjectLine = lines[0].startsWith('SUBJECT:');
+          const subjectLine = hasSubjectLine ? lines[0].replace('SUBJECT:', '').trim() : '';
+          const body = hasSubjectLine ? lines.slice(1).join('\n').trimStart() : tmpl;
           setTemplateSubject(subjectLine);
           setTemplateBody(body);
+          setTemplateEnabled(true);
         } else {
           setTemplateSubject('');
           setTemplateBody('');
+          setTemplateEnabled(false);
         }
         setTemplateHtmlEmail(!!(d.template_html_email));
         // snapshot for dirty detection
-        const loadedSubj = tmpl ? (tmpl.split('\n')[0].startsWith('SUBJECT:') ? tmpl.split('\n')[0].replace('SUBJECT:', '').trim() : '') : '';
-        const loadedBody = loadedSubj ? tmpl.split('\n').slice(1).join('\n').trimStart() : tmpl;
+        const firstLine = tmpl.split('\n')[0];
+        const hasSubjectLine2 = firstLine.startsWith('SUBJECT:');
+        const loadedSubj = hasSubjectLine2 ? firstLine.replace('SUBJECT:', '').trim() : '';
+        const loadedBody = hasSubjectLine2 ? tmpl.split('\n').slice(1).join('\n').trimStart() : tmpl;
         savedTemplate.current = { subject: loadedSubj, body: loadedBody };
         savedPrefs.current = {
           bcc: d.bcc ?? '', business_name: d.business_name ?? '',
@@ -1644,14 +1650,23 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     setTemplateSaving(true);
     try {
       const fd = new FormData();
-      fd.append('template_email', `SUBJECT: ${templateSubject}\n\n${templateBody}`);
+      const subjectTrimmed = templateSubject.trim();
+      const bodyTrimmed = templateBody.trim();
+      // If body is empty, send "" so backend explicitly nulls it
+      // Subject alone with no body is meaningless to store
+      const templateEmailValue = !bodyTrimmed
+        ? ''
+        : subjectTrimmed
+          ? `SUBJECT: ${subjectTrimmed}\n\n${bodyTrimmed}`
+          : bodyTrimmed;
+      fd.append('template_email', templateEmailValue);
       fd.append('template_html_email', templateHtmlEmail ? '1' : '0');
       const res = await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, {
         method: 'PUT', body: fd,
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
-      savedTemplate.current = { subject: templateSubject, body: templateBody };
       clearDirty('template');
+      await loadPrefs();   // re-fetch so UI reflects exactly what DB stored
       onToast('success', 'Template', 'Template saved');
       onSaved();
     } catch (err) {
@@ -1977,10 +1992,77 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
               <CsTabPanel theme={theme} key="template">
                 <CsPanelTitle theme={theme}>Template Email</CsPanelTitle>
                 <CsPanelSubtitle theme={theme}>
-                  A fixed email sent to all companies. Use <code style={{ fontSize: '0.78rem', background: 'rgba(128,128,128,0.15)', padding: '1px 5px', borderRadius: 4 }}>{'{{company_name}}'}</code> as a placeholder.
+                  When enabled, you can generate the same templatized email for all companies in this campaign. Use <code style={{ fontSize: '0.78rem', background: 'rgba(128,128,128,0.15)', padding: '1px 5px', borderRadius: 4 }}>{'{{company_name}}'}</code> as a placeholder.
                 </CsPanelSubtitle>
 
-                {/* Toolbar */}
+                {/* Enable / Disable toggle */}
+                <div
+                  onClick={async () => {
+                    if (templateEnabled) {
+                      // Turning OFF — clear everything and save null immediately
+                      setTemplateEnabled(false);
+                      setTemplateSubject('');
+                      setTemplateBody('');
+                      markDirty('template');
+                      setTemplateSaving(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('template_email', '');
+                        await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, { method: 'PUT', body: fd });
+                        savedTemplate.current = { subject: '', body: '' };
+                        clearDirty('template');
+                        onToast('success', 'Template', 'Template cleared');
+                        onSaved();
+                      } catch { onToast('error', 'Template', 'Failed to clear template'); }
+                      finally { setTemplateSaving(false); }
+                    } else {
+                      // Turning ON — auto-generate, fall back to default on failure
+                      setTemplateEnabled(true);
+                      setTemplateHtmlEmail(false);
+                      setTemplateGenerating(true);
+                      try {
+                        const res = await apiFetch(
+                          `${apiBase}/campaign/${campaignId}/campaign_preference/generate-template/?html_email=false`,
+                          { method: 'POST' },
+                        );
+                        if (!res.ok) throw new Error('Generation failed');
+                        const d = await res.json();
+                        setTemplateSubject(d.subject || '');
+                        setTemplateBody(d.content || '');
+                      } catch {
+                        // AI failed — fall back to a sensible default
+                        setTemplateSubject('A quick note for {{company_name}}');
+                        setTemplateBody("Hi {{company_name}} team,\n\nI wanted to reach out and introduce ourselves. We'd love to explore how we can help you.\n\nWould you be open to a quick call this week?");
+                        onToast('warning', 'Template', 'AI generation failed — default template applied');
+                      } finally {
+                        setTemplateGenerating(false);
+                      }
+                      markDirty('template');
+                    }
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem', cursor: templateSaving ? 'not-allowed' : 'pointer', userSelect: 'none', marginBottom: '1.25rem', opacity: templateSaving ? 0.5 : 1 }}
+                >
+                  <div style={{
+                    width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                    background: templateEnabled ? theme.colors.primary.main : theme.colors.base[300],
+                    position: 'relative', transition: 'background 0.2s',
+                    border: `1px solid ${templateEnabled ? theme.colors.primary.main : theme.colors.base[300]}`,
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2, left: templateEnabled ? 17 : 2,
+                      width: 14, height: 14, borderRadius: '50%',
+                      background: '#fff', transition: 'left 0.2s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>
+                    {templateGenerating ? 'Generating…' : templateEnabled ? 'Template enabled' : 'Enable template email'}
+                  </span>
+                </div>
+
+                {templateEnabled && (
+                  <>
+                    {/* Regenerate toolbar */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
                       <TemplateGenDropdown
                         theme={theme}
@@ -2042,6 +2124,8 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         {templateSaving ? 'Saving…' : 'Save Template'}
                       </SBtn>
                     </SSaveRow>
+                  </>
+                )}
               </CsTabPanel>
             )}
 

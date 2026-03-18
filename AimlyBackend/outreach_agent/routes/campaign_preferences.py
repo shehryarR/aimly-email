@@ -138,6 +138,7 @@ class MessageResponse(BaseModel):
 )
 async def update_campaign_preferences(
     campaign_id: int,
+    request: Request,
     # ════════════════════════════════════════════════════════════════════════════
     # TEXT FIELDS
     # Update behavior:
@@ -189,8 +190,11 @@ async def update_campaign_preferences(
     # ────────────────────────────────────────────────────────────────────────────
     inherit_global_settings_sent    = inherit_global_settings is not None
     inherit_global_attachments_sent = inherit_global_attachments is not None
-    template_email_sent             = template_email is not None
     template_html_email_sent        = template_html_email is not None
+    # Use raw form data to detect if template_email was explicitly sent (even as "")
+    # FastAPI converts "" -> None for Optional[str] so we can't rely on the parsed value
+    _raw_form = await request.form()
+    template_email_sent = "template_email" in _raw_form
 
     # ────────────────────────────────────────────────────────────────────────────
     # NORMALIZE TEXT FIELDS (empty string -> None -> SQL NULL)
