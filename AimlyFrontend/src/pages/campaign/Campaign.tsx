@@ -1265,10 +1265,6 @@ const TemplateGenDropdown: React.FC<{
             onClick={e => { e.stopPropagation(); setOpen(false); }} />
           <GenDropMenu theme={theme}>
             <GenDropItem theme={theme}
-              onClick={e => { e.stopPropagation(); onGenerate(false); setOpen(false); }}>
-              <PlainIcon />Plain Text
-            </GenDropItem>
-            <GenDropItem theme={theme}
               onClick={e => { e.stopPropagation(); onGenerate(true); setOpen(false); }}>
               <HtmlIcon />HTML Email
             </GenDropItem>
@@ -2039,16 +2035,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         }} />
                       </div>
                       <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>HTML Template</span>
-                      <span style={{
-                        fontSize: '0.7rem', fontWeight: 500,
-                        color: templateHtmlEmail ? theme.colors.primary.main : theme.colors.base.content,
-                        opacity: templateHtmlEmail ? 1 : 0.4,
-                        background: templateHtmlEmail ? theme.colors.primary.main + '15' : 'transparent',
-                        border: `1px solid ${templateHtmlEmail ? theme.colors.primary.main + '40' : 'transparent'}`,
-                        borderRadius: 999, padding: '1px 7px', transition: 'all 0.2s',
-                      }}>
-                        {templateHtmlEmail ? 'On' : 'Off'}
-                      </span>
                     </div>
 
                     <SSaveRow>
@@ -3414,10 +3400,6 @@ const RegenDropdown: React.FC<{
             onClick={e => { e.stopPropagation(); setOpen(false); }} />
           <GenDropMenu theme={theme}>
             <GenDropItem theme={theme}
-              onClick={e => { e.stopPropagation(); onRegenerate('plain'); setOpen(false); }}>
-              <PlainIcon />Plain Text
-            </GenDropItem>
-            <GenDropItem theme={theme}
               onClick={e => { e.stopPropagation(); onRegenerate('html'); setOpen(false); }}>
               <HtmlIcon />HTML Email
             </GenDropItem>
@@ -3990,16 +3972,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
                   </div>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>
                     HTML Email
-                  </span>
-                  <span style={{
-                    fontSize: '0.7rem', fontWeight: 500,
-                    color: htmlEmail ? theme.colors.primary.main : theme.colors.base.content,
-                    opacity: htmlEmail ? 1 : 0.4,
-                    background: htmlEmail ? theme.colors.primary.main + '15' : 'transparent',
-                    border: `1px solid ${htmlEmail ? theme.colors.primary.main + '40' : 'transparent'}`,
-                    borderRadius: 999, padding: '1px 7px', transition: 'all 0.2s',
-                  }}>
-                    {htmlEmail ? 'On' : 'Off'}
                   </span>
                 </div>
               </>
@@ -4764,10 +4736,6 @@ const CompanyGenBtn: React.FC<{
             boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)',
             minWidth: 130, overflow: 'hidden',
           }}>
-            <GenDropItem theme={theme} $active={mode === 'plain'}
-              onClick={e => { e.stopPropagation(); setOpen(false); onModeChange('plain', company); }}>
-              <PlainIcon />Plain Text
-            </GenDropItem>
             <GenDropItem theme={theme} $active={mode === 'html'}
               onClick={e => { e.stopPropagation(); setOpen(false); onModeChange('html', company); }}>
               <HtmlIcon />HTML Email
