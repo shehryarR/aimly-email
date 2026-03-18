@@ -107,7 +107,6 @@ def _read_cookie_key(request: Request, cookie_name: str) -> Optional[str]:
 
 
 def _set_api_cookie(response: Response, cookie_name: str, real_key: str) -> None:
-    # Secure=True requires HTTPS — set ENV=production to enable in prod
     is_production = os.getenv("ENV", "development").lower() == "production"
     response.set_cookie(
         key=cookie_name, value=_encrypt_key(real_key),
@@ -115,6 +114,7 @@ def _set_api_cookie(response: Response, cookie_name: str, real_key: str) -> None
         secure=is_production,
         samesite="strict",
         path="/",
+        max_age=60 * 60 * 24 * 30,  # 30 days in seconds
     )
 
 
