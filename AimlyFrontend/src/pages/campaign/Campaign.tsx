@@ -3501,8 +3501,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [brandSignature,          setBrandSignature]          = useState('');
   const [brandLogoData,           setBrandLogoData]           = useState<string | null>(null);
   const [brandLogoUploading,      setBrandLogoUploading]      = useState(false);
-  const [brandSaving,             setBrandSaving]             = useState(false);
-  const [brandMsg,                setBrandMsg]                = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const brandLogoInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -3525,7 +3523,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setUploadFile(null);
     setIsDragOver(false);
     if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
-    setBrandMsg(null);
     setBrandSignature('');
     setBrandLogoData(null);
     loadPrimaryEmail();
@@ -3766,11 +3763,17 @@ const EmailModal: React.FC<EmailModalProps> = ({
     } finally { setUploading(false); }
   };
 
-  const toggleAttachment = (id: number) => {
-    setLinkedEmailAttachIds(prev => {
-      const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
-    });
-    setAttachMsg(null);
+  const toggleAttachment = async (id: number) => {
+    if (!email) return;
+    const next = new Set(linkedEmailAttachIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setLinkedEmailAttachIds(next);
+    try {
+      await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Array.from(next)),
+      });
+    } catch { /* silent */ }
   };
 
   const saveAttachments = async () => {
@@ -3788,37 +3791,36 @@ const EmailModal: React.FC<EmailModalProps> = ({
     } finally { setAttachSaving(false); }
   };
 
-  // ── Branding handlers ─────────────────────────────────────────────────────────
-  const handleBrandLogoFile = async (file: File) => {
-    const MAX = 5 * 1024 * 1024;
-    if (file.size > MAX) { setBrandMsg({ type: 'error', text: 'Logo must be under 5 MB' }); return; }
-    setBrandLogoUploading(true); setBrandMsg(null);
-    try {
-      const reader = new FileReader();
-      reader.onload = () => { setBrandLogoData(reader.result as string); setBrandLogoUploading(false); };
-      reader.onerror = () => { setBrandMsg({ type: 'error', text: 'Failed to read file' }); setBrandLogoUploading(false); };
-      reader.readAsDataURL(file);
-    } catch { setBrandLogoUploading(false); }
-  };
-
-  const saveBranding = async () => {
+  // ── Branding helpers ─────────────────────────────────────────────────────────
+  const doSaveBranding = async (logoData: string | null, signature: string) => {
     if (!email) return;
-    setBrandSaving(true); setBrandMsg(null);
     try {
-      // Persist the current inherit flag first so the backend allows the edit
       await saveInheritFlag(inheritCampaignAttachments, inheritCampaignBranding);
-      const res = await apiFetch(`${apiBase}/email/${email.id}/update/`, {
+      await apiFetch(`${apiBase}/email/${email.id}/update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signature: brandSignature ?? '',
-          ...(brandLogoData ? { logo_data: brandLogoData } : { logo_clear: true }),
+          signature: signature ?? '',
+          ...(logoData ? { logo_data: logoData } : { logo_clear: true }),
         }),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
-      setBrandMsg({ type: 'success', text: 'Branding saved' });
-    } catch (err) {
-      setBrandMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save branding' });
-    } finally { setBrandSaving(false); }
+    } catch { /* silent */ }
+  };
+
+  const handleBrandLogoFile = async (file: File) => {
+    const MAX = 5 * 1024 * 1024;
+    if (file.size > MAX) return;
+    setBrandLogoUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const data = reader.result as string;
+        setBrandLogoData(data);
+        setBrandLogoUploading(false);
+        await doSaveBranding(data, brandSignature);
+      };
+      reader.onerror = () => { setBrandLogoUploading(false); };
+      reader.readAsDataURL(file);
+    } catch { setBrandLogoUploading(false); }
   };
 
   // ── Derived attachment lists ──────────────────────────────────────────────────
@@ -3837,10 +3839,15 @@ const EmailModal: React.FC<EmailModalProps> = ({
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   })();
 
+  const handleClose = () => {
+    if (activeTab === 'branding' && !inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature);
+    onClose();
+  };
+
   return (
     <>
-      <EmailModalBackdrop $open={isOpen} onClick={onClose} />
-      <EmailModalWrap $open={isOpen} onClick={onClose}>
+      <EmailModalBackdrop $open={isOpen} onClick={handleClose} />
+      <EmailModalWrap $open={isOpen} onClick={handleClose}>
         <EmailModalBox theme={theme} $open={isOpen} onClick={e => e.stopPropagation()}>
 
           {/* Header */}
@@ -3853,13 +3860,16 @@ const EmailModal: React.FC<EmailModalProps> = ({
               <span style={{ fontSize: '0.75rem', fontWeight: 400, opacity: 0.5 }}>· {company.email}</span>
               {email && email.status !== 'primary' && <EStatusBadge $status={email.status}>{email.status}</EStatusBadge>}
             </EmailModalTitle>
-            <CsCloseBtn theme={theme} onClick={onClose}>✕</CsCloseBtn>
+            <CsCloseBtn theme={theme} onClick={handleClose}>✕</CsCloseBtn>
           </EmailModalHead>
 
           {/* Tab bar — only shown when email is ready */}
           {phase === 'ready' && (
             <ETabBar theme={theme}>
-              <ETabBtn theme={theme} $active={activeTab === 'email'} onClick={() => setActiveTab('email')}>
+              <ETabBtn theme={theme} $active={activeTab === 'email'} onClick={() => {
+                if (activeTab === 'branding' && !inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature);
+                setActiveTab('email');
+              }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                 </svg>
@@ -3868,7 +3878,10 @@ const EmailModal: React.FC<EmailModalProps> = ({
               <ETabBtn
                 theme={theme}
                 $active={activeTab === 'attachments'}
-                onClick={() => setActiveTab('attachments')}
+                onClick={() => {
+                  if (activeTab === 'branding' && !inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature);
+                  setActiveTab('attachments');
+                }}
               >
                 <PaperclipIcon />
                 Attachments
@@ -4168,7 +4181,17 @@ const EmailModal: React.FC<EmailModalProps> = ({
                       </span>
                       {attachedFiles.length > 0 && (
                         <button
-                          onClick={() => { setLinkedEmailAttachIds(new Set()); setAttachMsg(null); }}
+                          onClick={async () => {
+                            setLinkedEmailAttachIds(new Set());
+                            if (email) {
+                              try {
+                                await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+                                  method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify([]),
+                                });
+                              } catch { /* silent */ }
+                            }
+                          }}
                           style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', color: theme.colors.base.content, opacity: 0.4, padding: '2px 6px', borderRadius: '4px' }}
                           onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
                           onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
@@ -4236,17 +4259,13 @@ const EmailModal: React.FC<EmailModalProps> = ({
                   </div>
 
                   {/* Footer */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', marginTop: '0.5rem' }}>
                     <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>
                       {filteredAttachments.length < allAttachments.length
                         ? `Showing ${filteredAttachments.length} of ${allAttachments.length} files`
                         : `${allAttachments.length} file${allAttachments.length !== 1 ? 's' : ''} total`}
                     </span>
-                    <SBtn theme={theme} onClick={saveAttachments} disabled={attachSaving} style={{ padding: '0.5rem 1.2rem', fontSize: '0.825rem' }}>
-                      {attachSaving ? 'Saving…' : 'Save'}
-                    </SBtn>
                   </div>
-                  {attachMsg && <SMsg theme={theme} $type={attachMsg.type} style={{ marginTop: '0.5rem' }}>{attachMsg.text}</SMsg>}
                 </>)}
                 </>)}
               </>
@@ -4349,7 +4368,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
                           <>
                             <LogoImg src={brandLogoData} alt="Email logo" />
                             <LogoRemove theme={theme} type="button"
-                              onClick={e => { e.stopPropagation(); setBrandLogoData(null); setBrandMsg(null); }}
+                              onClick={e => { e.stopPropagation(); setBrandLogoData(null); doSaveBranding(null, brandSignature); }}
                               disabled={brandLogoUploading}
                               title="Remove logo"
                             >✕</LogoRemove>
@@ -4376,16 +4395,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
                         rows={4}
                         placeholder={'Best,\nJohn Smith\nAcme Corp'}
                         value={brandSignature}
-                        onChange={e => { setBrandSignature(e.target.value); setBrandMsg(null); }}
+                        onChange={e => setBrandSignature(e.target.value)}
+                        onBlur={() => { if (!inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature); }}
                       />
-                    </div>
-
-                    {/* Save */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                      {brandMsg && <SMsg theme={theme} $type={brandMsg.type}>{brandMsg.text}</SMsg>}
-                      <SBtn theme={theme} onClick={saveBranding} disabled={brandSaving} style={{ padding: '0.5rem 1.2rem', fontSize: '0.825rem' }}>
-                        {brandSaving ? 'Saving…' : 'Save'}
-                      </SBtn>
                     </div>
                   </>
                 )}
