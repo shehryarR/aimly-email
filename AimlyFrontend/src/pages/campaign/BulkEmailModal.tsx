@@ -30,13 +30,12 @@ interface BulkEmailEntry {
   emailId: number | null;
   subject: string;
   body: string;
+  htmlEmail: boolean;
   phase: 'loading' | 'ready' | 'error';
   activeTab: 'email' | 'attachments' | 'branding';
   allAttachments: AttachmentOption[];
   linkedEmailAttachIds: Set<number>;
   attachSearch: string;
-  attachSaving: boolean;
-  attachMsg: { type: 'success' | 'error'; text: string } | null;
   attachLoading: boolean;
   uploadFile: File | null;
   uploading: boolean;
@@ -50,8 +49,6 @@ interface BulkEmailEntry {
   campaignBrandSignature: string;
   campaignBrandLogoData: string | null;
   brandLogoUploading: boolean;
-  brandSaving: boolean;
-  brandMsg: { type: 'success' | 'error'; text: string } | null;
 }
 
 export interface BulkEmailModalProps {
@@ -63,6 +60,7 @@ export interface BulkEmailModalProps {
   onClose: () => void;
   onToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, msg: string) => void;
   hasTemplateEmail?: boolean;
+  initialQueryType?: 'plain' | 'html' | 'template';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,8 +168,9 @@ const MiniSpinner = styled.div`
 // ── COMPANY EMAIL PANE ───────────────────────────────────────
 const EmailPane = styled.div`flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;`;
 const InnerTabBar = styled.div<{ theme: any }>`
-  display:flex;border-bottom:1px solid ${p => p.theme.colors.base[300]};flex-shrink:0;
-  background:${p => p.theme.colors.base[200]};
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid ${p => p.theme.colors.base[300]};flex-shrink:0;
+  background:${p => p.theme.colors.base[200]};padding-right:0.75rem;
 `;
 const InnerTab = styled.button<{ theme: any; $active: boolean }>`
   display:inline-flex;align-items:center;gap:0.45rem;padding:0.65rem 1.2rem;
@@ -464,13 +463,105 @@ const SplitMenuItem = styled.button<{ theme: any }>`
 `;
 
 
-// ─────────────────────────────────────────────────────────────
-// ICONS
-// ─────────────────────────────────────────────────────────────
+// ── Split-button (matches Campaign.tsx GenBtn pattern) ───────
+const SplitBtn = styled.button<{ theme: any; $disabled?: boolean }>`
+  position:relative;display:inline-flex;align-items:center;
+  height:34px;border-radius:${p => p.theme.radius.field};
+  border:1px solid ${p => p.theme.colors.base[300]};
+  background:${p => p.theme.colors.base[200]};color:${p => p.theme.colors.base.content};
+  opacity:${p => p.$disabled ? 0.3 : 1};pointer-events:${p => p.$disabled ? 'none' : 'auto'};
+  cursor:pointer;overflow:visible;transition:border-color 0.15s;padding:0;
+  &:hover{border-color:${p => p.theme.colors.primary.main};}
+`;
+const SplitBtnLeft = styled.span<{ theme: any }>`
+  display:inline-flex;align-items:center;align-self:stretch;
+  border-radius:${p => p.theme.radius.field} 0 0 ${p => p.theme.radius.field};
+  transition:background 0.15s,color 0.15s;
+  &:hover{background:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.content};}
+`;
+const SplitBtnIcon = styled.span`
+  display:flex;align-items:center;justify-content:center;padding:0 0.45rem;
+  svg{width:13px;height:13px;}
+`;
+const SplitBtnLabel = styled.span`
+  font-size:0.75rem;font-weight:600;padding:0 0.3rem 0 0;white-space:nowrap;
+`;
+const SplitBtnDivider = styled.span<{ theme: any }>`
+  width:1px;height:18px;flex-shrink:0;background:${p => p.theme.colors.base[300]};transition:background 0.15s;
+`;
+const SplitBtnChevron = styled.span<{ theme: any; $open: boolean }>`
+  display:flex;align-items:center;justify-content:center;align-self:stretch;
+  padding:0 0.55rem;min-width:28px;
+  border-radius:0 ${p => p.theme.radius.field} ${p => p.theme.radius.field} 0;
+  transition:background 0.15s,color 0.15s;
+  svg{width:10px;height:10px;transition:transform 0.15s;transform:${p => p.$open ? 'rotate(180deg)' : 'none'};}
+  &:hover{background:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.content};}
+`;
+const SplitDropMenu = styled.div<{ theme: any }>`
+  position:absolute;top:calc(100% + 4px);right:0;z-index:3000;
+  background:${p => p.theme.colors.base[200]};border:1px solid ${p => p.theme.colors.base[300]};
+  border-radius:${p => p.theme.radius.field};
+  box-shadow:0 8px 24px rgba(0,0,0,0.18);min-width:130px;overflow:hidden;
+  animation:${fadeIn} 0.15s ease;
+`;
+const SplitDropItem = styled.button<{ theme: any }>`
+  width:100%;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;
+  border:none;background:transparent;color:${p => p.theme.colors.base.content};
+  font-size:0.8rem;font-weight:500;cursor:pointer;text-align:left;transition:background 0.1s;
+  svg{width:13px;height:13px;opacity:0.7;flex-shrink:0;}
+  &:hover{background:${p => p.theme.colors.primary.main + '15'};color:${p => p.theme.colors.primary.main};}
+  &:hover svg{opacity:1;}
+  &:disabled{opacity:0.4;cursor:not-allowed;}
+`;
+
+// Regen split-button component matching RegenDropdown in Campaign.tsx
+const BulkRegenDropdown: React.FC<{
+  theme: any;
+  acting: boolean;
+  hasTemplateEmail: boolean;
+  onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
+}> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <SplitBtn theme={theme} $disabled={acting}>
+      <SplitBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
+        <SplitBtnIcon>
+          <IcoRegen />
+        </SplitBtnIcon>
+        <SplitBtnLabel>Plain Text</SplitBtnLabel>
+      </SplitBtnLeft>
+      <SplitBtnDivider theme={theme} />
+      <SplitBtnChevron theme={theme} $open={open} onClick={e => { e.stopPropagation(); setOpen(v => !v); }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </SplitBtnChevron>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }} onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <SplitDropMenu theme={theme}>
+            <SplitDropItem theme={theme} onClick={e => { e.stopPropagation(); onRegenerate('html'); setOpen(false); }}>
+              <IcoHtml />HTML Email
+            </SplitDropItem>
+            <SplitDropItem theme={theme}
+              onClick={e => { e.stopPropagation(); if (hasTemplateEmail) { onRegenerate('template'); setOpen(false); } }}
+              style={!hasTemplateEmail ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+              title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
+              <IcoTemplate />From Template
+            </SplitDropItem>
+          </SplitDropMenu>
+        </>
+      )}
+    </SplitBtn>
+  );
+};
+
+
 const IcoEmail     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const IcoClip      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
+const IcoHtml      = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
 const IcoBrand     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-const IcoRegen     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>;
+const IcoRegen     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 const IcoPersonal  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>;
 const IcoTemplate  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
 const IcoSend      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
@@ -509,6 +600,30 @@ const DiscardBtn = styled.button<{ theme: any }>`
   &:hover{opacity:0.9;}
 `;
 
+const GenConfirmDialog: React.FC<{ open: boolean; theme: any; queryType: 'plain'|'html'|'template'|null; count: number; onConfirm: () => void; onCancel: () => void }> = ({ open, theme, queryType, count, onConfirm, onCancel }) => (
+  <ConfirmOverlay $open={open} onClick={(e: React.MouseEvent) => { e.stopPropagation(); onCancel(); }}>
+    <ConfirmDialog theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', marginBottom:'0.75rem' }}>
+        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:36, height:36, borderRadius:'50%', background:(theme.colors.warning?.main||'#f59e0b')+'18', color:theme.colors.warning?.main||'#f59e0b', flexShrink:0 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </span>
+        <div>
+          <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:'0.2rem' }}>Regenerate all emails?</div>
+          <div style={{ fontSize:'0.8125rem', opacity:0.6, lineHeight:1.4 }}>
+            This will overwrite existing content for all {count} companies as <strong>{queryType === 'plain' ? 'Plain Text' : queryType === 'html' ? 'HTML Email' : 'From Template'}</strong>.
+          </div>
+        </div>
+      </div>
+      <ConfirmActions>
+        <KeepBtn theme={theme} onClick={onCancel}>Cancel</KeepBtn>
+        <DiscardBtn theme={theme} onClick={onConfirm} style={{ background: theme.colors.primary.main, color: theme.colors.primary.content }}>Regenerate</DiscardBtn>
+      </ConfirmActions>
+    </ConfirmDialog>
+  </ConfirmOverlay>
+);
+
 const CloseConfirmDialog: React.FC<{ open: boolean; theme: any; onKeep: () => void; onClose: () => void }> = ({ open, theme, onKeep, onClose }) => (
   <ConfirmOverlay $open={open} onClick={onKeep}>
     <ConfirmDialog theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
@@ -538,7 +653,7 @@ const getExt = (f: string) => f.split('.').pop()?.toLowerCase() || '';
 // COMPONENT
 // ─────────────────────────────────────────────────────────────
 const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
-  isOpen, companies, campaignId, theme, apiBase, onClose, onToast, hasTemplateEmail,
+  isOpen, companies, campaignId, theme, apiBase, onClose, onToast, hasTemplateEmail, initialQueryType = 'plain',
 }) => {
   // top-level view
   const [topTab, setTopTab] = useState<'companies'|'bulk-generation'|'bulk-attachments'|'bulk-branding'>('companies');
@@ -548,9 +663,12 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const [activeIdx,  setActiveIdx]  = useState(0);
 
   // footer state
-  const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'gen-p'|'gen-t'|null>(null);
+  const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'gen-p'|'gen-t'|'gen-h'|null>(null);
   const [schedTime,  setSchedTime]  = useState('');
   const [genProg,    setGenProg]    = useState({ done:0, total:0 });
+
+  // bulk html email toggle
+  const [bulkHtmlEmail, setBulkHtmlEmail] = useState(false);
 
   // bulk settings — attachment inheritance
   const [bulkAttachInherit, setBulkAttachInherit] = useState<true|false|'mixed'|null>(null);
@@ -601,8 +719,10 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // ── dirty tracking ───────────────────────────────────────────
   const [isDirty,      setIsDirty]      = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [pendingGenType, setPendingGenType] = useState<'plain'|'html'|'template'|null>(null);
   const markDirty = () => setIsDirty(true);
   const handleClose = () => {
+    saveAllEdits();
     setConfirmClose(true);
   };
 
@@ -620,17 +740,17 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     setAttachConfirmed(false); setBrandConfirmed(false);
     setAttachIndividualChanged(false); setBrandIndividualChanged(false);
     setBulkSig(''); setBulkLogo(null); setBulkBrandApplyMsg(null);
+    setBulkHtmlEmail(initialQueryType === 'html');
     setIsDirty(false); setConfirmClose(false);
     const init: BulkEmailEntry[] = companies.map(c => ({
-      company:c, emailId:null, subject:'', body:'', phase:'loading', activeTab:'email',
+      company:c, emailId:null, subject:'', body:'', htmlEmail:false, phase:'loading', activeTab:'email',
       allAttachments:[], linkedEmailAttachIds:new Set(), attachSearch:'',
-      attachSaving:false, attachMsg:null, attachLoading:false,
+      attachLoading:false,
       uploadFile:null, uploading:false, uploadMsg:null, isDragOver:false,
       inheritCampaignAttachments:1, inheritCampaignBranding:1, inheritedAttachIds:[],
       brandSignature:'', brandLogoData:null,
       campaignBrandSignature:'', campaignBrandLogoData:null,
       brandLogoUploading:false,
-      brandSaving:false, brandMsg:null,
     }));
     setEntries(init);
     companies.forEach((c,i) => loadEntry(i,c));
@@ -662,15 +782,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
   // ── load / populate / generate entry ────────────────────────
   const loadEntry = async (idx: number, company: Company) => {
-    try {
-      const r = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
-      if (r.ok) {
-        const d = await r.json();
-        if (d.email_content?.trim()) await populateEntry(idx, company, d);
-        else await generateEntry(idx, company, null);
-      } else if (r.status===404) { await generateEntry(idx, company, null); }
-      else { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
-    } catch { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
+    await generateEntry(idx, company, null, false);
   };
 
   const populateEntry = async (idx: number, company: Company, d: any) => {
@@ -687,6 +799,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     } catch {}
     setEntries(p => p.map((e,i) => i===idx ? {
       ...e, emailId:d.id, subject:d.email_subject||'', body:d.email_content||'',
+      htmlEmail: !!(d.html_email),
       // When inheriting, store API values as campaign branding; own branding stays empty
       // When not inheriting, store API values as own branding
       brandSignature: iB===1 ? (e.brandSignature||'') : (d.signature||''),
@@ -699,18 +812,21 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     } : e));
   };
 
-  const generateEntry = async (idx: number, company: Company, personalized: boolean|null) => {
+  const generateEntry = async (idx: number, company: Company, queryType: 'plain'|'html'|'template'|null, force: boolean = true) => {
     setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'loading'} : e));
     try {
-      const qp = personalized===null ? '/' : `/?personalized=${personalized}`;
-      const gr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email${qp}`, {method:'POST'});
+      const resolvedType = queryType ?? initialQueryType;
+      const gr = await apiFetch(
+        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}&force=${force}`,
+        { method:'POST' }
+      );
       if (!gr.ok) {
         const err=await gr.json();
         onToast('error','Generation Failed', err.detail||`Failed for ${company.name}`);
         setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); return;
       }
       const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
-      if (pr.ok) { await populateEntry(idx, company, await pr.json()); if (personalized!==null) onToast('success','Generated',`Email for ${company.name} regenerated`); }
+      if (pr.ok) { await populateEntry(idx, company, await pr.json()); if (queryType!==null) onToast('success','Generated',`Email for ${company.name} regenerated`); }
       else { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
     } catch { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
   };
@@ -718,11 +834,11 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // ── send / schedule ──────────────────────────────────────────
   const handleSendAll = async () => {
     if (bulkActing) return;
-    setBulkActing('send')
+    setBulkActing('send');
+    await saveAllEdits();
     let sent=0,fail=0;
     await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async e=>{
       try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/update/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({email_subject:e.subject,email_content:e.body})});
         const r=await apiFetch(`${apiBase}/email/${e.emailId}/send/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
         r.ok?sent++:fail++;
       } catch {fail++;}
@@ -735,12 +851,12 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
   const handleScheduleAll = async () => {
     if (!schedTime||bulkActing) return;
-    setBulkActing('schedule')
+    setBulkActing('schedule');
+    await saveAllEdits();
     const iso=new Date(schedTime).toISOString();
     let ok=0,fail=0;
     await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async e=>{
       try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/update/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({email_subject:e.subject,email_content:e.body})});
         const r=await apiFetch(`${apiBase}/email/${e.emailId}/send/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({time:iso})});
         r.ok?ok++:fail++;
       } catch {fail++;}
@@ -757,16 +873,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     if (!readyIds.length) return;
     setBulkActing('schedule');
     try {
-      // Save any unsaved edits first
-      await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async e => {
-        try {
-          await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email_subject: e.subject, email_content: e.body }),
-          });
-        } catch { /* best effort */ }
-      }));
+      await saveAllEdits();
       const r = await apiFetch(`${apiBase}/email/smart-schedule/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -796,16 +903,16 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   };
 
   // ── bulk generate all ────────────────────────────────────────
-  const handleBulkGen = async (personalized: boolean) => {
-    const key = personalized?'gen-p':'gen-t';
+  const handleBulkGen = async (queryType: 'plain'|'html'|'template') => {
+    const key = queryType === 'plain' ? 'gen-p' : queryType === 'html' ? 'gen-h' : 'gen-t';
     if (bulkActing) return;
     setBulkActing(key as any); setGenProg({done:0,total:entries.length});
     for (let i=0;i<entries.length;i++) {
-      await generateEntry(i, entries[i].company, personalized);
+      await generateEntry(i, entries[i].company, queryType, true);
       setGenProg(p=>({...p,done:p.done+1}));
     }
     setBulkActing(null);
-    onToast('success','Regenerated',`All ${entries.length} emails regenerated (${personalized?'Personalised':'From Template'})`);
+    onToast('success','Regenerated',`All ${entries.length} emails regenerated (${queryType})`);
   };
 
   // ── bulk attachment inherit toggle ───────────────────────────
@@ -813,7 +920,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     if (bulkAttachSaving) return;
     setBulkAttachInherit(on); 
     setBulkAttachSaving(true); 
-    setBulkInheritMsg(null); // Clear any previous messages
+    setBulkInheritMsg(null);
     let ok = 0, fail = 0;
     await Promise.all(entries.map(async(e,i)=>{
       try {
@@ -821,23 +928,22 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
           method:'PUT', headers:{'Content-Type':'application/json'},
           body:JSON.stringify({inherit_campaign_attachments:on?1:0, inherit_campaign_branding:e.inheritCampaignBranding}),
         });
-        upd(i,{inheritCampaignAttachments:on?1:0}); ok++;
+        upd(i,{inheritCampaignAttachments:on?1:0});
+        // Re-fetch primary to get fresh resolved attachment_ids
+        const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${e.company.id}/primary/`);
+        if (pr.ok) {
+          const d = await pr.json();
+          upd(i, { inheritedAttachIds: d.attachment_ids ?? [] });
+        }
+        ok++;
       } catch {fail++;}
     }));
     setBulkAttachSaving(false);
-    
-    // Only set message if this is the only operation or combine with branding if needed
     if (!bulkBrandSaving) {
       if (fail === 0) {
-        setBulkInheritMsg({
-          ok: true, 
-          text: `Attachment inheritance ${on ? 'enabled' : 'disabled'} for all ${ok} companies`
-        });
+        setBulkInheritMsg({ ok: true, text: `Attachment inheritance ${on ? 'enabled' : 'disabled'} for all ${ok} companies` });
       } else {
-        setBulkInheritMsg({
-          ok: false, 
-          text: `Failed to update attachment inheritance for ${fail} companies`
-        });
+        setBulkInheritMsg({ ok: false, text: `Failed to update attachment inheritance for ${fail} companies` });
       }
     }
   };
@@ -961,33 +1067,74 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
     } catch(err){upd(idx,{uploading:false,uploadMsg:{type:'error',text:err instanceof Error?err.message:'Upload failed'}});}
   };
-  const toggleAttach=(idx:number,id:number)=>{const n=new Set(entries[idx].linkedEmailAttachIds);n.has(id)?n.delete(id):n.add(id);upd(idx,{linkedEmailAttachIds:n,attachMsg:null});};
-  const saveAttachments=async(idx:number)=>{
-    const e=entries[idx];if(!e.emailId) return;
-    upd(idx,{attachSaving:true,attachMsg:null});
-    try{
-      const r=await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify([...e.linkedEmailAttachIds])});
-      if(!r.ok){const err=await r.json();throw new Error(err.detail||'Failed');}
-      upd(idx,{attachSaving:false,attachMsg:{type:'success',text:'Attachments saved'}});
-      // Individual change after bulk — force re-confirmation
-      if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
-    }catch(err){upd(idx,{attachSaving:false,attachMsg:{type:'error',text:err instanceof Error?err.message:'Failed'}});}
+  const toggleAttach = async (idx: number, id: number) => {
+    const e = entries[idx];
+    const next = new Set(e.linkedEmailAttachIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    upd(idx, { linkedEmailAttachIds: next });
+    if (e.emailId) {
+      try {
+        await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([...next]),
+        });
+      } catch { /* silent */ }
+    }
+    if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
   };
   const saveInherit=async(idx:number,aV:number,bV:number)=>{
     const e=entries[idx];
     try{await apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({inherit_campaign_attachments:aV,inherit_campaign_branding:bV})});}catch{}
   };
-  const saveBranding=async(idx:number)=>{
-    const e=entries[idx];if(!e.emailId) return;
-    upd(idx,{brandSaving:true,brandMsg:null});
-    try{
-      await saveInherit(idx,e.inheritCampaignAttachments,e.inheritCampaignBranding);
-      const r=await apiFetch(`${apiBase}/email/${e.emailId}/update/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:e.brandSignature??'',...(e.brandLogoData?{logo_data:e.brandLogoData}:{logo_clear:true})})});
-      if(!r.ok){const err=await r.json();throw new Error(err.detail||'Failed');}
-      upd(idx,{brandSaving:false,brandMsg:{type:'success',text:'Branding saved'}});
-      // Individual change after bulk — force re-confirmation
-      if (brandConfirmed) { setBrandConfirmed(false); setBrandIndividualChanged(true); }
-    }catch(err){upd(idx,{brandSaving:false,brandMsg:{type:'error',text:err instanceof Error?err.message:'Failed'}});}
+  const saveAllEdits = async () => {
+    await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async e => {
+      try {
+        await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email_subject: e.subject,
+            email_content: e.body,
+            ...(!e.inheritCampaignBranding && {
+              signature: e.brandSignature ?? '',
+              ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }),
+            }),
+          }),
+        });
+      } catch { /* best effort */ }
+    }));
+  };
+
+  const handleBulkHtmlToggle = async (val: boolean) => {
+    setBulkHtmlEmail(val);
+    entries.forEach((e, i) => upd(i, { htmlEmail: val }));
+    await Promise.all(entries.filter(e => e.emailId).map(async e => {
+      try {
+        await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html_email: val }),
+        });
+      } catch { /* silent */ }
+    }));
+  };
+
+  const saveBranding = async (idx: number, userEdited = false) => {
+    const e = entries[idx]; if (!e.emailId) return;
+    try {
+      await saveInherit(idx, e.inheritCampaignAttachments, e.inheritCampaignBranding);
+      await apiFetch(`${apiBase}/email/${e.emailId}/update/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ signature: e.brandSignature ?? '', ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }) }) });
+      if (userEdited && brandConfirmed) { setBrandConfirmed(false); setBrandIndividualChanged(true); }
+    } catch { /* silent */ }
+  };
+
+  const saveHtmlEmailFlag = async (idx: number, htmlEmail: boolean) => {
+    const e = entries[idx]; if (!e.emailId) return;
+    upd(idx, { htmlEmail });
+    try {
+      await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html_email: htmlEmail }),
+      });
+    } catch { /* silent */ }
   };
 
   // ── derived ──────────────────────────────────────────────────
@@ -997,11 +1144,11 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   })();
   const readyCount  = entries.filter(e=>e.phase==='ready'&&e.emailId).length;
   const entry       = entries[activeIdx];
-  const isGenning   = bulkActing==='gen-p'||bulkActing==='gen-t';
+  const isGenning   = bulkActing==='gen-p'||bulkActing==='gen-t'||bulkActing==='gen-h';
   const genPct      = genProg.total>0 ? Math.round(genProg.done/genProg.total*100) : 0;
   const allSettled  = entries.length > 0 && entries.every(e => e.phase === 'ready' || e.phase === 'error');
   const doneCount   = entries.filter(e => e.phase === 'ready' || e.phase === 'error').length;
-  const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv'];
+  const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
   if (!isOpen) return null;
 
@@ -1060,7 +1207,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
           </TopTab>
           <TopTab theme={theme} $active={topTab==='bulk-generation'} onClick={()=>setTopTab('bulk-generation')}>
             <IcoRegen />
-            Bulk Generation
+            Bulk Settings
           </TopTab>
           <TopTab theme={theme} $active={topTab==='bulk-attachments'} onClick={()=>setTopTab('bulk-attachments')}>
             <IcoClip />
@@ -1081,7 +1228,10 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
             <CompanyNav theme={theme}>
               <NavLabel theme={theme}>Companies</NavLabel>
               {entries.map((e,idx)=>(
-                <NavItem key={e.company.id} theme={theme} $active={idx===activeIdx} onClick={()=>setActiveIdx(idx)}>
+                <NavItem key={e.company.id} theme={theme} $active={idx===activeIdx} onClick={()=>{
+                  if(entry&&entry.activeTab==='branding'&&!entry.inheritCampaignBranding) saveBranding(activeIdx);
+                  setActiveIdx(idx);
+                }}>
                   {e.phase==='loading' ? <MiniSpinner /> : e.phase==='error' ? <span style={{fontSize:'0.72rem',color:theme.colors.error?.main||'#ef4444'}}>⚠</span> : <StatusDot theme={theme} $phase={e.phase}/>}
                   <NavName>{e.company.name}</NavName>
                 </NavItem>
@@ -1094,20 +1244,36 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                 <>
                   {entry.phase==='ready' && (
                     <InnerTabBar theme={theme}>
-                      <InnerTab theme={theme} $active={entry.activeTab==='email'} onClick={()=>upd(activeIdx,{activeTab:'email'})}>
-                        <IcoEmail/>Email
-                      </InnerTab>
-                      <InnerTab theme={theme} $active={entry.activeTab==='attachments'} onClick={()=>upd(activeIdx,{activeTab:'attachments'})}>
-                        <IcoClip/>Attachments
-                        {!entry.inheritCampaignAttachments&&entry.linkedEmailAttachIds.size>0&&(
-                          <span style={{fontSize:'0.63rem',fontWeight:700,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 5px'}}>
-                            {entry.linkedEmailAttachIds.size}
-                          </span>
-                        )}
-                      </InnerTab>
-                      <InnerTab theme={theme} $active={entry.activeTab==='branding'} onClick={()=>upd(activeIdx,{activeTab:'branding'})}>
-                        <IcoBrand/>Branding
-                      </InnerTab>
+                      <div style={{display:'flex'}}>
+                        <InnerTab theme={theme} $active={entry.activeTab==='email'} onClick={()=>{
+                          if(entry.activeTab==='branding'&&!entry.inheritCampaignBranding) saveBranding(activeIdx);
+                          upd(activeIdx,{activeTab:'email'});
+                        }}>
+                          <IcoEmail/>Email
+                        </InnerTab>
+                        <InnerTab theme={theme} $active={entry.activeTab==='attachments'} onClick={()=>{
+                          if(entry.activeTab==='branding'&&!entry.inheritCampaignBranding) saveBranding(activeIdx);
+                          upd(activeIdx,{activeTab:'attachments'});
+                        }}>
+                          <IcoClip/>Attachments
+                          {!entry.inheritCampaignAttachments&&entry.linkedEmailAttachIds.size>0&&(
+                            <span style={{fontSize:'0.63rem',fontWeight:700,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 5px'}}>
+                              {entry.linkedEmailAttachIds.size}
+                            </span>
+                          )}
+                        </InnerTab>
+                        <InnerTab theme={theme} $active={entry.activeTab==='branding'} onClick={()=>upd(activeIdx,{activeTab:'branding'})}>
+                          <IcoBrand/>Branding
+                        </InnerTab>
+                      </div>
+                      {entry.activeTab==='email' && (
+                        <BulkRegenDropdown
+                          theme={theme}
+                          acting={!!bulkActing}
+                          hasTemplateEmail={!!hasTemplateEmail}
+                          onRegenerate={(qt)=>generateEntry(activeIdx,entry.company,qt,true)}
+                        />
+                      )}
                     </InnerTabBar>
                   )}
 
@@ -1120,22 +1286,18 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     </div>
                   )}
 
-                  {/* EMAIL TAB */}
                   {entry.phase==='ready'&&entry.activeTab==='email'&&(
                     <Scroll>
-                      <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap'}}>
-                        <span style={{fontSize:'0.72rem',fontWeight:600,opacity:0.4,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>Regenerate:</span>
-                        <GenBtn theme={theme} disabled={!!bulkActing} onClick={()=>generateEntry(activeIdx,entry.company,true)}>
-                          <IcoRegen/><IcoPersonal/> Personalised
-                        </GenBtn>
-                        <span title={!hasTemplateEmail?'No template email set':undefined} style={{display:'inline-flex'}}>
-                          <GenBtn theme={theme} disabled={!!bulkActing||!hasTemplateEmail} onClick={()=>hasTemplateEmail&&generateEntry(activeIdx,entry.company,false)} style={!hasTemplateEmail?{opacity:0.38,cursor:'not-allowed'}:{}}>
-                            <IcoRegen/><IcoTemplate/> From Template
-                          </GenBtn>
-                        </span>
-                      </div>
                       <div><FieldLbl theme={theme}>Subject</FieldLbl><SubjectIn theme={theme} value={entry.subject} onChange={e=>{upd(activeIdx,{subject:e.target.value});markDirty();}} placeholder="Email subject…"/></div>
                       <div><FieldLbl theme={theme}>Body</FieldLbl><BodyTA theme={theme} value={entry.body} onChange={e=>{upd(activeIdx,{body:e.target.value});markDirty();}} placeholder="Email body…"/></div>
+                      {/* HTML Email toggle */}
+                      <div onClick={()=>saveHtmlEmailFlag(activeIdx,!entry.htmlEmail)}
+                        style={{display:'inline-flex',alignItems:'center',gap:'0.6rem',cursor:'pointer',userSelect:'none' as const,width:'fit-content'}}>
+                        <div style={{width:36,height:20,borderRadius:999,flexShrink:0,background:entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300],position:'relative',transition:'background 0.2s',border:`1px solid ${entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300]}`}}>
+                          <div style={{position:'absolute',top:2,left:entry.htmlEmail?17:2,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                        </div>
+                        <span style={{fontSize:'0.8rem',fontWeight:600,opacity:0.75}}>HTML Email</span>
+                      </div>
                     </Scroll>
                   )}
 
@@ -1209,12 +1371,8 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                                   :notAtt.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked={false} onClick={()=>toggleAttach(activeIdx,a.id)}><AttachBox theme={theme} $checked={false}/><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{fontSize:'0.68rem',opacity:0.35}}>attach</span></AttachRow>);})}
                               </AttachList>
                             </div>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',paddingTop:'0.25rem'}}>
+                            <div style={{display:'flex',alignItems:'center',paddingTop:'0.25rem'}}>
                               <span style={{fontSize:'0.78rem',opacity:0.45}}>{entry.allAttachments.length} file{entry.allAttachments.length!==1?'s':''} total</span>
-                              <div style={{display:'flex',alignItems:'center',gap:'0.6rem'}}>
-                                {entry.attachMsg&&<MsgLine theme={theme} $ok={entry.attachMsg.type==='success'}>{entry.attachMsg.text}</MsgLine>}
-                                <SaveBtn theme={theme} onClick={()=>saveAttachments(activeIdx)} disabled={entry.attachSaving} style={{padding:'0.45rem 1rem',fontSize:'0.8rem'}}>{entry.attachSaving?'Saving…':'Save'}</SaveBtn>
-                              </div>
                             </div>
                           </>
                         )}
@@ -1248,19 +1406,17 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                         <>
                           <div style={{marginBottom:'1.1rem'}}>
                             <div style={{fontSize:'0.8rem',fontWeight:600,marginBottom:'0.35rem',opacity:0.8}}>Logo <span style={{fontSize:'0.7rem',fontWeight:400,opacity:0.5}}>PNG, JPG, GIF or WebP · max 5 MB</span></div>
-                            <LogoZone theme={theme} $has={!!entry.brandLogoData} onClick={()=>!entry.brandLogoUploading&&logoRefs.current[activeIdx]?.click()} onDragOver={e=>e.preventDefault()} onDrop={async e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&!entry.brandLogoUploading){const d=await b64(f);upd(activeIdx,{brandLogoData:d});}}}>
-                              {entry.brandLogoData?<><LogoImg src={entry.brandLogoData} alt="Logo"/><LogoRemoveButton theme={theme} type="button" onClick={e=>{e.stopPropagation();upd(activeIdx,{brandLogoData:null});}}>✕</LogoRemoveButton></>:<LogoHint><IcoLogoPlaceholder/><span>Click or drag to upload</span></LogoHint>}
+                            <LogoZone theme={theme} $has={!!entry.brandLogoData} onClick={()=>!entry.brandLogoUploading&&logoRefs.current[activeIdx]?.click()} onDragOver={e=>e.preventDefault()} onDrop={async e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&!entry.brandLogoUploading){const d=await b64(f);upd(activeIdx,{brandLogoData:d});saveBranding(activeIdx,true);}}}>
+                              {entry.brandLogoData?<><LogoImg src={entry.brandLogoData} alt="Logo"/><LogoRemoveButton theme={theme} type="button" onClick={e=>{e.stopPropagation();upd(activeIdx,{brandLogoData:null});saveBranding(activeIdx,true);}}>✕</LogoRemoveButton></>:<LogoHint><IcoLogoPlaceholder/><span>Click or drag to upload</span></LogoHint>}
                             </LogoZone>
-                            <input ref={el=>{logoRefs.current[activeIdx]=el;}} type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f){const d=await b64(f);upd(activeIdx,{brandLogoData:d});}e.target.value='';}}/>
+                            <input ref={el=>{logoRefs.current[activeIdx]=el;}} type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{const f=e.target.files?.[0];if(f){const d=await b64(f);upd(activeIdx,{brandLogoData:d});saveBranding(activeIdx,true);}e.target.value='';}}/>
                           </div>
                           <div style={{marginBottom:'1.1rem'}}>
                             <div style={{fontSize:'0.8rem',fontWeight:600,marginBottom:'0.35rem',opacity:0.8}}>Email Signature</div>
-                            <textarea rows={4} placeholder={'Best,\nJohn Smith\nAcme Corp'} value={entry.brandSignature} onChange={e=>{upd(activeIdx,{brandSignature:e.target.value,brandMsg:null});markDirty();}}
+                            <textarea rows={4} placeholder={'Best,\nJohn Smith\nAcme Corp'} value={entry.brandSignature}
+                              onChange={e=>{upd(activeIdx,{brandSignature:e.target.value});markDirty();}}
+                              onBlur={()=>saveBranding(activeIdx,true)}
                               style={{width:'100%',padding:'0.65rem 0.9rem',border:`1px solid ${theme.colors.base[300]}`,borderRadius:theme.radius.field,background:theme.colors.base[200],color:theme.colors.base.content,fontSize:'0.875rem',fontFamily:'inherit',resize:'vertical' as const,minHeight:80,boxSizing:'border-box' as const}}/>
-                          </div>
-                          <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:'0.6rem'}}>
-                            {entry.brandMsg&&<MsgLine theme={theme} $ok={entry.brandMsg.type==='success'}>{entry.brandMsg.text}</MsgLine>}
-                            <SaveBtn theme={theme} onClick={()=>saveBranding(activeIdx)} disabled={entry.brandSaving} style={{padding:'0.45rem 1rem',fontSize:'0.8rem'}}>{entry.brandSaving?'Saving…':'Save'}</SaveBtn>
                           </div>
                         </>
                       )}
@@ -1280,31 +1436,53 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         {/* ════ BULK GENERATION TAB ════ */}
         {topTab === 'bulk-generation' && (
           <BulkPane>
-            <PanelTitle theme={theme} style={{ marginBottom: '0.25rem' }}>Generate All Emails</PanelTitle>
-            <PanelSubtitle theme={theme} style={{ marginBottom: '1.25rem' }}>
-              Regenerate emails for all {entries.length} companies at once
-            </PanelSubtitle>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <Btn theme={theme} $v="primary" disabled={!!bulkActing} onClick={() => handleBulkGen(true)} style={{ minWidth: '140px' }}>
-                {bulkActing === 'gen-p' ? <MiniSpinner /> : <><IcoRegen /><IcoPersonal /></>}
-                {bulkActing === 'gen-p' && genProg.total > 0 ? `${genProg.done}/${genProg.total}…` : 'Personalised'}
-              </Btn>
-              <Btn theme={theme} $v={hasTemplateEmail ? 'primary' : 'default'} disabled={!!bulkActing || !hasTemplateEmail}
-                onClick={() => hasTemplateEmail && handleBulkGen(false)}
-                style={{ minWidth: '140px', opacity: !hasTemplateEmail ? 0.5 : 1, cursor: !hasTemplateEmail ? 'not-allowed' : 'pointer' }}>
-                {bulkActing === 'gen-t' ? <MiniSpinner /> : <><IcoRegen /><IcoTemplate /></>}
-                {bulkActing === 'gen-t' && genProg.total > 0 ? `${genProg.done}/${genProg.total}…` : 'From Template'}
-              </Btn>
-            </div>
-            {isGenning && (
-              <div style={{ marginTop: '1rem' }}>
-                <ProgressTrack theme={theme}><ProgressFill theme={theme} $pct={genPct} /></ProgressTrack>
-                <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{genProg.done} of {genProg.total} generated</span>
-                  <span>{genPct}%</span>
-                </div>
+            {/* Generate section */}
+            <div style={{ borderBottom: `1px solid ${theme.colors.base[300]}`, paddingBottom: '1.5rem' }}>
+              <PanelTitle theme={theme}>Generate All</PanelTitle>
+              <PanelSubtitle theme={theme} style={{ marginBottom: '1rem' }}>Regenerate emails for all {entries.length} companies at once</PanelSubtitle>
+              <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' as const }}>
+                {[
+                  { key: 'plain',    label: 'Plain Text',     acting: 'gen-p' },
+                  { key: 'html',     label: 'HTML Email',     acting: 'gen-h' },
+                  { key: 'template', label: 'From Template',  acting: 'gen-t', disabled: !hasTemplateEmail,
+                    title: !hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined },
+                ].map(opt => (
+                  <Btn key={opt.key} theme={theme} $v="primary"
+                    disabled={!!bulkActing || !!opt.disabled}
+                    title={opt.title}
+                    onClick={() => !opt.disabled && setPendingGenType(opt.key as 'plain'|'html'|'template')}
+                    style={{ opacity: opt.disabled ? 0.45 : 1, cursor: opt.disabled ? 'not-allowed' : 'pointer' }}>
+                    {bulkActing === opt.acting ? <><MiniSpinner />{genProg.total > 0 ? `${genProg.done}/${genProg.total}…` : 'Generating…'}</> : <><IcoRegen />{opt.label}</>}
+                  </Btn>
+                ))}
               </div>
-            )}
+              {isGenning && (
+                <div style={{ marginTop: '1rem' }}>
+                  <ProgressTrack theme={theme}><ProgressFill theme={theme} $pct={genPct} /></ProgressTrack>
+                  <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{genProg.done} of {genProg.total} generated</span><span>{genPct}%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* HTML Email flag */}
+            <div>
+              <PanelTitle theme={theme}>HTML Email Flag</PanelTitle>
+              <PanelSubtitle theme={theme} style={{ marginBottom: '0.875rem' }}>Toggle the HTML flag for all selected companies, independent of generation</PanelSubtitle>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
+                <div onClick={() => handleBulkHtmlToggle(!bulkHtmlEmail)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' as const }}>
+                  <div style={{ width: 36, height: 20, borderRadius: 999, flexShrink: 0, background: bulkHtmlEmail ? theme.colors.primary.main : theme.colors.base[300], position: 'relative', transition: 'background 0.2s', border: `1px solid ${bulkHtmlEmail ? theme.colors.primary.main : theme.colors.base[300]}` }}>
+                    <div style={{ position: 'absolute', top: 2, left: bulkHtmlEmail ? 17 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </div>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>HTML Email</span>
+                </div>
+                {entries.filter(e => e.phase === 'ready').some(e => e.htmlEmail !== bulkHtmlEmail) && (
+                  <span style={{ fontSize: '0.75rem', opacity: 0.5, fontStyle: 'italic' }}>Some companies differ — toggling will apply to all</span>
+                )}
+              </div>
+            </div>
           </BulkPane>
         )}
 
@@ -1319,10 +1497,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     You've made individual attachment changes to one or more companies since the last bulk operation.
                     Proceeding will overwrite those individual changes across all {entries.length} companies.
                   </PanelSubtitle>
-                  <AlertBox theme={theme} $variant="warn">
-                    <IcoWarn />
-                    <div><strong>Individual changes will be lost.</strong> Some companies had their attachments updated individually — bulk settings will replace them all.</div>
-                  </AlertBox>
                 </>
               ) : (
                 <>
@@ -1330,18 +1504,33 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     This lets you set the same attachment inheritance and files across all {entries.length} companies at once.
                     Each company's current attachment setting will be overwritten.
                   </PanelSubtitle>
-                  <AlertBox theme={theme} $variant="warn">
-                    <IcoWarn />
-                    <div><strong>This will overwrite all companies.</strong> Their individual attachment settings will be replaced with whatever you set here.</div>
-                  </AlertBox>
                 </>
               )}
+              <AlertBox theme={theme} $variant="warn">
+                <IcoWarn />
+                <div><strong>All per-company attachments will be detached.</strong> Every company will lose their individually attached files. You can re-attach them after.</div>
+              </AlertBox>
               <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <Btn theme={theme} $v="primary" onClick={() => {
+                <Btn theme={theme} $v="primary" onClick={async () => {
                   setAttachConfirmed(true);
                   setAttachIndividualChanged(false);
-                  const firstReady = entries.find(e => e.phase === 'ready');
-                  if (firstReady) handleBulkAttachInherit(firstReady.inheritCampaignAttachments === 1);
+                  // Clear all attachments and turn off inheritance for every company
+                  await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async (e, i) => {
+                    upd(i, { linkedEmailAttachIds: new Set(), inheritCampaignAttachments: 0 });
+                    try {
+                      await Promise.all([
+                        apiFetch(`${apiBase}/email/${e.emailId}/attachments/`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify([]),
+                        }),
+                        apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ inherit_campaign_attachments: 0, inherit_campaign_branding: e.inheritCampaignBranding }),
+                        }),
+                      ]);
+                    } catch { /* silent */ }
+                  }));
+                  setBulkAttachInherit(false);
                 }}>
                   {attachIndividualChanged ? 'Yes, overwrite individual changes' : 'Yes, manage bulk attachments'}
                 </Btn>
@@ -1415,7 +1604,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   if (e.phase !== 'ready') return e;
                   const s = new Set(e.linkedEmailAttachIds);
                   attach ? s.add(id) : s.delete(id);
-                  return { ...e, linkedEmailAttachIds: s, attachMsg: null };
+                  return { ...e, linkedEmailAttachIds: s };
                 }));
               };
               const saveBulkAttachments = async () => {
@@ -1501,10 +1690,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     You've made individual branding changes to one or more companies since the last bulk operation.
                     Proceeding will overwrite those individual changes across all {entries.length} companies.
                   </PanelSubtitle>
-                  <AlertBox theme={theme} $variant="warn">
-                    <IcoWarn />
-                    <div><strong>Individual changes will be lost.</strong> Some companies had their branding updated individually — bulk settings will replace them all.</div>
-                  </AlertBox>
                 </>
               ) : (
                 <>
@@ -1512,18 +1697,35 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     This lets you set the same branding inheritance across all {entries.length} companies at once.
                     Each company's current branding setting will be overwritten.
                   </PanelSubtitle>
-                  <AlertBox theme={theme} $variant="warn">
-                    <IcoWarn />
-                    <div><strong>This will overwrite all companies.</strong> Their individual branding settings will be replaced with whatever you set here.</div>
-                  </AlertBox>
                 </>
               )}
+              <AlertBox theme={theme} $variant="warn">
+                <IcoWarn />
+                <div><strong>All per-company branding will be cleared.</strong> Every company's individual logo and signature will be removed. You can re-apply them after.</div>
+              </AlertBox>
               <div style={{ display: 'flex', gap: '0.6rem' }}>
-                <Btn theme={theme} $v="primary" onClick={() => {
+                <Btn theme={theme} $v="primary" onClick={async () => {
                   setBrandConfirmed(true);
                   setBrandIndividualChanged(false);
-                  const firstReady = entries.find(e => e.phase === 'ready');
-                  if (firstReady) handleBulkBrandInherit(firstReady.inheritCampaignBranding === 1);
+                  // Clear all branding and turn off inheritance for every company
+                  await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async (e, i) => {
+                    upd(i, { brandSignature: '', brandLogoData: null, inheritCampaignBranding: 0 });
+                    try {
+                      await Promise.all([
+                        apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ signature: '', logo_clear: true }),
+                        }),
+                        apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ inherit_campaign_attachments: e.inheritCampaignAttachments, inherit_campaign_branding: 0 }),
+                        }),
+                      ]);
+                    } catch { /* silent */ }
+                  }));
+                  setBulkBrandInherit(false);
+                  setBulkSig('');
+                  setBulkLogo(null);
                 }}>
                   {brandIndividualChanged ? 'Yes, overwrite individual changes' : 'Yes, manage bulk branding'}
                 </Btn>
@@ -1731,6 +1933,14 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         theme={theme}
         onKeep={() => setConfirmClose(false)}
         onClose={() => { setConfirmClose(false); setIsDirty(false); onClose(); }}
+      />
+      <GenConfirmDialog
+        open={!!pendingGenType}
+        theme={theme}
+        queryType={pendingGenType}
+        count={entries.length}
+        onCancel={() => setPendingGenType(null)}
+        onConfirm={() => { const qt = pendingGenType!; setPendingGenType(null); handleBulkGen(qt); }}
       />
       </>
       )}

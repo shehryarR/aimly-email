@@ -3250,7 +3250,7 @@ const EGenBtn = styled.button<{ theme: any; $active?: boolean }>`
 `;
 const EActionBtn = styled.button<{ theme: any; $variant?: 'primary' | 'success' | 'warning' | 'default' }>`
   display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.55rem 1.1rem;
+  height: 34px; padding: 0 1.1rem;
   border-radius: ${p => p.theme.radius.field};
   border: none; font-size: 0.8375rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
   background: ${p =>
@@ -3326,19 +3326,6 @@ const SendIcon = () => (
     <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
   </svg>
 );
-const DraftIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-  </svg>
-);
-const ScheduleIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-    <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-    <polyline points="9 16 11 18 15 14"/>
-  </svg>
-);
 const RegenerateIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 4 23 10 17 10"/>
@@ -3376,29 +3363,46 @@ const RegenDropdown: React.FC<{
   onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
 }> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const chevronRef = useRef<HTMLSpanElement>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.right });
+    setOpen(v => !v);
+  };
+
   return (
     <GenBtn theme={theme} $disabled={acting}>
       <GenBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
         <GenBtnIcon>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </GenBtnIcon>
-        <GenBtnLabel>
-          Plain Text
-        </GenBtnLabel>
+        <GenBtnLabel>Plain Text</GenBtnLabel>
       </GenBtnLeft>
       <GenBtnDivider theme={theme} className="gen-divider" />
-      <GenBtnChevron theme={theme} $open={open}
-        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
-      >
+      <GenBtnChevron ref={chevronRef} theme={theme} $open={open} onClick={openMenu}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </GenBtnChevron>
-      {open && (
+      {open && createPortal(
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }}
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
             onClick={e => { e.stopPropagation(); setOpen(false); }} />
-          <GenDropMenu theme={theme}>
+          <div style={{
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
+            transform: 'translateX(-100%)',
+            zIndex: 9999,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)',
+            minWidth: 130, overflow: 'hidden',
+          }}>
             <GenDropItem theme={theme}
               onClick={e => { e.stopPropagation(); onRegenerate('html'); setOpen(false); }}>
               <HtmlIcon />HTML Email
@@ -3409,8 +3413,9 @@ const RegenDropdown: React.FC<{
               title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
               <TemplateIcon />From Template
             </GenDropItem>
-          </GenDropMenu>
-        </>
+          </div>
+        </>,
+        document.body
       )}
     </GenBtn>
   );
@@ -3455,12 +3460,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [acting, setActing]         = useState<string | null>(null);
   const [htmlEmail, setHtmlEmail]   = useState(false);
   const htmlEmailRef = useRef(false);
-  const [schedOpen, setSchedOpen]   = useState(false);
-  const [schedTime, setSchedTime]   = useState('');
-  const [autoSaving, setAutoSaving] = useState(false);
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSaved     = useRef('');
-  const scheduleInputRef = useRef<HTMLInputElement>(null);
 
   // ── Attachment tab state (mirrors CampaignSettingsModal exactly) ─────────────
   const [allAttachments,       setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -3492,13 +3491,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setActiveTab('email');
     setPhase('loading');
     setLoadingMsg('Loading email…');
-    setSchedOpen(false);
-    setSchedTime('');
     setActing(null);
     setHtmlEmail(initialHtmlEmail);
     htmlEmailRef.current = initialHtmlEmail;
-    setAutoSaving(false);
-    lastSaved.current = '';
     setAttachSearch('');
     setAttachMsg(null);
     setUploadMsg(null);
@@ -3570,7 +3565,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setBrandSignature((d as any).signature || '');
     setBrandLogoData((d as any).logo_data || null);
     setInheritedAttachIds(d.attachment_ids ?? []);
-    lastSaved.current = JSON.stringify({ s: d.email_subject || '', b: d.email_content || '' });
     setPhase('ready');
     loadEmailLinkedAttachments(d.id);
   };
@@ -3645,62 +3639,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
       onToast('error', 'Send Failed', err instanceof Error ? err.message : 'Failed to send');
     } finally { setActing(null); }
   };
-
-  const handleDraft = async () => {
-    if (!email || acting) return;
-    setActing('draft'); await saveEdits();
-    try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/draft/`, {
-        method: 'POST',
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Draft failed');
-      onToast('success', 'Saved as Draft', 'Email saved to drafts');
-      onClose();
-    } catch (err) {
-      onToast('error', 'Draft Failed', err instanceof Error ? err.message : 'Failed to save draft');
-    } finally { setActing(null); }
-  };
-
-  const handleSchedule = async () => {
-    if (!email || acting || !schedTime) return;
-    setActing('schedule'); await saveEdits();
-    try {
-      const isoTime = new Date(schedTime).toISOString();
-      const res = await apiFetch(`${apiBase}/email/${email.id}/send/`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ time: isoTime }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Schedule failed');
-      onToast('success', 'Scheduled', d.message || 'Email scheduled');
-      onClose();
-    } catch (err) {
-      onToast('error', 'Schedule Failed', err instanceof Error ? err.message : 'Failed to schedule');
-    } finally { setActing(null); }
-  };
-
-  // ── Auto-save on edit ─────────────────────────────────────────────────────
-  const doAutoSave = async () => {
-    if (!email) return;
-    const cur = JSON.stringify({ s: subject, b: body });
-    if (cur === lastSaved.current) return;
-    setAutoSaving(true);
-    try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/update/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_subject: subject, email_content: body }),
-      });
-      if (res.ok) lastSaved.current = cur;
-    } catch { /* silent */ } finally { setAutoSaving(false); }
-  };
-
-  useEffect(() => {
-    if (!email || phase !== 'ready') return;
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(doAutoSave, 1200);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [subject, body]);
 
   // ── Attachment tab helpers (mirrors settings modal exactly) ───────────────────
   const handleAttachFilePick = (file: File) => {
@@ -3814,15 +3752,11 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
   if (!company) return null;
 
-  // min for datetime-local must be in local time ("YYYY-MM-DDTHH:mm")
-  const minDatetime = (() => {
-    const d = new Date(Date.now() + 60000);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  })();
-
   const handleClose = () => {
-    if (activeTab === 'branding' && !inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature);
+    if (email) {
+      saveEdits();
+      if (!inheritCampaignBranding) doSaveBranding(brandLogoData, brandSignature);
+    }
     onClose();
   };
 
@@ -3916,17 +3850,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
             {phase === 'ready' && activeTab === 'email' && (
               <>
-                {/* Regenerate row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <RegenDropdown
-                    theme={theme}
-                    acting={!!acting}
-                    hasTemplateEmail={!!hasTemplateEmail}
-                    onRegenerate={generateEmail}
-                  />
-                  {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
-                </div>
-
                 {/* Subject */}
                 <div>
                   <EFieldLabel theme={theme}>Subject</EFieldLabel>
@@ -4381,60 +4304,17 @@ const EmailModal: React.FC<EmailModalProps> = ({
           {/* Footer actions — only on email tab */}
           {phase === 'ready' && activeTab === 'email' && (
             <EmailModalFoot theme={theme}>
-              {/* Auto-save note */}
-              {autoSaving && (
-                <span style={{ fontSize: '0.75rem', opacity: 0.5, marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <ESpinner style={{ width: 13, height: 13, borderWidth: 2 }} />Saving…
-                </span>
-              )}
-
-              {schedOpen ? (
-                <>
-                  <input
-                    ref={scheduleInputRef}
-                    type="datetime-local"
-                    min={minDatetime}
-                    value={schedTime}
-                    onChange={e => setSchedTime(e.target.value)}
-                    style={{
-                      padding: '0.4rem 0.6rem', fontSize: '0.8125rem',
-                      border: `1px solid ${theme.colors.base[300]}`,
-                      borderRadius: theme.radius.field,
-                      background: theme.colors.base[200],
-                      color: theme.colors.base.content,
-                      boxSizing: 'border-box' as const, marginRight: 'auto',
-                    }}
-                  />
-                  <EActionBtn theme={theme} $variant="default" disabled={!!acting}
-                    onClick={() => { setSchedOpen(false); setSchedTime(''); }}>
-                    Cancel
-                  </EActionBtn>
-                  <EActionBtn theme={theme} $variant="warning" disabled={!schedTime || !!acting}
-                    onClick={handleSchedule}>
-                    {acting === 'schedule' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <ScheduleIcon />}
-                    Confirm
-                  </EActionBtn>
-                </>
-              ) : (
-                <>
-                  {/* Draft */}
-                  <EActionBtn theme={theme} $variant="default" disabled={!!acting} onClick={handleDraft}>
-                    {acting === 'draft' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <DraftIcon />}
-                    Draft
-                  </EActionBtn>
-                  {/* Schedule */}
-                  <EActionBtn theme={theme} $variant="default" disabled={!!acting}
-                    onClick={() => { setSchedOpen(true); setTimeout(() => scheduleInputRef.current?.focus(), 80); }}>
-                    <ScheduleIcon />
-                    Schedule
-                  </EActionBtn>
-                  {/* Send */}
-                  <EActionBtn theme={theme} $variant="primary" disabled={!!acting} onClick={handleSend}>
-                    {acting === 'send' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <SendIcon />}
-                    Send
-                  </EActionBtn>
-                </>
-              )}
+              <RegenDropdown
+                theme={theme}
+                acting={!!acting}
+                hasTemplateEmail={!!hasTemplateEmail}
+                onRegenerate={generateEmail}
+              />
+              {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
+              <EActionBtn theme={theme} $variant="primary" disabled={!!acting} onClick={handleSend}>
+                {acting === 'send' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <SendIcon />}
+                Send
+              </EActionBtn>
             </EmailModalFoot>
           )}
 
@@ -4773,6 +4653,66 @@ const downloadCSV = (companies: Company[], filename: string) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// BULK GEN BUTTON — split-button for bulk email action bar
+// ─────────────────────────────────────────────────────────────
+const BulkGenBtn: React.FC<{
+  theme: any;
+  disabled: boolean;
+  hasTemplateEmail: boolean;
+  onOpen: (queryType: 'plain' | 'html' | 'template') => void;
+}> = ({ theme, disabled, hasTemplateEmail, onOpen }) => {
+  const [open, setOpen] = useState(false);
+  const chevronRef = useRef<HTMLSpanElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (disabled) return;
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.right });
+    setOpen(v => !v);
+  };
+
+  return (
+    <GenBtn theme={theme} $disabled={disabled} title={disabled ? 'All selected companies have opted out' : 'Email selected companies'}>
+      <GenBtnLeft theme={theme} onClick={e => { e.stopPropagation(); if (!disabled) onOpen('plain'); }}>
+        <GenBtnIcon><SparkleIcon /></GenBtnIcon>
+        <GenBtnLabel>Plain Text</GenBtnLabel>
+      </GenBtnLeft>
+      <GenBtnDivider theme={theme} className="gen-divider" />
+      <GenBtnChevron ref={chevronRef} theme={theme} $open={open} onClick={openMenu}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </GenBtnChevron>
+      {open && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{
+            position: 'fixed', top: menuPos.top, left: menuPos.left, transform: 'translateX(-100%)',
+            zIndex: 9999, background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)',
+            minWidth: 130, overflow: 'hidden',
+          }}>
+            <GenDropItem theme={theme} onClick={e => { e.stopPropagation(); setOpen(false); onOpen('html'); }}>
+              <HtmlIcon />HTML Email
+            </GenDropItem>
+            <GenDropItem theme={theme}
+              onClick={e => { e.stopPropagation(); if (hasTemplateEmail) { setOpen(false); onOpen('template'); } }}
+              style={!hasTemplateEmail ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+              title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
+              <TemplateIcon />Template
+            </GenDropItem>
+          </div>
+        </>,
+        document.body
+      )}
+    </GenBtn>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // MAIN CAMPAIGN COMPONENT
 // ─────────────────────────────────────────────────────────────
 interface CampaignProps {
@@ -4833,6 +4773,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [emailModal, setEmailModal] = useState<{ open: boolean; company: Company | null; initialHtmlEmail?: boolean; initialQueryType?: 'plain' | 'html' | 'template' }>({ open: false, company: null });
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [bulkGenQueryType, setBulkGenQueryType] = useState<'plain'|'html'|'template'>('plain');
   const [hasTemplateEmail, setHasTemplateEmail]   = useState(false);
 
   // Company detail modal
@@ -5469,13 +5410,15 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
               of {totalCompanies} selected
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-              <IconBtn theme={theme}
-                onClick={() => setBulkEmailOpen(true)}
-                title={allSelectedOptedOut ? 'All selected companies have opted out' : 'Email Selected Companies'}
+              <BulkGenBtn
+                theme={theme}
                 disabled={allSelectedOptedOut}
-                style={allSelectedOptedOut ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
-                <SparkleIcon />
-              </IconBtn>
+                hasTemplateEmail={hasTemplateEmail}
+                onOpen={(queryType) => {
+                  setBulkGenQueryType(queryType);
+                  setBulkEmailOpen(true);
+                }}
+              />
               <IconBtn theme={theme} title="Download Selected as CSV" onClick={handleBulkDownload}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -5577,8 +5520,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
                         openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
                       }}
                       onOpen={(co) => {
-                        const mode = genEmailModes[co.id] ?? 'plain';
-                        openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
+                        openEmailModal(co, false, 'plain');
                       }}
                     />
                     <IconBtn theme={theme} $variant="danger"
@@ -5663,6 +5605,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         onClose={() => setBulkEmailOpen(false)}
         onToast={showToast}
         hasTemplateEmail={hasTemplateEmail}
+        initialQueryType={bulkGenQueryType}
       />
 
       <CompanyDetailModal
