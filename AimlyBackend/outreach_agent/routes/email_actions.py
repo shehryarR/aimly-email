@@ -157,6 +157,7 @@ def generate_email(
     company_id: int,
     http_request: Request,
     query_type: str = Query("plain", description="Email generation mode: 'plain' = LLM plain text, 'html' = LLM styled HTML, 'template' = use campaign template"),
+    force: bool = Query(False, description="If True, always regenerate even if a matching email already exists"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -315,6 +316,24 @@ def generate_email(
             else:
                 subject = f"Reaching out to {company_name}"
                 body = content
+
+        # For plain/html: check existing primary email before calling LLM (skip if force=True)
+        if query_type in ("plain", "html") and not force:
+            cursor.execute("""
+                SELECT id, email_subject, email_content, recipient_email, html_email
+                FROM emails
+                WHERE campaign_company_id = ? AND status = 'primary'
+            """, (cc_id,))
+            existing = cursor.fetchone()
+            if existing and existing["email_content"] and existing["email_content"].strip():
+                existing_is_html = bool(existing["html_email"])
+                requested_html   = (query_type == "html")
+                if existing_is_html == requested_html:
+                    # Type matches — return existing without LLM call
+                    return MessageResponse(
+                        message=f"Email loaded ({query_type})",
+                        email_id=existing["id"]
+                    )
 
     # Outside the first connection — now open a second one to write
     if query_type in ("plain", "html"):

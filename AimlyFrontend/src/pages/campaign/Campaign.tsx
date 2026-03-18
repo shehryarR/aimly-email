@@ -420,10 +420,9 @@ const GenBtn = styled.button<{ theme: any; $disabled?: boolean }>`
   opacity: ${p => p.$disabled ? 0.3 : 1};
   pointer-events: ${p => p.$disabled ? 'none' : 'auto'};
   cursor: pointer; overflow: visible;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition: border-color 0.15s;
   padding: 0;
-  &:hover { border-color: ${p => p.theme.colors.primary.main}; background: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.content}; }
-  &:hover .gen-divider { background: ${p => p.theme.colors.primary.content}22; }
+  &:hover { border-color: ${p => p.theme.colors.primary.main}; }
 `;
 const GenBtnIcon = styled.span`
   display: flex; align-items: center; justify-content: center;
@@ -434,15 +433,28 @@ const GenBtnLabel = styled.span`
   font-size: 0.75rem; font-weight: 600;
   padding: 0 0.3rem 0 0; white-space: nowrap;
 `;
+// Left clickable section (icon + label) — highlights on hover
+const GenBtnLeft = styled.span<{ theme: any }>`
+  display: inline-flex; align-items: center; align-self: stretch;
+  border-radius: ${p => p.theme.radius.field} 0 0 ${p => p.theme.radius.field};
+  transition: background 0.15s, color 0.15s;
+  &:hover { background: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.content}; }
+  &:hover + .gen-divider { background: ${p => p.theme.colors.primary.main}60; }
+`;
 const GenBtnDivider = styled.span<{ theme: any }>`
   width: 1px; height: 18px; flex-shrink: 0;
   background: ${p => p.theme.colors.base[300]};
   transition: background 0.15s;
 `;
-const GenBtnChevron = styled.span<{ $open: boolean }>`
+const GenBtnChevron = styled.span<{ theme: any; $open: boolean }>`
   display: flex; align-items: center; justify-content: center;
-  padding: 0 0.4rem;
+  align-self: stretch;
+  padding: 0 0.55rem;
+  min-width: 28px;
+  border-radius: 0 ${p => p.theme.radius.field} ${p => p.theme.radius.field} 0;
+  transition: background 0.15s, color 0.15s;
   svg { width: 10px; height: 10px; transition: transform 0.15s; transform: ${p => p.$open ? 'rotate(180deg)' : 'none'}; }
+  &:hover { background: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.content}; }
 `;
 const GenDropMenu = styled.div<{ theme: any }>`
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 3000;
@@ -1223,23 +1235,24 @@ type CsTab = 'inherit' | 'brand' | 'strategy' | 'email' | 'branding' | 'attachme
 const TemplateGenDropdown: React.FC<{
   theme: any;
   generating: boolean;
-  htmlEmail: boolean;
   onGenerate: (htmlEmail: boolean) => void;
-}> = ({ theme, generating, htmlEmail, onGenerate }) => {
+}> = ({ theme, generating, onGenerate }) => {
   const [open, setOpen] = useState(false);
   return (
-    <GenBtn theme={theme} $disabled={generating} style={{ opacity: generating ? 0.6 : 1, pointerEvents: generating ? 'none' : 'auto' }}>
-      <GenBtnIcon>
-        {generating
-          ? <ESpinner style={{ width: 13, height: 13, borderWidth: 2 }} />
-          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        }
-      </GenBtnIcon>
-      <GenBtnLabel onClick={() => !generating && onGenerate(htmlEmail)}>
-        {generating ? 'Generating…' : 'Plain Text'}
-      </GenBtnLabel>
+    <GenBtn theme={theme} $disabled={generating}>
+      <GenBtnLeft theme={theme} onClick={() => !generating && onGenerate(false)}>
+        <GenBtnIcon>
+          {generating
+            ? <ESpinner style={{ width: 13, height: 13, borderWidth: 2 }} />
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          }
+        </GenBtnIcon>
+        <GenBtnLabel>
+          {generating ? 'Generating…' : 'Plain Text'}
+        </GenBtnLabel>
+      </GenBtnLeft>
       <GenBtnDivider theme={theme} className="gen-divider" />
-      <GenBtnChevron $open={open}
+      <GenBtnChevron theme={theme} $open={open}
         onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1251,11 +1264,11 @@ const TemplateGenDropdown: React.FC<{
           <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }}
             onClick={e => { e.stopPropagation(); setOpen(false); }} />
           <GenDropMenu theme={theme}>
-            <GenDropItem theme={theme} $active={!htmlEmail}
+            <GenDropItem theme={theme}
               onClick={e => { e.stopPropagation(); onGenerate(false); setOpen(false); }}>
               <PlainIcon />Plain Text
             </GenDropItem>
-            <GenDropItem theme={theme} $active={htmlEmail}
+            <GenDropItem theme={theme}
               onClick={e => { e.stopPropagation(); onGenerate(true); setOpen(false); }}>
               <HtmlIcon />HTML Email
             </GenDropItem>
@@ -1608,11 +1621,11 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
 
   // ── Template Email handlers ─────────────────────────────────
-  const generateTemplate = async () => {
+  const generateTemplate = async (htmlEmail: boolean) => {
     setTemplateGenerating(true);
     try {
       const res = await apiFetch(
-        `${apiBase}/campaign/${campaignId}/campaign_preference/generate-template/?html_email=${templateHtmlEmail}`,
+        `${apiBase}/campaign/${campaignId}/campaign_preference/generate-template/?html_email=${htmlEmail}`,
         { method: 'POST' },
       );
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Generation failed'); }
@@ -1976,18 +1989,41 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                       <TemplateGenDropdown
                         theme={theme}
                         generating={templateGenerating}
-                        htmlEmail={templateHtmlEmail}
                         onGenerate={(html) => {
                           setTemplateHtmlEmail(html);
-                          setTimeout(generateTemplate, 0);
+                          generateTemplate(html);
                         }}
                       />
                     </div>
 
+                    {/* Subject */}
+                    <SFG>
+                      <SLabel theme={theme}>Subject</SLabel>
+                      <SInput
+                        theme={theme}
+                        placeholder="A quick idea for {{company_name}}"
+                        value={templateSubject}
+                        onChange={e => { setTemplateSubject(e.target.value); markDirty('template'); }}
+                      />
+                    </SFG>
+
+                    {/* Body */}
+                    <SFG style={{ marginBottom: 0 }}>
+                      <SLabel theme={theme}>Body</SLabel>
+                      <STextarea
+                        theme={theme}
+                        rows={10}
+                        placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
+                        value={templateBody}
+                        onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
+                        style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
+                      />
+                    </SFG>
+
                     {/* HTML Template toggle */}
                     <div
                       onClick={() => { setTemplateHtmlEmail(v => !v); markDirty('template'); }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none', marginBottom: '1rem' }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none', marginTop: '0.75rem' }}
                     >
                       <div style={{
                         width: 36, height: 20, borderRadius: 999, flexShrink: 0,
@@ -2014,30 +2050,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         {templateHtmlEmail ? 'On' : 'Off'}
                       </span>
                     </div>
-
-                    {/* Subject */}
-                    <SFG>
-                      <SLabel theme={theme}>Subject</SLabel>
-                      <SInput
-                        theme={theme}
-                        placeholder="A quick idea for {{company_name}}"
-                        value={templateSubject}
-                        onChange={e => { setTemplateSubject(e.target.value); markDirty('template'); }}
-                      />
-                    </SFG>
-
-                    {/* Body */}
-                    <SFG style={{ marginBottom: 0 }}>
-                      <SLabel theme={theme}>Body</SLabel>
-                      <STextarea
-                        theme={theme}
-                        rows={10}
-                        placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
-                        value={templateBody}
-                        onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
-                        style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
-                      />
-                    </SFG>
 
                     <SSaveRow>
                       <SBtn theme={theme} onClick={saveTemplate} disabled={templateSaving || templateGenerating}>
@@ -3369,7 +3381,7 @@ const PlainIcon = () => (
 );
 
 // ─────────────────────────────────────────────────────────────
-// REGENERATE DROPDOWN — single button replacing three regen btns
+// REGENERATE DROPDOWN — matches TemplateGenDropdown / GenBtn UI
 // ─────────────────────────────────────────────────────────────
 const RegenDropdown: React.FC<{
   theme: any;
@@ -3379,58 +3391,46 @@ const RegenDropdown: React.FC<{
 }> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: 'relative', display: 'inline-flex' }}>
-      {/* Main button */}
-      <EGenBtn
-        theme={theme}
-        disabled={acting}
-        style={{ borderRadius: '6px 0 0 6px', borderRight: 'none', paddingRight: '0.65rem' }}
-        onClick={() => !acting && setOpen(v => !v)}
+    <GenBtn theme={theme} $disabled={acting}>
+      <GenBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
+        <GenBtnIcon>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </GenBtnIcon>
+        <GenBtnLabel>
+          Plain Text
+        </GenBtnLabel>
+      </GenBtnLeft>
+      <GenBtnDivider theme={theme} className="gen-divider" />
+      <GenBtnChevron theme={theme} $open={open}
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
       >
-        <RegenerateIcon />Regenerate
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-          style={{ width: 11, height: 11, marginLeft: 2, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
-      </EGenBtn>
+      </GenBtnChevron>
       {open && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }} onClick={() => setOpen(false)} />
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 3000,
-            background: theme.colors.base[200],
-            border: `1px solid ${theme.colors.base[300]}`,
-            borderRadius: theme.radius.box,
-            boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)',
-            minWidth: 160, padding: '0.3rem',
-          }}>
-            {([
-              { type: 'plain' as const,    icon: <PlainIcon />,    label: 'Plain Text' },
-              { type: 'html' as const,     icon: <HtmlIcon />,     label: 'HTML Email' },
-              { type: 'template' as const, icon: <TemplateIcon />, label: 'From Template', disabled: !hasTemplateEmail },
-            ] as const).map(item => (
-              <div
-                key={item.type}
-                onClick={() => { if (!('disabled' in item && item.disabled)) { onRegenerate(item.type); setOpen(false); } }}
-                title={'disabled' in item && item.disabled ? 'No template set — configure in Campaign Settings' : undefined}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  padding: '0.45rem 0.6rem', borderRadius: theme.radius.field,
-                  cursor: 'disabled' in item && item.disabled ? 'not-allowed' : 'pointer',
-                  opacity: 'disabled' in item && item.disabled ? 0.4 : 1,
-                  fontSize: '0.8rem', fontWeight: 500,
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => { if (!('disabled' in item && item.disabled)) (e.currentTarget as HTMLElement).style.background = theme.colors.base[300]; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-              >
-                {item.icon}{item.label}
-              </div>
-            ))}
-          </div>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }}
+            onClick={e => { e.stopPropagation(); setOpen(false); }} />
+          <GenDropMenu theme={theme}>
+            <GenDropItem theme={theme}
+              onClick={e => { e.stopPropagation(); onRegenerate('plain'); setOpen(false); }}>
+              <PlainIcon />Plain Text
+            </GenDropItem>
+            <GenDropItem theme={theme}
+              onClick={e => { e.stopPropagation(); onRegenerate('html'); setOpen(false); }}>
+              <HtmlIcon />HTML Email
+            </GenDropItem>
+            <GenDropItem theme={theme}
+              onClick={e => { e.stopPropagation(); if (hasTemplateEmail) { onRegenerate('template'); setOpen(false); } }}
+              style={!hasTemplateEmail ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
+              title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
+              <TemplateIcon />From Template
+            </GenDropItem>
+          </GenDropMenu>
         </>
       )}
-    </div>
+    </GenBtn>
   );
 };
 
@@ -3580,16 +3580,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
   // ── Primary email load / generate ────────────────────────────────────────────
   const loadPrimaryEmail = async () => {
     if (!company) return;
-    try {
-      const res = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
-      if (res.ok) {
-        const d = await res.json();
-        if (d.email_content && d.email_content.trim()) { populateEmail(d); }
-        else { await generateEmail(null); }
-      } else if (res.status === 404) {
-        await generateEmail(null);
-      } else { setPhase('error'); }
-    } catch { setPhase('error'); }
+    await generateEmail(null);
   };
 
   const populateEmail = (d: EmailData) => {
@@ -3614,10 +3605,14 @@ const EmailModal: React.FC<EmailModalProps> = ({
       (initialQueryType === 'html' || htmlEmailRef.current) ? 'html' : 'plain'
     );
     setPhase('loading');
-    setLoadingMsg(resolvedType === 'template' ? 'Generating from template…' : `Generating ${resolvedType === 'html' ? 'HTML' : 'plain'} email…`);
+    setLoadingMsg(
+      isInitialLoad
+        ? 'Loading email…'
+        : resolvedType === 'template' ? 'Generating from template…' : `Generating ${resolvedType === 'html' ? 'HTML' : 'plain'} email…`
+    );
     try {
       const genRes = await apiFetch(
-        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}`,
+        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}&force=${!isInitialLoad}`,
         { method: 'POST' },
       );
       if (!genRes.ok) {
@@ -4730,12 +4725,13 @@ const CompanyGenBtn: React.FC<{
       theme={theme}
       $disabled={disabled}
       title={disabled ? (company.optedOut ? 'Company has opted out of emails' : 'Deselect all to use individual actions') : 'Generate / view email'}
-      onClick={e => { e.stopPropagation(); if (!disabled) onOpen(company); }}
     >
-      <GenBtnIcon><SparkleIcon /></GenBtnIcon>
-      <GenBtnLabel>Plain Text</GenBtnLabel>
+      <GenBtnLeft theme={theme} onClick={e => { e.stopPropagation(); if (!disabled) onOpen(company); }}>
+        <GenBtnIcon><SparkleIcon /></GenBtnIcon>
+        <GenBtnLabel>Plain Text</GenBtnLabel>
+      </GenBtnLeft>
       <GenBtnDivider theme={theme} className="gen-divider" />
-      <GenBtnChevron ref={chevronRef} $open={open} onClick={openMenu}>
+      <GenBtnChevron ref={chevronRef} theme={theme} $open={open} onClick={openMenu}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9"/>
         </svg>

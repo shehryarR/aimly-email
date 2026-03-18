@@ -541,9 +541,8 @@ def generate_template_email(
 
     context_block = "\n".join(context_lines)
 
-    instruction = f"""You are an expert B2B cold email copywriter. Your task is to write a \
-reusable outreach email template that will be personalised per recipient at send time.
-
+    # ── Build the prompt — plain vs HTML ─────────────────────────────────────
+    common_rules = f"""
 ════════════════════════════════════════════════════════════
 BUSINESS CONTEXT
 ════════════════════════════════════════════════════════════
@@ -557,38 +556,48 @@ RULES  (follow every one strictly)
    - Do NOT invent any other placeholders (e.g. no {{{{first_name}}}}, {{{{industry}}}}).
 2. Subject line: personalised, under 10 words, curiosity-driving.
 3. Opening line: reference {{{{company_name}}}} or lead with a sharp hook — never "Dear Sir/Madam".
-4. Body: 3–5 sentences maximum. Be concise and direct.
-5. Close with the Call to Action above. One sentence only.
-6. Do NOT include a sign-off or signature (handled separately by the system).
-7. Tone must match exactly: {resolved_tone}
-8. Output ONLY the email. No explanations, no commentary, no markdown code fences.
-   Start your response directly with "SUBJECT:".
+4. Close with the Call to Action above. One sentence only.
+5. Do NOT include a sign-off or signature (handled separately by the system).
+6. Tone must match exactly: {resolved_tone}
 
 ════════════════════════════════════════════════════════════
-EXACT OUTPUT FORMAT  (replicate this structure precisely)
+OUTPUT FORMAT
 ════════════════════════════════════════════════════════════
 SUBJECT: <your subject line>
 
-<email body — plain text, no bullet points, no headers>
+CONTENT:
+<email body here>
+
+Now write the template for {resolved_business_name}."""
+
+    if html_email:
+        instruction = f"""You are an expert B2B email designer. Write a reusable HTML outreach email template personalised per recipient at send time.
+{common_rules}
 
 ════════════════════════════════════════════════════════════
-EXAMPLE  (illustrative only — do NOT copy the content)
+HTML RULES
 ════════════════════════════════════════════════════════════
-SUBJECT: A quick idea for {{{{company_name}}}}
+- CONTENT must be a complete self-contained HTML snippet (NOT a full <!DOCTYPE> page).
+- Use only inline CSS — no <style> blocks, no external stylesheets.
+- Clean professional layout: font Arial/sans-serif, 15px, line-height 1.6, color #333333.
+- Separate sections with <div> or <p> tags, margin-bottom: 16px.
+- CTA should be a styled <a> button, e.g.:
+  <a href="#" style="display:inline-block;padding:10px 24px;background:#4F46E5;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Book a Call</a>
+- Do NOT include <html>, <head>, <body>, or <style> tags.
+- Body: 3–5 sentences/sections maximum. Be concise and direct.
+"""
+    else:
+        instruction = f"""You are an expert B2B cold email copywriter. Write a reusable plain-text outreach email template personalised per recipient at send time.
+{common_rules}
 
-{{{{company_name}}}} caught our attention — your rapid expansion across new markets is impressive.
-
-At Acme Corp, we help scaling companies cut customer onboarding time by up to 40% using \
-automated workflow tools that plug straight into your existing stack — no migration required.
-
-Would it be worth a 20-minute call to explore whether we could do the same for {{{{company_name}}}}?
 ════════════════════════════════════════════════════════════
-
-Now write the template for {resolved_business_name}. Remember: output ONLY the email, \
-starting with SUBJECT:
+PLAIN TEXT RULES
+════════════════════════════════════════════════════════════
+- Body: 3–5 sentences maximum. Be concise and direct.
+- No bullet points, no headers, no HTML tags.
 """
 
-    # ── Call the LLM (sync route → new_event_loop is safe here) ─────────────
+    # ── Call the LLM — raw_prompt=True so the agent uses the instruction verbatim ─
     try:
         loop = asyncio.new_event_loop()
         email_result, _ = loop.run_until_complete(
@@ -597,7 +606,8 @@ starting with SUBJECT:
                 user_instruction=instruction,
                 llm_config=llm_config,
                 company_details=None,
-                html_email=html_email,
+                html_email=False,
+                raw_prompt=True,
             )
         )
         loop.close()

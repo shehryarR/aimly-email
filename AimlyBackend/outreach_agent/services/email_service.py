@@ -21,6 +21,7 @@ async def generate_email(
     llm_config: dict,
     company_details: str = None,
     html_email: bool = False,
+    raw_prompt: bool = False,
     progress_callback=None,
 ):
     """
@@ -50,6 +51,7 @@ async def generate_email(
             user_instruction=user_instruction,
             company_summary=company_details,
             html_email=html_email,
+            raw_prompt=raw_prompt,
             llm_config=llm_config,
         )
     )

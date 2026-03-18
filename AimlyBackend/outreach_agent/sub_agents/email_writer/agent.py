@@ -19,6 +19,7 @@ class EmailWriterInput(BaseModel):
     user_instruction:  str = Field(description="Business context and email requirements")
     company_summary:   Optional[str] = Field(default=None, description="Research summary about the company (optional)")
     html_email:        bool = Field(default=False, description="Whether to generate a styled HTML email instead of plain text")
+    raw_prompt:        bool = Field(default=False, description="If True, user_instruction is used as the complete LLM prompt verbatim — no wrapping or extra instructions added")
     llm_config:       dict = Field(
         description=(
             "Pre-loaded LLM config from the route layer. "
@@ -166,41 +167,45 @@ async def run_email_writer_agent(inputs: EmailWriterInput) -> Dict[str, str]:
     if not model:
         raise ValueError("Missing LLM model. Please configure it in LLM Settings.")
 
-    print(f"[EmailWriter] model={model!r}  company={inputs.company_name!r}  html_email={inputs.html_email}")
-    
-    # Determine which prompt template to use based on company_summary and html_email
-    has_research = inputs.company_summary and inputs.company_summary.strip()
-    
-    if inputs.html_email:
-        if has_research:
-            print(f"[EmailWriter] Using personalized HTML template with research")
-            main_prompt = PERSONALIZED_HTML_EMAIL_PROMPT.format(
-                company_name=inputs.company_name,
-                user_instruction=inputs.user_instruction,
-                company_summary=inputs.company_summary,
-            )
-        else:
-            print(f"[EmailWriter] Using generic HTML template (no research available)")
-            main_prompt = GENERIC_HTML_EMAIL_PROMPT.format(
-                company_name=inputs.company_name,
-                user_instruction=inputs.user_instruction,
-            )
-        full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS + "\n" + HTML_EMAIL_INSTRUCTIONS
+    print(f"[EmailWriter] model={model!r}  company={inputs.company_name!r}  html_email={inputs.html_email}  raw_prompt={inputs.raw_prompt}")
+
+    # ── Raw prompt: use user_instruction verbatim, skip all wrapping ──────────
+    if inputs.raw_prompt:
+        full_prompt = inputs.user_instruction
     else:
-        if has_research:
-            print(f"[EmailWriter] Using personalized template with research")
-            main_prompt = PERSONALIZED_EMAIL_PROMPT.format(
-                company_name=inputs.company_name,
-                user_instruction=inputs.user_instruction,
-                company_summary=inputs.company_summary,
-            )
+        # Determine which prompt template to use based on company_summary and html_email
+        has_research = inputs.company_summary and inputs.company_summary.strip()
+
+        if inputs.html_email:
+            if has_research:
+                print(f"[EmailWriter] Using personalized HTML template with research")
+                main_prompt = PERSONALIZED_HTML_EMAIL_PROMPT.format(
+                    company_name=inputs.company_name,
+                    user_instruction=inputs.user_instruction,
+                    company_summary=inputs.company_summary,
+                )
+            else:
+                print(f"[EmailWriter] Using generic HTML template (no research available)")
+                main_prompt = GENERIC_HTML_EMAIL_PROMPT.format(
+                    company_name=inputs.company_name,
+                    user_instruction=inputs.user_instruction,
+                )
+            full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS + "\n" + HTML_EMAIL_INSTRUCTIONS
         else:
-            print(f"[EmailWriter] Using generic template (no research available)")
-            main_prompt = GENERIC_EMAIL_PROMPT.format(
-                company_name=inputs.company_name,
-                user_instruction=inputs.user_instruction,
-            )
-        full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS
+            if has_research:
+                print(f"[EmailWriter] Using personalized template with research")
+                main_prompt = PERSONALIZED_EMAIL_PROMPT.format(
+                    company_name=inputs.company_name,
+                    user_instruction=inputs.user_instruction,
+                    company_summary=inputs.company_summary,
+                )
+            else:
+                print(f"[EmailWriter] Using generic template (no research available)")
+                main_prompt = GENERIC_EMAIL_PROMPT.format(
+                    company_name=inputs.company_name,
+                    user_instruction=inputs.user_instruction,
+                )
+            full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS
 
     try:
         llm = LLMFactory.create_llm(api_key, "gemini")
