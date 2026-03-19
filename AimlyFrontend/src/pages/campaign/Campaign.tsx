@@ -3552,6 +3552,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [acting, setActing]         = useState<string | null>(null);
   const [htmlEmail, setHtmlEmail]   = useState(false);
   const htmlEmailRef = useRef(false);
+  const [showSched, setShowSched]   = useState(false);
+  const [schedTime, setSchedTime]   = useState('');
+  const schedInputRef = useRef<HTMLInputElement>(null);
 
   // ── Attachment tab state (mirrors CampaignSettingsModal exactly) ─────────────
   const [allAttachments,       setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -3584,6 +3587,8 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setPhase('loading');
     setLoadingMsg('Loading email…');
     setActing(null);
+    setShowSched(false);
+    setSchedTime('');
     setHtmlEmail(initialHtmlEmail);
     htmlEmailRef.current = initialHtmlEmail;
     setAttachSearch('');
@@ -3729,6 +3734,23 @@ const EmailModal: React.FC<EmailModalProps> = ({
       onClose();
     } catch (err) {
       onToast('error', 'Send Failed', err instanceof Error ? err.message : 'Failed to send');
+    } finally { setActing(null); }
+  };
+
+  const handleSchedule = async () => {
+    if (!email || acting || !schedTime) return;
+    setActing('schedule'); await saveEdits();
+    try {
+      const res = await apiFetch(`${apiBase}/email/${email.id}/send/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ time: schedTime }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Schedule failed');
+      onToast('success', 'Email Scheduled', `Email scheduled for ${company?.email}`);
+      onClose();
+    } catch (err) {
+      onToast('error', 'Schedule Failed', err instanceof Error ? err.message : 'Failed to schedule');
     } finally { setActing(null); }
   };
 
@@ -4403,10 +4425,49 @@ const EmailModal: React.FC<EmailModalProps> = ({
                 onRegenerate={generateEmail}
               />
               {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
-              <EActionBtn theme={theme} $variant="primary" disabled={!!acting} onClick={handleSend}>
-                {acting === 'send' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <SendIcon />}
-                Send
-              </EActionBtn>
+              {showSched ? (
+                <>
+                  <input
+                    ref={schedInputRef}
+                    type="datetime-local"
+                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    value={schedTime}
+                    onChange={e => setSchedTime(e.target.value)}
+                    style={{
+                      padding: '0.4rem 0.6rem', fontSize: '0.8125rem',
+                      border: `1px solid ${theme.colors.base[300]}`,
+                      borderRadius: theme.radius.field,
+                      background: theme.colors.base[200],
+                      color: theme.colors.base.content,
+                      boxSizing: 'border-box' as const,
+                    }}
+                  />
+                  <EActionBtn theme={theme} disabled={!!acting} onClick={() => { setShowSched(false); setSchedTime(''); }}>
+                    Cancel
+                  </EActionBtn>
+                  <EActionBtn theme={theme} $variant="warning" disabled={!schedTime || !!acting} onClick={handleSchedule}>
+                    {acting === 'schedule' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                      </svg>
+                    )}
+                    Confirm
+                  </EActionBtn>
+                </>
+              ) : (
+                <>
+                  <EActionBtn theme={theme} disabled={!!acting} onClick={() => { setShowSched(true); setTimeout(() => schedInputRef.current?.focus(), 80); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    Schedule
+                  </EActionBtn>
+                  <EActionBtn theme={theme} $variant="primary" disabled={!!acting} onClick={handleSend}>
+                    {acting === 'send' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : <SendIcon />}
+                    Send
+                  </EActionBtn>
+                </>
+              )}
             </EmailModalFoot>
           )}
 
