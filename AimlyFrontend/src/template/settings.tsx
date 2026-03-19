@@ -843,17 +843,38 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       const uploadData = await uploadRes.json();
       const newId: number = uploadData.id;
 
-      // 2. Add to local linked set — linking is deferred to "Save Attachments" button
-      setLinkedAttachmentIds(prev => new Set([...Array.from(prev), newId]));
+      // 2. Build the new linked set
+      const newLinkedIds = new Set([...Array.from(linkedAttachmentIds), newId]);
 
-      // 3. Refresh the full list
-      await loadAttachments(globalSettingsId);
+      // 3. Auto-save the link immediately if we have a globalSettingsId
+      if (globalSettingsId) {
+        const linkRes = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Array.from(newLinkedIds)),
+        });
+        if (!linkRes.ok) {
+          const e = await linkRes.json();
+          throw new Error(e.detail || 'Upload succeeded but linking failed');
+        }
+        // Sync saved ref and clear dirty since it's already persisted
+        savedLinkedIds.current = newLinkedIds;
+        clearDirty('attachments');
+      }
+
+      // 4. Update local state
+      setLinkedAttachmentIds(newLinkedIds);
+
+      // 5. Refresh the full attachments list (without overwriting linkedAttachmentIds)
+      const attRes = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=200`);
+      if (attRes.ok) {
+        const d = await attRes.json();
+        setAllAttachments(d.attachments ?? []);
+      }
+
       setUploadFile(null);
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
-      setUploadMsg({
-        type: 'success',
-        text: `"${uploadData.filename}" uploaded — click "Save Attachments" to link it`,
-      });
+      setUploadMsg({ type: 'success', text: `"${uploadData.filename}" uploaded and linked` });
     } catch (err) {
       setUploadMsg({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' });
     } finally {
