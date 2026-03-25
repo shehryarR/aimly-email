@@ -356,7 +356,14 @@ const AppRouter: React.FC = () => {
     navigate(intendedPath && intendedPath !== '/auth' ? intendedPath : '/campaigns', { replace: true });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Clear API key cookies on backend before clearing local state
+      // so the next user on the same browser doesn't inherit them
+      await apiFetch(`${API_BASE}/auth/logout/`, { method: 'POST' });
+    } catch {
+      // Ignore errors — still proceed with local logout
+    }
     logout();
     setShowSettings(false);
     navigate('/auth');

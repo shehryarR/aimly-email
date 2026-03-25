@@ -3,7 +3,7 @@ Authentication Routes
 Handles user login, registration, logout, password reset and JWT authentication
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, validator
 import jwt
@@ -405,6 +405,21 @@ def validate_token(current_user: dict = Depends(get_current_user)):
         "user_id": current_user["user_id"],
         "username": current_user["username"]
     }
+
+
+# ==================================================================================
+# POST /auth/logout/ - Clear API key cookies on logout
+# ==================================================================================
+@auth_router.post("/logout/")
+def logout(response: Response):
+    """
+    Clears the encrypted API key cookies from the browser.
+    Must be called on logout so the next user on the same browser
+    does not inherit the previous user's API keys.
+    """
+    response.delete_cookie(key="llm_api_key_enc", path="/")
+    response.delete_cookie(key="tavily_api_key_enc", path="/")
+    return {"message": "Logged out successfully"}
 
 
 # ==================================================================================
