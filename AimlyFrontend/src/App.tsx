@@ -25,12 +25,6 @@ interface User {
   user_id: number;
 }
 
-interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
-
 type AppState = 'loading' | 'server-down' | 'ready';
 
 // ── Constants ─────────────────────────────────────────────
@@ -39,150 +33,50 @@ const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
 // ── Auth storage helpers ──────────────────────────────────
-const getStoredTokens = (): AuthTokens | null => {
-  try {
-    const raw = localStorage.getItem('auth_tokens');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed.access_token && parsed.refresh_token ? parsed : null;
-  } catch {
-    return null;
-  }
-};
+// Only store non-sensitive user info (username, user_id) for UI display.
+// JWT tokens are now stored in HttpOnly cookies managed by the backend.
 
-const saveTokens = (tokens: AuthTokens): void => {
-  localStorage.setItem('auth_tokens', JSON.stringify(tokens));
+const saveUser = (user: User): void => {
+  localStorage.setItem('user', JSON.stringify(user));
 };
 
 const clearAuthData = (): void => {
-  localStorage.removeItem('auth_tokens');
   localStorage.removeItem('user');
 };
 
-// ── JWT decode (no library needed — just base64) ──────────
-const decodeJwtExpiry = (token: string): number | null => {
-  try {
-    const payload = token.split('.')[1];
-    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    return decoded.exp ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const isTokenExpired = (token: string): boolean => {
-  const exp = decodeJwtExpiry(token);
-  if (exp === null) return true;
-  // 10-second buffer so we refresh slightly before actual expiry
-  return Date.now() / 1000 >= exp - 10;
-};
-
-// ── Token refresh ─────────────────────────────────────────
-// Returns new tokens on success, null if refresh token is also expired/invalid
-const attemptTokenRefresh = async (refreshToken: string): Promise<AuthTokens | null> => {
-  try {
-    const response = await fetch(`${API_BASE}/auth/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (!data.access_token || !data.refresh_token) return null;
-    const newTokens: AuthTokens = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      token_type: data.token_type ?? 'bearer',
-    };
-    saveTokens(newTokens);
-    return newTokens;
-  } catch {
-    return null;
-  }
-};
-
-// ── Core auth check (used by AuthContext on mount) ────────
-// Returns valid access token string, or null if fully unauthenticated
-const resolveValidAccessToken = async (): Promise<string | null> => {
-  const tokens = getStoredTokens();
-  if (!tokens) return null;
-
-  // Access token still valid — use it directly
-  if (!isTokenExpired(tokens.access_token)) {
-    return tokens.access_token;
-  }
-
-  // Access token expired — try refreshing
-  console.log('Access token expired, attempting refresh...');
-  if (isTokenExpired(tokens.refresh_token)) {
-    // Refresh token also expired — full logout
-    console.warn('Refresh token also expired, clearing session.');
-    clearAuthData();
-    return null;
-  }
-
-  const newTokens = await attemptTokenRefresh(tokens.refresh_token);
-  if (!newTokens) {
-    console.warn('Refresh failed, clearing session.');
-    clearAuthData();
-    return null;
-  }
-
-  console.log('Token refreshed successfully.');
-  return newTokens.access_token;
-};
-
 // ── apiFetch — drop-in fetch replacement ─────────────────
-// Automatically attaches Bearer token, refreshes on 401, force-logs out
-// if refresh also fails. Components import and use this instead of fetch().
-// The onForceLogout callback is wired up by AuthContext below.
+// Cookies are sent automatically with every request (credentials: 'include').
+// On 401, attempts a token refresh via the backend, then retries once.
+// If refresh also fails, forces logout.
 let _forceLogoutCallback: (() => void) | null = null;
 
 export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Promise<Response> => {
-  let tokens = getStoredTokens();
-
-  // Proactively refresh if access token is about to expire
-  if (tokens && isTokenExpired(tokens.access_token)) {
-    if (!isTokenExpired(tokens.refresh_token)) {
-      const newTokens = await attemptTokenRefresh(tokens.refresh_token);
-      if (newTokens) {
-        tokens = newTokens;
-      } else {
-        clearAuthData();
-        _forceLogoutCallback?.();
-        throw new Error('Session expired. Please log in again.');
-      }
-    } else {
-      clearAuthData();
-      _forceLogoutCallback?.();
-      throw new Error('Session expired. Please log in again.');
-    }
-  }
-
-  // Attach auth header
   const headers = new Headers(init.headers);
-  if (tokens?.access_token) {
-    headers.set('Authorization', `Bearer ${tokens.access_token}`);
-  }
   if (!headers.has('Content-Type') && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
   let response = await fetch(input, { ...init, headers, credentials: 'include' });
 
-  // 401 received — try one refresh then retry
-  if (response.status === 401 && tokens?.refresh_token) {
+  // 401 received — attempt refresh then retry once
+  if (response.status === 401) {
     console.log('Received 401, attempting token refresh...');
-    const refreshedTokens = isTokenExpired(tokens.refresh_token)
-      ? null
-      : await attemptTokenRefresh(tokens.refresh_token);
-
-    if (refreshedTokens) {
-      headers.set('Authorization', `Bearer ${refreshedTokens.access_token}`);
-      response = await fetch(input, { ...init, headers, credentials: 'include' });
-    } else {
-      // Refresh token expired or invalid — force logout
-      console.warn('Token refresh failed on 401, forcing logout.');
+    try {
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh/`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (refreshRes.ok) {
+        // Retry original request — new access_token cookie is now set
+        response = await fetch(input, { ...init, headers, credentials: 'include' });
+      } else {
+        // Refresh failed — backend already cleared cookies, clear localStorage too
+        console.warn('Token refresh failed, forcing logout.');
+        clearAuthData();
+        _forceLogoutCallback?.();
+        throw new Error('Session expired. Please log in again.');
+      }
+    } catch (e) {
       clearAuthData();
       _forceLogoutCallback?.();
       throw new Error('Session expired. Please log in again.');
@@ -227,17 +121,19 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
     return () => { _forceLogoutCallback = null; };
   }, [logout]);
 
-  // Single auth check on mount
+  // Single auth check on mount — validate cookie session with backend
   useEffect(() => {
     const initialize = async () => {
-      const validToken = await resolveValidAccessToken();
-      if (validToken) {
-        try {
+      try {
+        const res = await fetch(`${API_BASE}/auth/validate/`, { credentials: 'include' });
+        if (res.ok) {
           const raw = localStorage.getItem('user');
           if (raw) setUser(JSON.parse(raw));
-        } catch {
+        } else {
           clearAuthData();
         }
+      } catch {
+        clearAuthData();
       }
       setAuthReady(true);
     };
@@ -245,6 +141,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
   }, []);
 
   const login = useCallback((userData: User) => {
+    saveUser(userData);
     setUser(userData);
   }, []);
 

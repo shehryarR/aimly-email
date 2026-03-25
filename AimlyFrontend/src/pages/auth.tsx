@@ -327,18 +327,6 @@ interface AuthProps {
   onLoginSuccess?: (user: { username: string; user_id: number }) => void;
 }
 
-interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
-
-interface LoginResponse extends AuthTokens {
-  user_id: number;
-  username: string;
-  email: string;
-}
-
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 
@@ -405,6 +393,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         const response = await fetch(`${API_BASE}/auth/google/callback/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ code }),
         });
 
@@ -414,14 +403,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           throw new Error(data.detail || 'Google sign-in failed. Please try again.');
         }
 
-        // Save tokens — same as normal login
-        const tokens: AuthTokens = {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          token_type: data.token_type ?? 'bearer',
-        };
-        localStorage.setItem('auth_tokens', JSON.stringify(tokens));
-        localStorage.setItem('user', JSON.stringify({ username: data.username, user_id: data.user_id }));
+        // Tokens are set as HttpOnly cookies by the backend automatically.
+        // We only store non-sensitive user info for UI display.
+        const user = { username: data.username, user_id: data.user_id };
+        localStorage.setItem('user', JSON.stringify(user));
 
         onLoginSuccess?.({ username: data.username, user_id: data.user_id });
       } catch (error) {
@@ -614,9 +599,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
       const response = await fetch(`${API_BASE}/auth/login/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           identifier: loginData.identifier,
           password: loginData.password,
@@ -630,21 +614,14 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         throw new Error(errorData.detail || 'Login failed');
       }
 
-      const data: LoginResponse = await response.json();
-      
-      // Save tokens and user data
-      const tokens: AuthTokens = {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        token_type: data.token_type,
-      };
-      
+      const data = await response.json();
+
+      // Tokens are set as HttpOnly cookies by the backend automatically.
+      // We only store non-sensitive user info for UI display.
       const user = {
         username: data.username,
-        user_id: data.user_id,
+        user_id:  data.user_id,
       };
-
-      localStorage.setItem('auth_tokens', JSON.stringify(tokens));
       localStorage.setItem('user', JSON.stringify(user));
 
       // Notify parent component

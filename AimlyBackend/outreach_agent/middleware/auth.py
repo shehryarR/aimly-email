@@ -44,12 +44,11 @@ class OptionalAuthMiddleware(BaseHTTPMiddleware):
         # Check if this is a public endpoint
         is_public = any(request.url.path.startswith(endpoint) for endpoint in public_endpoints)
         
-        # Extract and validate JWT token if present
+        # Extract and validate JWT token from HttpOnly cookie
         user_context = None
-        auth_header = request.headers.get("authorization")
+        token = request.cookies.get("access_token")
         
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
+        if token:
             try:
                 payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
                 

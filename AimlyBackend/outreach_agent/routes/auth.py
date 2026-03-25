@@ -175,21 +175,36 @@ def verify_token(token: str) -> Optional[dict]:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str, keep_me_logged_in: bool = False) -> None:
+    """Set JWT tokens as HttpOnly cookies."""
+    is_production = os.getenv("ENV", "development").lower() == "production"
+    access_max_age  = 60 * 60 * 24 * 7  if keep_me_logged_in else 60 * 60 * 24      # 7d or 1d
+    refresh_max_age = 60 * 60 * 24 * 30 if keep_me_logged_in else 60 * 60 * 24 * 7  # 30d or 7d
+
+    response.set_cookie(
+        key="access_token", value=access_token,
+        httponly=True, secure=is_production,
+        samesite="strict", path="/",
+        max_age=access_max_age,
+    )
+    response.set_cookie(
+        key="refresh_token", value=refresh_token,
+        httponly=True, secure=is_production,
+        samesite="strict", path="/",
+        max_age=refresh_max_age,
+    )
+
+
 # ==================================================================================
 # Authentication dependency
 # ==================================================================================
-def get_current_user(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
+def get_current_user(request: Request):
     """
-    Extract user info from JWT token.
+    Extract user info from JWT access_token cookie.
 
     Also accepts internal server-to-server requests via:
       Header: X-Internal-Key: <INTERNAL_API_KEY>
       Header: X-User-Id: <user_id>
-
-    This allows the scheduler to call endpoints directly without a JWT token.
     """
     # ── Internal API key check ────────────────────────────────────────────────
     internal_key = request.headers.get("X-Internal-Key")
@@ -206,7 +221,6 @@ def get_current_user(
         except ValueError:
             raise HTTPException(status_code=400, detail="X-User-Id must be an integer")
 
-        # Verify user exists
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
@@ -217,41 +231,40 @@ def get_current_user(
 
         return {"user_id": user_id, "username": user["username"]}
 
-    # ── Normal JWT check ──────────────────────────────────────────────────────
-    if not credentials:
+    # ── Cookie-based JWT check ────────────────────────────────────────────────
+    token = request.cookies.get("access_token")
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    token = credentials.credentials
     payload = verify_token(token)
 
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type")
 
-    user_id = payload.get("user_id")
+    user_id  = payload.get("user_id")
     username = payload.get("username")
 
     if user_id is None or username is None:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
-    # Verify user still exists
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=401, detail="User no longer exists")
 
-    return {"user_id": user_id, "username": username, "token": token}
+    return {"user_id": user_id, "username": username}
 
 
 # ==================================================================================
-# POST /auth/login - Authenticate user and return JWT tokens
+# POST /auth/login - Authenticate user and return JWT tokens via cookies
 # ==================================================================================
-@auth_router.post("/login/", response_model=TokenResponse)
-async def login(request: LoginRequest):
+@auth_router.post("/login/")
+async def login(request: LoginRequest, response: Response):
     """
-    Authenticate user and return JWT tokens.
+    Authenticate user and set JWT tokens as HttpOnly cookies.
     identifier can be username or email.
-    If keep_me_logged_in is true, longer access token is issued.
+    If keep_me_logged_in is true, longer-lived cookies are issued.
     Verifies reCAPTCHA v3 token before proceeding.
     """
     if not request.identifier or not request.password:
@@ -287,19 +300,19 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token_data = {"user_id": user["id"], "username": user["username"]}
-    access_token_expires = timedelta(days=7) if request.keep_me_logged_in else timedelta(hours=JWT_ACCESS_TOKEN_EXPIRE_HOURS)
+    access_token_expires  = timedelta(days=7)  if request.keep_me_logged_in else timedelta(hours=JWT_ACCESS_TOKEN_EXPIRE_HOURS)
     refresh_token_expires = timedelta(days=30) if request.keep_me_logged_in else timedelta(days=JWT_REFRESH_TOKEN_EXPIRE_DAYS)
 
-    access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
+    access_token  = create_access_token(data=token_data, expires_delta=access_token_expires)
     refresh_token = create_refresh_token(data=token_data, expires_delta=refresh_token_expires)
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user_id=user["id"],
-        username=user["username"],
-        email=user["user_email"]
-    )
+    _set_auth_cookies(response, access_token, refresh_token, request.keep_me_logged_in)
+
+    return {
+        "user_id":  user["id"],
+        "username": user["username"],
+        "email":    user["user_email"],
+    }
 
 
 # ==================================================================================
@@ -360,17 +373,38 @@ async def register(request: RegisterRequest):
 
 
 # ==================================================================================
-# POST /auth/refresh - Refresh access token using refresh token
+# POST /auth/refresh - Refresh access token using refresh token cookie
 # ==================================================================================
-@auth_router.post("/refresh/", response_model=TokenResponse)
-def refresh_token(request: RefreshTokenRequest):
-    """Refresh access token using refresh token."""
-    payload = verify_token(request.refresh_token)
+@auth_router.post("/refresh/")
+def refresh_token(request: Request, response: Response):
+    """
+    Refresh access token using refresh_token cookie.
+    If refresh token is missing or expired, clears all cookies so the browser
+    doesn't keep stale tokens indefinitely.
+    """
+    token = request.cookies.get("refresh_token")
+    if not token:
+        # No cookie at all — clear everything just in case
+        response.delete_cookie(key="access_token",  path="/")
+        response.delete_cookie(key="refresh_token", path="/")
+        raise HTTPException(status_code=401, detail="No refresh token found")
+
+    try:
+        payload = verify_token(token)
+    except HTTPException:
+        # Token expired or invalid — clear all cookies so browser is clean
+        response.delete_cookie(key="access_token",      path="/")
+        response.delete_cookie(key="refresh_token",     path="/")
+        response.delete_cookie(key="llm_api_key_enc",   path="/")
+        response.delete_cookie(key="tavily_api_key_enc",path="/")
+        raise HTTPException(status_code=401, detail="Refresh token expired. Please log in again.")
 
     if payload.get("type") != "refresh":
+        response.delete_cookie(key="access_token",  path="/")
+        response.delete_cookie(key="refresh_token", path="/")
         raise HTTPException(status_code=401, detail="Invalid token type")
 
-    user_id = payload.get("user_id")
+    user_id  = payload.get("user_id")
     username = payload.get("username")
 
     with get_connection() as conn:
@@ -381,17 +415,17 @@ def refresh_token(request: RefreshTokenRequest):
     if not user:
         raise HTTPException(status_code=401, detail="User no longer exists")
 
-    token_data = {"user_id": user_id, "username": username}
-    new_access_token = create_access_token(data=token_data)
+    token_data        = {"user_id": user_id, "username": username}
+    new_access_token  = create_access_token(data=token_data)
     new_refresh_token = create_refresh_token(data=token_data)
 
-    return TokenResponse(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-        user_id=user_id,
-        username=username,
-        email=user["user_email"]
-    )
+    _set_auth_cookies(response, new_access_token, new_refresh_token)
+
+    return {
+        "user_id":  user_id,
+        "username": username,
+        "email":    user["user_email"],
+    }
 
 
 # ==================================================================================
@@ -408,16 +442,18 @@ def validate_token(current_user: dict = Depends(get_current_user)):
 
 
 # ==================================================================================
-# POST /auth/logout/ - Clear API key cookies on logout
+# POST /auth/logout/ - Clear all cookies on logout
 # ==================================================================================
 @auth_router.post("/logout/")
 def logout(response: Response):
     """
-    Clears the encrypted API key cookies from the browser.
+    Clears all HttpOnly cookies — JWT tokens and API key cookies.
     Must be called on logout so the next user on the same browser
-    does not inherit the previous user's API keys.
+    does not inherit the previous user's session or API keys.
     """
-    response.delete_cookie(key="llm_api_key_enc", path="/")
+    response.delete_cookie(key="access_token",     path="/")
+    response.delete_cookie(key="refresh_token",    path="/")
+    response.delete_cookie(key="llm_api_key_enc",  path="/")
     response.delete_cookie(key="tavily_api_key_enc", path="/")
     return {"message": "Logged out successfully"}
 
@@ -581,10 +617,10 @@ def google_oauth_url():
 
 
 # ==================================================================================
-# POST /auth/google/callback/ - Exchange code, verify user, issue JWT
+# POST /auth/google/callback/ - Exchange code, verify user, issue JWT via cookies
 # ==================================================================================
-@auth_router.post("/google/callback/", response_model=TokenResponse)
-async def google_callback(request: GoogleCallbackRequest):
+@auth_router.post("/google/callback/")
+async def google_callback(request: GoogleCallbackRequest, response: Response):
     """
     Receives the authorization code from the frontend after Google redirects.
     Exchanges the code for tokens, verifies the user's identity, and:
@@ -694,15 +730,15 @@ async def google_callback(request: GoogleCallbackRequest):
                 print(f"Google auto-registration failed: {e}")
                 raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 
-    # ── Step 4: Issue your JWT tokens (same as normal login) ──────────────────
-    token_data = {"user_id": user_id, "username": username}
-    access_token = create_access_token(data=token_data)
+    # ── Step 4: Set cookies and return user info ──────────────────────────────
+    token_data    = {"user_id": user_id, "username": username}
+    access_token  = create_access_token(data=token_data)
     refresh_token = create_refresh_token(data=token_data)
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user_id=user_id,
-        username=username,
-        email=email,
-    )
+    _set_auth_cookies(response, access_token, refresh_token)
+
+    return {
+        "user_id":  user_id,
+        "username": username,
+        "email":    email,
+    }
