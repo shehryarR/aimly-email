@@ -62,8 +62,9 @@ def create_tables() -> None:
             CREATE TABLE IF NOT EXISTS users (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
                 username       TEXT UNIQUE NOT NULL,
-                password_hash  TEXT NOT NULL,
+                password_hash  TEXT,
                 user_email     TEXT UNIQUE NOT NULL,
+                google_id      TEXT,
                 company_addition_active  INTEGER DEFAULT 0,
                 company_addition_metadata TEXT,
                 created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -75,6 +76,60 @@ def create_tables() -> None:
             cursor.execute("ALTER TABLE users ADD COLUMN company_addition_metadata TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        # Migrate existing users table if google_id column doesn't exist
+        # NOTE: SQLite does not support ADD COLUMN ... UNIQUE directly
+        # We add the column first, then create a unique index separately
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN google_id TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Create unique index on google_id if it doesn't exist
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id
+            ON users (google_id)
+            WHERE google_id IS NOT NULL
+        """)
+
+        # Migrate users table: make password_hash nullable (required for Google OAuth users)
+        # SQLite doesn't support ALTER COLUMN, so we check PRAGMA table_info and rebuild if needed
+        cursor.execute("PRAGMA table_info(users)")
+        columns = cursor.fetchall()
+        pwd_col = next((c for c in columns if c[1] == 'password_hash'), None)
+        if pwd_col and pwd_col[3] == 1:  # notnull == 1 means NOT NULL constraint is set
+            print("Migrating users table: removing NOT NULL from password_hash for Google OAuth support...")
+            cursor.executescript("""
+                PRAGMA foreign_keys = OFF;
+
+                CREATE TABLE users_new (
+                    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username                  TEXT UNIQUE NOT NULL,
+                    password_hash             TEXT,
+                    user_email                TEXT UNIQUE NOT NULL,
+                    google_id                 TEXT,
+                    company_addition_active   INTEGER DEFAULT 0,
+                    company_addition_metadata TEXT,
+                    created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO users_new
+                    SELECT id, username, password_hash, user_email,
+                           google_id, company_addition_active,
+                           company_addition_metadata, created_at
+                    FROM users;
+
+                DROP TABLE users;
+
+                ALTER TABLE users_new RENAME TO users;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id
+                    ON users (google_id)
+                    WHERE google_id IS NOT NULL;
+
+                PRAGMA foreign_keys = ON;
+            """)
+            print("✅ users table migrated successfully")
 
         # Migrate existing emails table if html_email column doesn't exist
         try:

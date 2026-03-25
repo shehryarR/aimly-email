@@ -724,6 +724,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [deleteAccountForm, setDeleteAccountForm] = useState({ password: '' });
   const [showDeletePwd,     setShowDeletePwd]     = useState(false);
 
+  // ── Google account detection ───────────────────────────────
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      apiFetch(`${API_BASE}/auth/me/`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setIsGoogleUser(d.is_google === true); })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
   // Expandable sections state
   const [expandedSections, setExpandedSections] = useState({
     profile: true,
@@ -2017,7 +2029,15 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                 <PanelTitle theme={theme}>Account</PanelTitle>
                 <PanelSubtitle theme={theme}>Manage your profile and credentials. Your current password is required to confirm any changes.</PanelSubtitle>
 
-                {/* Profile Update */}
+                {/* Google account notice */}
+                {isGoogleUser && (
+                  <Msg theme={theme} $type="info" style={{ marginBottom: '1rem' }}>
+                    Your account is managed by Google. Profile and password changes are not available for Google sign-in accounts.
+                  </Msg>
+                )}
+
+                {/* Profile Update — hidden for Google users */}
+                {!isGoogleUser && (<>
                 <SectionHeader theme={theme} $isExpanded={expandedSections.profile} onClick={() => toggleSection('profile', 'account')}>
                   <SectionTitle theme={theme} $isExpanded={expandedSections.profile}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2060,7 +2080,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   </Btn>
                 </SectionContent>
 
-                {/* Change Password */}
+                {/* Change Password — hidden for Google users */}
                 <SectionHeader theme={theme} $isExpanded={expandedSections.password} onClick={() => toggleSection('password', 'account')}>
                   <SectionTitle theme={theme} $isExpanded={expandedSections.password}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2135,8 +2155,9 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     {pwdLoading ? 'Saving…' : 'Change Password'}
                   </Btn>
                 </SectionContent>
+                </>)}
 
-                {/* Danger Zone */}
+                {/* Danger Zone — always shown, password input hidden for Google users */}
                 <SectionHeader theme={theme} $isExpanded={expandedSections.danger} onClick={() => toggleSection('danger', 'account')}
                   style={{ borderColor: theme.colors.error.main + '50', background: theme.colors.error.main + '08' }}>
                   <SectionTitle theme={theme} $isExpanded={expandedSections.danger} style={{ color: expandedSections.danger ? theme.colors.error.main : theme.colors.error.main + 'CC' }}>
@@ -2162,26 +2183,28 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   ) : (
                     <>
                       <Msg theme={theme} $type="error">This permanently deletes your account and all data. This cannot be undone.</Msg>
-                      <FormGroup style={{ marginTop: '1rem' }}>
-                        <Label theme={theme}>Enter your password to confirm <RequiredStar>*</RequiredStar></Label>
-                        <PasswordWrapper>
-                          <PasswordInput theme={theme} type={showDeletePwd ? 'text' : 'password'} placeholder="Current password required"
-                            value={deleteAccountForm.password}
-                            onChange={e => { setDeleteAccountForm(p => ({ ...p, password: e.target.value })); if (accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning')) setAccMsg(null); }} 
-                        autoComplete="new-password"
-                        readOnly
-                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
-                          <EyeButton theme={theme} type="button" onClick={() => setShowDeletePwd(v=>!v)}>
-                            {showDeletePwd ? <EyeOffIcon /> : <EyeIcon />}
-                          </EyeButton>
-                        </PasswordWrapper>
-                      </FormGroup>
+                      {!isGoogleUser && (
+                        <FormGroup style={{ marginTop: '1rem' }}>
+                          <Label theme={theme}>Enter your password to confirm <RequiredStar>*</RequiredStar></Label>
+                          <PasswordWrapper>
+                            <PasswordInput theme={theme} type={showDeletePwd ? 'text' : 'password'} placeholder="Current password required"
+                              value={deleteAccountForm.password}
+                              onChange={e => { setDeleteAccountForm(p => ({ ...p, password: e.target.value })); if (accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning')) setAccMsg(null); }} 
+                          autoComplete="new-password"
+                          readOnly
+                          onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                            <EyeButton theme={theme} type="button" onClick={() => setShowDeletePwd(v=>!v)}>
+                              {showDeletePwd ? <EyeOffIcon /> : <EyeIcon />}
+                            </EyeButton>
+                          </PasswordWrapper>
+                        </FormGroup>
+                      )}
                       {accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning') && (
                         <Msg theme={theme} $type={accMsg.type}>{accMsg.text}</Msg>
                       )}
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem', marginTop:'0.75rem' }}>
                         <Btn theme={theme} $variant="secondary" onClick={() => { setDelConfirm(false); setDeleteAccountForm({ password: '' }); if (accMsg?.section === 'profile' && (accMsg.type === 'error' || accMsg.type === 'warning')) setAccMsg(null); }}>Cancel</Btn>
-                        <Btn theme={theme} $variant="danger" onClick={deleteAccount} disabled={accLoading || !deleteAccountForm.password}>
+                        <Btn theme={theme} $variant="danger" onClick={deleteAccount} disabled={accLoading || (!isGoogleUser && !deleteAccountForm.password)}>
                           {accLoading ? 'Deleting…' : 'Yes, Delete'}
                         </Btn>
                       </div>

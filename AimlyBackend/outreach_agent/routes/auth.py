@@ -32,6 +32,14 @@ RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")
 RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
 RECAPTCHA_MIN_SCORE = 0.5
 
+# Google OAuth
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/auth/google/callback")
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+
 # Password hashing — passlib handles bcrypt version differences cleanly
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -118,6 +126,10 @@ class UserResponse(BaseModel):
     user_id: int
     username: str
     email: str
+    is_google: bool = False
+
+class GoogleCallbackRequest(BaseModel):
+    code: str
 
 class MessageResponse(BaseModel):
     message: str
@@ -404,7 +416,7 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, username, user_email
+            SELECT id, username, user_email, google_id
             FROM users WHERE id = ?
         """, (current_user["user_id"],))
         user = cursor.fetchone()
@@ -416,6 +428,7 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         user_id=user["id"],
         username=user["username"],
         email=user["user_email"],
+        is_google=user["google_id"] is not None,
     )
 
 
@@ -525,3 +538,156 @@ async def forget_password(request: ForgetPasswordRequest):
     except Exception as e:
         print(f"Failed to send email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send email. Please try again later")
+
+
+# ==================================================================================
+# GET /auth/google/ - Return Google OAuth URL for frontend to redirect to
+# ==================================================================================
+@auth_router.get("/google/")
+def google_oauth_url():
+    """
+    Build and return the Google OAuth authorization URL.
+    Frontend redirects the browser to this URL to start the OAuth flow.
+    """
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured on server")
+
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    }
+    query_string = "&".join(f"{k}={v}" for k, v in params.items())
+    url = f"{GOOGLE_AUTH_URL}?{query_string}"
+    return {"url": url}
+
+
+# ==================================================================================
+# POST /auth/google/callback/ - Exchange code, verify user, issue JWT
+# ==================================================================================
+@auth_router.post("/google/callback/", response_model=TokenResponse)
+async def google_callback(request: GoogleCallbackRequest):
+    """
+    Receives the authorization code from the frontend after Google redirects.
+    Exchanges the code for tokens, verifies the user's identity, and:
+      - Existing Google user  → login
+      - Email already exists  → reject (tell user to use password login)
+      - New user              → auto-register then login
+    Returns the same TokenResponse as normal login.
+    """
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured on server")
+
+    # ── Step 1: Exchange code for Google tokens ───────────────────────────────
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": request.code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+
+    token_data = token_response.json()
+
+    if "error" in token_data:
+        raise HTTPException(status_code=400, detail=f"Google token exchange failed: {token_data.get('error_description', token_data['error'])}")
+
+    google_access_token = token_data.get("access_token")
+    if not google_access_token:
+        raise HTTPException(status_code=400, detail="Failed to obtain Google access token")
+
+    # ── Step 2: Get user info from Google ─────────────────────────────────────
+    async with httpx.AsyncClient() as client:
+        userinfo_response = await client.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {google_access_token}"},
+        )
+
+    if userinfo_response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Failed to fetch user info from Google")
+
+    userinfo = userinfo_response.json()
+
+    google_id = userinfo.get("sub")
+    email = userinfo.get("email", "").strip().lower()
+    name = userinfo.get("name", "")
+    email_verified = userinfo.get("email_verified", False)
+
+    if not google_id or not email:
+        raise HTTPException(status_code=400, detail="Google account missing required information")
+
+    if not email_verified:
+        raise HTTPException(status_code=400, detail="Google account email is not verified")
+
+    # ── Step 3: DB lookup / register ──────────────────────────────────────────
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check if google_id already exists → returning Google user
+        cursor.execute("SELECT id, username, user_email FROM users WHERE google_id = ?", (google_id,))
+        existing_google_user = cursor.fetchone()
+
+        if existing_google_user:
+            # Known Google user → just log them in
+            user_id = existing_google_user["id"]
+            username = existing_google_user["username"]
+
+        else:
+            # Check if email exists with a password account
+            cursor.execute("SELECT id, google_id FROM users WHERE user_email = ?", (email,))
+            existing_email_user = cursor.fetchone()
+
+            if existing_email_user:
+                # Email registered manually → reject
+                raise HTTPException(
+                    status_code=409,
+                    detail="This email is already registered. Please log in with your password."
+                )
+
+            # Brand new user → auto-register
+            # Generate a clean username from their Google display name
+            base_username = re.sub(r'[^a-zA-Z0-9_]', '', name.replace(' ', '_'))[:20] or "user"
+            username = base_username
+
+            # If username taken, append numbers until unique
+            counter = 1
+            while True:
+                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                if not cursor.fetchone():
+                    break
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            try:
+                cursor.execute("""
+                    INSERT INTO users (username, password_hash, user_email, google_id)
+                    VALUES (?, NULL, ?, ?)
+                """, (username, email, google_id))
+                user_id = cursor.lastrowid
+                cursor.execute("INSERT INTO user_keys (user_id) VALUES (?)", (user_id,))
+                cursor.execute("INSERT INTO global_settings (user_id) VALUES (?)", (user_id,))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"Google auto-registration failed: {e}")
+                raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
+
+    # ── Step 4: Issue your JWT tokens (same as normal login) ──────────────────
+    token_data = {"user_id": user_id, "username": username}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user_id=user_id,
+        username=username,
+        email=email,
+    )

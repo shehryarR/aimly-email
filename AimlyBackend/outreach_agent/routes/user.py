@@ -56,7 +56,7 @@ class UserUpdateRequest(BaseModel):
         return v
 
 class DeleteAccountRequest(BaseModel):
-    password: str
+    password: str = ""
 
     @validator('password')
     def strip_password(cls, v):
@@ -98,11 +98,18 @@ def update_user(request: UserUpdateRequest, current_user: dict = Depends(get_cur
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Verify current password first
+        # Block Google users from modifying their profile
         cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
-        
-        if not user or not verify_password(request.password, user['password_hash']):
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if user["password_hash"] is None:
+            raise HTTPException(status_code=403, detail="This account uses Google sign-in. Profile changes are not allowed.")
+
+        # Verify current password first
+        if not verify_password(request.password, user['password_hash']):
             raise HTTPException(status_code=401, detail="Invalid current password")
         
         # Prepare update fields
@@ -178,12 +185,17 @@ def delete_user(request: DeleteAccountRequest, current_user: dict = Depends(get_
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Verify current password
+        # Fetch user
         cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
         
-        if not user or not verify_password(request.password, user['password_hash']):
-            raise HTTPException(status_code=401, detail="Invalid password")
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # For normal accounts, verify password. Google accounts have no password so skip.
+        if user["password_hash"] is not None:
+            if not verify_password(request.password, user['password_hash']):
+                raise HTTPException(status_code=401, detail="Invalid password")
         
         try:
             # Delete user (cascade will handle related records)

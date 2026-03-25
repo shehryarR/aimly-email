@@ -270,6 +270,54 @@ const ForgotPasswordButton = styled.button<{ theme: any; $disabled: boolean }>`
   }
 `;
 
+const GoogleButton = styled.button<{ theme: any }>`
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  border-radius: ${props => props.theme.radius.field};
+  font-weight: 600;
+  border: 1px solid ${props => props.theme.colors.base[300]};
+  background-color: ${props => props.theme.colors.base[100]};
+  color: ${props => props.theme.colors.base.content};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+
+  &:hover {
+    background-color: ${props => props.theme.colors.base[200]};
+    border-color: ${props => props.theme.colors.primary.main};
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const OrDivider = styled.div<{ theme: any }>`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  color: ${props => props.theme.colors.base.content};
+  opacity: 0.4;
+  font-size: 0.8rem;
+  font-weight: 500;
+
+  &::before, &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: ${props => props.theme.colors.base[300]};
+  }
+`;
+
 
 interface AuthProps {
   onLoginSuccess?: (user: { username: string; user_id: number }) => void;
@@ -336,6 +384,74 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     message: '',
     type: 'neutral' as 'success' | 'error' | 'neutral',
   });
+
+  // ── Google OAuth callback handler (runs on page load if ?code= is in URL) ──
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (!code) return;
+
+    // Remove code from URL immediately so it can't be reused on refresh
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    const handleGoogleCallback = async () => {
+      setLoading(true);
+      setMessage({ type: 'neutral', text: 'Signing in with Google...' });
+      try {
+        const response = await fetch(`${API_BASE}/auth/google/callback/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || 'Google sign-in failed. Please try again.');
+        }
+
+        // Save tokens — same as normal login
+        const tokens: AuthTokens = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          token_type: data.token_type ?? 'bearer',
+        };
+        localStorage.setItem('auth_tokens', JSON.stringify(tokens));
+        localStorage.setItem('user', JSON.stringify({ username: data.username, user_id: data.user_id }));
+
+        onLoginSuccess?.({ username: data.username, user_id: data.user_id });
+      } catch (error) {
+        setMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Google sign-in failed. Please try again.',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    handleGoogleCallback();
+  }, []);
+
+  // ── Google OAuth initiation ────────────────────────────────────────────────
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_BASE}/auth/google/`);
+      const data = await response.json();
+      if (!response.ok || !data.url) {
+        throw new Error('Failed to initiate Google sign-in. Please try again.');
+      }
+      window.location.href = data.url;
+    } catch (error) {
+      setLoading(false);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Google sign-in failed. Please try again.',
+      });
+    }
+  };
 
   // Clear messages when switching tabs
   const handleTabSwitch = (tab: 'login' | 'register') => {
@@ -839,6 +955,18 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               </Button>
             </Form>
           )}
+
+          {/* Google Sign-In — shown on both tabs */}
+          <OrDivider theme={theme}>or</OrDivider>
+          <GoogleButton theme={theme} type="button" onClick={handleGoogleSignIn} disabled={loading}>
+            <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Continue with Google
+          </GoogleButton>
         </AuthCard>
       </AuthContainer>
 
