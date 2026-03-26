@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Global Settings Management Routes
 Handles user's global default settings that apply to all campaigns
@@ -92,8 +93,8 @@ class GlobalSettingsResponse(BaseModel):
     email_instruction: Optional[str] = None
     signature: Optional[str] = None
     logo_data: Optional[str] = None  # Base64 encoded logo data for frontend
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 # ==================================================================================

@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 User Keys Management Routes
 Handles storage and retrieval of sensitive user configuration data like API keys
@@ -200,8 +201,8 @@ class UserKeysResponse(BaseModel):
     email_address:         Optional[str] = None
     email_password_masked: Optional[str] = None
     tavily_api_key_masked: Optional[str] = None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class KeyStatus(BaseModel):

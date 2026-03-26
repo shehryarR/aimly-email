@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Campaign Management Routes - CORRECTED FOR ACTUAL SCHEMA
 Handles CRUD operations for campaigns with server-side sorting
@@ -32,7 +33,7 @@ class CampaignResponse(BaseModel):
     id: int
     user_id: int
     name: str
-    created_at: str
+    created_at: datetime
 
 class CampaignsListResponse(BaseModel):
     campaigns: List[CampaignResponse]

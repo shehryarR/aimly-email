@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Campaign Preferences Management Routes - CORRECT NULL IMPLEMENTATION
 Handles campaign-specific settings and configurations
@@ -120,8 +121,8 @@ class CampaignPreferencesResponse(BaseModel):
     logo_data: Optional[str] = None
     inherit_global_settings: Optional[int] = None
     inherit_global_attachments: Optional[int] = None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class MessageResponse(BaseModel):

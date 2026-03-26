@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Statistics and Analytics Routes
 Provides aggregated metrics and statistics for campaigns and overall account
@@ -43,7 +44,7 @@ class CampaignDetailStats(BaseModel):
     companies_count: int
     emails: EmailStats
     read_rate: float = 0.0
-    created_at: str
+    created_at: datetime
 
 
 def _process_email_stats(email_stats_raw) -> tuple:

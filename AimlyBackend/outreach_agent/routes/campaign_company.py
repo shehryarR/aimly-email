@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Campaign-Company Relationship Routes
 Handles many-to-many relationships between campaigns and companies
@@ -50,7 +51,7 @@ class CompanyResponse(BaseModel):
     phone_number: Optional[str] = None
     address: Optional[str] = None
     company_info: Optional[str] = None
-    created_at: str
+    created_at: datetime
     optedOut: bool = False
 
 class CampaignCompanyResponse(BaseModel):
@@ -63,7 +64,7 @@ class CampaignResponse(BaseModel):
     id: int
     user_id: int
     name: str
-    created_at: str
+    created_at: datetime
 
 class CompanyCampaignsResponse(BaseModel):
     campaigns: List[CampaignResponse]

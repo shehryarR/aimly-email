@@ -1,3 +1,4 @@
+from datetime import datetime
 """
 Company Management Routes
 Handles CRUD operations for companies including bulk operations, CSV file uploads, and AI search
@@ -196,7 +197,7 @@ class CompanyResponse(BaseModel):
     phone_number: Optional[str] = None
     address: Optional[str] = None
     company_info: Optional[str] = None
-    created_at: str
+    created_at: datetime
     optedOut: bool = False
     campaign_ids: List[int] = []
 
