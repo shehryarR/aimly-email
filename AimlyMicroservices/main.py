@@ -8,9 +8,9 @@ Combines two sub-services under one FastAPI app:
 
 Environment variables
 ---------------------
-  MICROSERVICE_DB_PATH    Path to the SQLite database  (default: ./email_microservice.db)
   MICROSERVICE_API_KEY    Master key for /admin/* routes  (default: your-super-secure-microservice-key)
-  MICROSERVICE_PORT       Port to listen on              (default: 8001)
+  MICROSERVICE_PORT       Port to listen on               (default: 8001)
+  DB_HOST / DB_PORT / MYSQL_USER / MYSQL_PASSWORD / DB_NAME
 """
 
 import os
@@ -31,13 +31,12 @@ try:
 except ImportError:
     print("⚠️  dotenv not installed – using system env vars")
 
-from database import DATABASE_NAME, get_db_connection, init_database
+from database import get_db_connection, init_database
 from email_read_router import router as read_router
 from email_optout_router import router as optout_router
 
 MICROSERVICE_API_KEY = os.getenv("MICROSERVICE_API_KEY", "your-super-secure-microservice-key")
 
-print(f"🗄️  DATABASE = {DATABASE_NAME}")
 print(f"🔑 API KEY  = {MICROSERVICE_API_KEY[:10]}...{MICROSERVICE_API_KEY[-5:]}")
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -56,7 +55,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount sub-routers
 app.include_router(read_router)
 app.include_router(optout_router)
 
@@ -80,19 +78,15 @@ async def create_backend(
     request: CreateBackendRequest,
     _: bool = Depends(verify_microservice_api_key),
 ):
-    """
-    Create a new backend tenant and receive its API key.
-    Requires the master MICROSERVICE_API_KEY in the X-Api-Key header.
-    """
     backend_id = f"backend_{secrets.token_urlsafe(16)}"
     api_key = f"bk_{secrets.token_urlsafe(32)}"
 
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO backends (backend_id, api_key, name) VALUES (?, ?, ?)",
-            (backend_id, api_key, request.name),
-        )
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO backends (backend_id, api_key, name) VALUES (%s, %s, %s)",
+                (backend_id, api_key, request.name),
+            )
         conn.commit()
 
     return {
@@ -107,7 +101,6 @@ async def create_backend(
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
-    print("hello")
     return FileResponse("./content/favicon.ico")
 
 
@@ -115,12 +108,14 @@ async def favicon():
 async def health_check():
     try:
         with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM email_reads WHERE processed = FALSE AND read_at IS NOT NULL")
-            unprocessed_reads = cursor.fetchone()[0]
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) as cnt FROM email_reads WHERE processed = 0 AND read_at IS NOT NULL"
+                )
+                unprocessed_reads = cursor.fetchone()["cnt"]
 
-            cursor.execute("SELECT COUNT(*) FROM backends WHERE active = TRUE")
-            active_backends = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) as cnt FROM backends WHERE active = 1")
+                active_backends = cursor.fetchone()["cnt"]
 
         return {
             "status": "healthy",

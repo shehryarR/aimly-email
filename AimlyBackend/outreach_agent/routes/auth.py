@@ -223,7 +223,7 @@ def get_current_user(request: Request):
 
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, username FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT id, username FROM users WHERE id = %s", (user_id,))
             user = cursor.fetchone()
 
         if not user:
@@ -249,7 +249,7 @@ def get_current_user(request: Request):
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=401, detail="User no longer exists")
 
@@ -292,7 +292,7 @@ async def login(request: LoginRequest, response: Response):
         cursor.execute("""
             SELECT id, username, password_hash, user_email 
             FROM users 
-            WHERE username = ? OR user_email = ?
+            WHERE username = %s OR user_email = %s
         """, (request.identifier, request.identifier))
         user = cursor.fetchone()
 
@@ -347,11 +347,11 @@ async def register(request: RegisterRequest):
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id FROM users WHERE username = ?", (request.username,))
+        cursor.execute("SELECT id FROM users WHERE username = %s", (request.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Username already exists")
 
-        cursor.execute("SELECT id FROM users WHERE user_email = ?", (request.email,))
+        cursor.execute("SELECT id FROM users WHERE user_email = %s", (request.email,))
         if cursor.fetchone():
             raise HTTPException(status_code=409, detail="Email already registered")
 
@@ -359,11 +359,11 @@ async def register(request: RegisterRequest):
             password_hash = hash_password(request.password)
             cursor.execute("""
                 INSERT INTO users (username, password_hash, user_email)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (request.username, password_hash, request.email))
             user_id = cursor.lastrowid
-            cursor.execute("INSERT INTO user_keys (user_id) VALUES (?)", (user_id,))
-            cursor.execute("INSERT INTO global_settings (user_id) VALUES (?)", (user_id,))
+            cursor.execute("INSERT INTO user_keys (user_id) VALUES (%s)", (user_id,))
+            cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -409,7 +409,7 @@ def refresh_token(request: Request, response: Response):
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, user_email FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, username, user_email FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
 
     if not user:
@@ -468,7 +468,7 @@ def get_current_user_info(current_user: dict = Depends(get_current_user)):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, username, user_email, google_id
-            FROM users WHERE id = ?
+            FROM users WHERE id = %s
         """, (current_user["user_id"],))
         user = cursor.fetchone()
 
@@ -516,7 +516,7 @@ async def forget_password(request: ForgetPasswordRequest):
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username FROM users WHERE user_email = ?", (request.email,))
+        cursor.execute("SELECT id, username FROM users WHERE user_email = %s", (request.email,))
         user = cursor.fetchone()
 
     if not user:
@@ -578,7 +578,7 @@ async def forget_password(request: ForgetPasswordRequest):
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE users SET password_hash = ? WHERE user_email = ?
+                UPDATE users SET password_hash = %s WHERE user_email = %s
             """, (password_hash, request.email))
             conn.commit()
 
@@ -682,7 +682,7 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
         cursor = conn.cursor()
 
         # Check if google_id already exists → returning Google user
-        cursor.execute("SELECT id, username, user_email FROM users WHERE google_id = ?", (google_id,))
+        cursor.execute("SELECT id, username, user_email FROM users WHERE google_id = %s", (google_id,))
         existing_google_user = cursor.fetchone()
 
         if existing_google_user:
@@ -692,7 +692,7 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
 
         else:
             # Check if email exists with a password account
-            cursor.execute("SELECT id, google_id FROM users WHERE user_email = ?", (email,))
+            cursor.execute("SELECT id, google_id FROM users WHERE user_email = %s", (email,))
             existing_email_user = cursor.fetchone()
 
             if existing_email_user:
@@ -710,7 +710,7 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
             # If username taken, append numbers until unique
             counter = 1
             while True:
-                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
                 if not cursor.fetchone():
                     break
                 username = f"{base_username}{counter}"
@@ -719,11 +719,11 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
             try:
                 cursor.execute("""
                     INSERT INTO users (username, password_hash, user_email, google_id)
-                    VALUES (?, NULL, ?, ?)
+                    VALUES (%s, NULL, %s, %s)
                 """, (username, email, google_id))
                 user_id = cursor.lastrowid
-                cursor.execute("INSERT INTO user_keys (user_id) VALUES (?)", (user_id,))
-                cursor.execute("INSERT INTO global_settings (user_id) VALUES (?)", (user_id,))
+                cursor.execute("INSERT INTO user_keys (user_id) VALUES (%s)", (user_id,))
+                cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
                 conn.commit()
             except Exception as e:
                 conn.rollback()

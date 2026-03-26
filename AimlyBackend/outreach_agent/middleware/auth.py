@@ -14,10 +14,6 @@ from core.database import get_user_by_username
 
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-if not JWT_SECRET_KEY:
-    from core.database import load_env_json
-    load_env_json()
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 # Security scheme

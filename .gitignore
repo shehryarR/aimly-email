@@ -4,3 +4,6 @@ venv
 dist
 __pycache__
 *.pyc
+data/mysql/
+*.db
+.venv/

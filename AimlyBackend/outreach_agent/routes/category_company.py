@@ -44,7 +44,7 @@ def add_companies_to_category(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id FROM categories WHERE id = ? AND user_id = ?",
+            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
             (category_id, user_id),
         )
         if not cursor.fetchone():
@@ -54,14 +54,14 @@ def add_companies_to_category(
             added = 0
             for company_id in company_ids:
                 cursor.execute(
-                    "SELECT id FROM companies WHERE id = ? AND user_id = ?",
+                    "SELECT id FROM companies WHERE id = %s AND user_id = %s",
                     (company_id, user_id),
                 )
                 if not cursor.fetchone():
                     continue
 
                 cursor.execute(
-                    "INSERT OR IGNORE INTO category_company (category_id, company_id) VALUES (?, ?)",
+                    "INSERT IGNORE INTO category_company (category_id, company_id) VALUES (%s, %s)",
                     (category_id, company_id),
                 )
                 if cursor.rowcount > 0:
@@ -104,18 +104,18 @@ def remove_companies_from_category(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id FROM categories WHERE id = ? AND user_id = ?",
+            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
             (category_id, user_id),
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Category not found")
 
         try:
-            placeholders = ",".join(["?"] * len(company_ids))
+            placeholders = ",".join(["%s"] * len(company_ids))
             cursor.execute(
                 f"""
                 DELETE FROM category_company
-                WHERE category_id = ? AND company_id IN ({placeholders})
+                WHERE category_id = %s AND company_id IN ({placeholders})
                 """,
                 [category_id] + company_ids,
             )
@@ -151,17 +151,17 @@ def get_category_companies(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id FROM categories WHERE id = ? AND user_id = ?",
+            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
             (category_id, user_id),
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Category not found")
 
-        conditions = ["cc.category_id = ?", "co.user_id = ?"]
+        conditions = ["cc.category_id = %s", "co.user_id = %s"]
         params: list = [category_id, user_id]
 
         if search and search.strip():
-            conditions.append("(co.name LIKE ? OR co.email LIKE ?)")
+            conditions.append("(co.name LIKE %s OR co.email LIKE %s)")
             params.extend([f"%{search.strip()}%", f"%{search.strip()}%"])
 
         where_str = " AND ".join(conditions)
@@ -181,7 +181,7 @@ def get_category_companies(
             JOIN companies co ON cc.company_id = co.id
             WHERE {where_str}
             ORDER BY cc.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             """,
             params + [size, offset],
         )

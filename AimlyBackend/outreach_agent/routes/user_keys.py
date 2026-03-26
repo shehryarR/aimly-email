@@ -262,7 +262,7 @@ def update_user_keys(
     # Only persist non-key fields to DB
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM user_keys WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT id FROM user_keys WHERE user_id = %s", (user_id,))
         existing = cursor.fetchone()
 
         try:
@@ -271,21 +271,21 @@ def update_user_keys(
                 update_values = []
 
                 if llm_model_sent:
-                    update_fields.append("llm_model = ?");      update_values.append(llm_model)
+                    update_fields.append("llm_model = %s");      update_values.append(llm_model)
                 if smtp_host_sent:
-                    update_fields.append("smtp_host = ?");      update_values.append(smtp_host)
+                    update_fields.append("smtp_host = %s");      update_values.append(smtp_host)
                 if email_address_sent:
-                    update_fields.append("email_address = ?");  update_values.append(email_address)
+                    update_fields.append("email_address = %s");  update_values.append(email_address)
                 if email_password_sent:
-                    update_fields.append("email_password = ?"); update_values.append(email_password)
+                    update_fields.append("email_password = %s"); update_values.append(email_password)
                 if smtp_port_sent:
-                    update_fields.append("smtp_port = ?");      update_values.append(smtp_port)
+                    update_fields.append("smtp_port = %s");      update_values.append(smtp_port)
 
                 if update_fields:
                     update_fields.append("updated_at = CURRENT_TIMESTAMP")
                     update_values.append(user_id)
                     cursor.execute(
-                        f"UPDATE user_keys SET {', '.join(update_fields)} WHERE user_id = ?",
+                        f"UPDATE user_keys SET {', '.join(update_fields)} WHERE user_id = %s",
                         update_values,
                     )
             else:
@@ -293,7 +293,7 @@ def update_user_keys(
                     INSERT INTO user_keys (
                         user_id, llm_model, smtp_host, smtp_port,
                         email_address, email_password
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
                 """, (user_id, llm_model, smtp_host, smtp_port, email_address, email_password))
 
             conn.commit()
@@ -340,7 +340,7 @@ def get_keys_status(
         cursor = conn.cursor()
         cursor.execute("""
             SELECT smtp_host, smtp_port, email_address, email_password, llm_model
-            FROM user_keys WHERE user_id = ?
+            FROM user_keys WHERE user_id = %s
         """, (user_id,))
         row = cursor.fetchone()
 
@@ -379,7 +379,7 @@ def get_user_keys(
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM user_keys WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT * FROM user_keys WHERE user_id = %s", (user_id,))
         keys = cursor.fetchone()
 
     if not keys:

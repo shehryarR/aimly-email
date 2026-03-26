@@ -105,13 +105,13 @@ def get_account_stats(current_user: dict = Depends(get_current_user)):
 
         # Get total campaigns
         cursor.execute("""
-            SELECT COUNT(*) as total FROM campaigns WHERE user_id = ?
+            SELECT COUNT(*) as total FROM campaigns WHERE user_id = %s
         """, (user_id,))
         total_campaigns = cursor.fetchone()["total"]
 
         # Get total companies
         cursor.execute("""
-            SELECT COUNT(*) as total FROM companies WHERE user_id = ?
+            SELECT COUNT(*) as total FROM companies WHERE user_id = %s
         """, (user_id,))
         total_companies = cursor.fetchone()["total"]
 
@@ -120,19 +120,19 @@ def get_account_stats(current_user: dict = Depends(get_current_user)):
             SELECT COUNT(*) as total
             FROM campaign_company cc
             JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE c.user_id = ?
+            WHERE c.user_id = %s
         """, (user_id,))
         total_campaign_companies = cursor.fetchone()["total"]
 
         # Get total attachments
         cursor.execute("""
-            SELECT COUNT(*) as total FROM attachments WHERE user_id = ?
+            SELECT COUNT(*) as total FROM attachments WHERE user_id = %s
         """, (user_id,))
         total_attachments = cursor.fetchone()["total"]
 
         # Get total categories
         cursor.execute("""
-            SELECT COUNT(*) as total FROM categories WHERE user_id = ?
+            SELECT COUNT(*) as total FROM categories WHERE user_id = %s
         """, (user_id,))
         total_categories = cursor.fetchone()["total"]
 
@@ -146,7 +146,7 @@ def get_account_stats(current_user: dict = Depends(get_current_user)):
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE c.user_id = ?
+            WHERE c.user_id = %s
             GROUP BY e.status
         """, (user_id,))
 
@@ -181,7 +181,7 @@ def get_campaign_stats(campaign_id: int, current_user: dict = Depends(get_curren
         cursor.execute("""
             SELECT id, name, created_at
             FROM campaigns
-            WHERE id = ? AND user_id = ?
+            WHERE id = %s AND user_id = %s
         """, (campaign_id, user_id))
 
         campaign = cursor.fetchone()
@@ -192,7 +192,7 @@ def get_campaign_stats(campaign_id: int, current_user: dict = Depends(get_curren
         cursor.execute("""
             SELECT COUNT(*) as companies_count
             FROM campaign_company cc
-            WHERE cc.campaign_id = ?
+            WHERE cc.campaign_id = %s
         """, (campaign_id,))
         companies_count = cursor.fetchone()["companies_count"]
 
@@ -205,7 +205,7 @@ def get_campaign_stats(campaign_id: int, current_user: dict = Depends(get_curren
                 SUM(CASE WHEN e.read_at IS NOT NULL THEN 1 ELSE 0 END) as read_count
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
-            WHERE cc.campaign_id = ?
+            WHERE cc.campaign_id = %s
             GROUP BY e.status
         """, (campaign_id,))
 

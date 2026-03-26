@@ -12,7 +12,7 @@ import ssl
 from datetime import datetime
 
 import aiohttp
-from core.database.connection import get_connection, load_env_json
+from core.database.connection import get_connection
 
 
 # =============================================================================
@@ -91,7 +91,7 @@ class MicroserviceClient:
             with get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute("SELECT id FROM emails WHERE id = ?", (email_id,))
+                cursor.execute("SELECT id FROM emails WHERE id = %s", (email_id,))
                 if not cursor.fetchone():
                     print(f"[Microservice] Email ID {email_id} not found")
                     return
@@ -99,7 +99,7 @@ class MicroserviceClient:
                 cursor.execute("""
                     UPDATE emails
                     SET read_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND read_at IS NULL
+                    WHERE id = %s AND read_at IS NULL
                 """, (email_id,))
 
                 if cursor.rowcount > 0:
@@ -128,8 +128,6 @@ async def run_sync_microservice() -> None:
     Long-running coroutine launched by main.py lifespan.
     Polls the microservice every 30 seconds.
     """
-    load_env_json()
-
     base_url   = os.getenv("MICROSERVICE_BASE_URL")
     api_key    = os.getenv("MICROSERVICE_API_KEY")
     backend_id = os.getenv("MICROSERVICE_BACKEND_ID")

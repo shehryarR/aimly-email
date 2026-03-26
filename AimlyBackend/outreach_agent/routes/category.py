@@ -77,7 +77,7 @@ def create_categories(
                 detail = normalize_text_field(cat.detail)
 
                 cursor.execute(
-                    "SELECT id FROM categories WHERE user_id = ? AND name = ?",
+                    "SELECT id FROM categories WHERE user_id = %s AND name = %s",
                     (user_id, cat.name),
                 )
                 if cursor.fetchone():
@@ -87,7 +87,7 @@ def create_categories(
                     )
 
                 cursor.execute(
-                    "INSERT INTO categories (user_id, name, detail) VALUES (?, ?, ?)",
+                    "INSERT INTO categories (user_id, name, detail) VALUES (%s, %s, %s)",
                     (user_id, cat.name, detail),
                 )
                 created_count += 1
@@ -140,7 +140,7 @@ def update_categories(
                     raise HTTPException(status_code=400, detail="Each item must include 'id'")
 
                 cursor.execute(
-                    "SELECT id FROM categories WHERE id = ? AND user_id = ?",
+                    "SELECT id FROM categories WHERE id = %s AND user_id = %s",
                     (category_id, user_id),
                 )
                 if not cursor.fetchone():
@@ -154,23 +154,23 @@ def update_categories(
                     if not name:
                         raise HTTPException(status_code=400, detail="Category name cannot be empty")
                     cursor.execute(
-                        "SELECT id FROM categories WHERE user_id = ? AND name = ? AND id != ?",
+                        "SELECT id FROM categories WHERE user_id = %s AND name = %s AND id != %s",
                         (user_id, name, category_id),
                     )
                     if cursor.fetchone():
                         raise HTTPException(status_code=409, detail=f"Category '{name}' already exists")
-                    update_fields.append("name = ?")
+                    update_fields.append("name = %s")
                     update_values.append(name)
 
                 if "detail" in item:
-                    update_fields.append("detail = ?")
+                    update_fields.append("detail = %s")
                     update_values.append(normalize_text_field(item["detail"]))
 
                 if update_fields:
                     update_fields.append("updated_at = CURRENT_TIMESTAMP")
                     update_values.extend([category_id, user_id])
                     cursor.execute(
-                        f"UPDATE categories SET {', '.join(update_fields)} WHERE id = ? AND user_id = ?",
+                        f"UPDATE categories SET {', '.join(update_fields)} WHERE id = %s AND user_id = %s",
                         update_values,
                     )
                     if cursor.rowcount > 0:
@@ -215,14 +215,14 @@ def get_categories(
             id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
             if not id_list:
                 return CategoriesListResponse(categories=[], total=0, page=page, size=size)
-            placeholders = ",".join(["?"] * len(id_list))
+            placeholders = ",".join(["%s"] * len(id_list))
             cursor.execute(
                 f"""
                 SELECT c.id, c.user_id, c.name, c.detail, c.created_at, c.updated_at,
                        COUNT(cc.company_id) AS company_count
                 FROM categories c
                 LEFT JOIN category_company cc ON c.id = cc.category_id
-                WHERE c.user_id = ? AND c.id IN ({placeholders})
+                WHERE c.user_id = %s AND c.id IN ({placeholders})
                 GROUP BY c.id
                 ORDER BY c.created_at DESC
                 """,
@@ -237,10 +237,10 @@ def get_categories(
             )
 
         # Build WHERE
-        where_parts = ["c.user_id = ?"]
+        where_parts = ["c.user_id = %s"]
         where_params: list = [user_id]
         if search and search.strip():
-            where_parts.append("c.name LIKE ?")
+            where_parts.append("c.name LIKE %s")
             where_params.append(f"%{search.strip()}%")
         where_str = "WHERE " + " AND ".join(where_parts)
 
@@ -270,7 +270,7 @@ def get_categories(
             {where_str}
             GROUP BY c.id
             {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             """,
             where_params + [size, offset],
         )
@@ -301,9 +301,9 @@ def delete_categories(
     with get_connection() as conn:
         cursor = conn.cursor()
         try:
-            placeholders = ",".join(["?"] * len(id_list))
+            placeholders = ",".join(["%s"] * len(id_list))
             cursor.execute(
-                f"DELETE FROM categories WHERE user_id = ? AND id IN ({placeholders})",
+                f"DELETE FROM categories WHERE user_id = %s AND id IN ({placeholders})",
                 [user_id] + id_list,
             )
             deleted_count = cursor.rowcount

@@ -1,18 +1,17 @@
 # ============================================================
 #  AIMLY - Root Makefile
-#  Manages: AimlyBackend | AimlyFrontend | AimlyMicroservices
+#  Manages: AimlyBackend | AimlyFrontend | AimlyMicroservices | MySQL
 # ============================================================
 
+COMPOSE = docker compose -f docker/docker-compose.yml --env-file .env
+
 .PHONY: help \
-        setup setup-backend setup-frontend setup-microservices \
-        _start-microservices _stop-microservices \
+        setup \
         build build-backend build-frontend build-microservices \
-        up up-backend up-frontend up-microservices \
-        down down-backend down-frontend down-microservices \
-        restart restart-backend restart-frontend restart-microservices \
-        logs logs-backend logs-frontend logs-microservices \
-        run run-backend run-frontend run-microservices \
-        stop
+        up up-backend up-frontend up-microservices up-db \
+        down down-backend down-frontend down-microservices down-db \
+        restart restart-backend restart-frontend restart-microservices restart-db \
+        logs logs-backend logs-frontend logs-microservices logs-db
 
 
 # ── Default: show help ───────────────────────────────────────
@@ -20,58 +19,64 @@ help:
 	@echo ""
 	@echo "  AIMLY Makefile Commands"
 	@echo "  ────────────────────────────────────────────────────"
-	@echo "  make setup    → Configure + install ALL projects (run once)"
+	@echo "  make setup    → Generate .env (run once)"
 	@echo "  make build    → Build ALL Docker images"
-	@echo "  make up       → Start ALL services via Docker"
-	@echo "  make down     → Stop  ALL Docker containers"
+	@echo "  make up       → Start ALL services"
+	@echo "  make down     → Stop  ALL services"
 	@echo "  make restart  → down + build + up for ALL"
 	@echo "  make logs     → Tail logs for ALL services"
-	@echo "  make run      → Start ALL as local processes (dev)"
-	@echo "  make stop     → Stop  ALL local processes"
 	@echo ""
-	@echo "  Per-service (replace * with: backend | frontend | microservices):"
-	@echo "  make setup-*   build-*   up-*   down-*   restart-*   logs-*   run-*"
+	@echo "  Per-service (replace * with: backend | frontend | microservices | db):"
+	@echo "  make build-*   up-*   down-*   restart-*   logs-*"
 	@echo ""
 
 
-# ── INTERNAL ─────────────────────────────────────────────────
-# Start microservice via Docker so backend env_generator can call it.
-# Requires Docker image to already be built (setup-microservices handles this).
-_start-microservices:
-	@echo "── Starting microservice (Docker) for credential generation ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml up -d email-microservice
+# ── SETUP ────────────────────────────────────────────────────
+setup:
+	@echo "── Creating required directories ──"
+	mkdir -p data/mysql
+	mkdir -p AimlyBackend/data/uploads/attachments
+	mkdir -p AimlyMicroservices/data
+	@echo ""
+	@echo "── Creating virtual environment ──"
+	python3 -m venv .venv
+	@echo ""
+	@echo "── Installing setup dependencies ──"
+	.venv/bin/pip install -r requirements.txt
+	@echo ""
+	@echo "── Step 1: MySQL configuration ──"
+	.venv/bin/python3 env_generators/mysql.py
+	@echo ""
+	@echo "── Step 2: Microservice configuration ──"
+	.venv/bin/python3 env_generators/microservice.py
+	@echo ""
+	@echo "── Step 3: Building microservice image ──"
+	$(COMPOSE) build email-microservice
+	@echo ""
+	@echo "── Step 4: Starting MySQL ──"
+	$(COMPOSE) up -d mysql
+	@echo "  Waiting for MySQL to be healthy..."
+	@sleep 30
+	@echo ""
+	@echo "── Step 4b: Setting up database users ──"
+	.venv/bin/python3 env_generators/setup_db.py
+	@echo ""
+	@echo "── Step 5: Starting microservice ──"
+	$(COMPOSE) up -d email-microservice
 	@echo "  Waiting for microservice to boot..."
-	@sleep 8
-
-# Stop and remove the temporary microservice container
-_stop-microservices:
-	@echo "── Stopping temporary microservice container ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml stop email-microservice
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml rm -f email-microservice
-	@sleep 3
-
-
-# ── SETUP (configure + install deps) ─────────────────────────
-# NOTE: Run 'make stop' first if services are already running.
-setup: setup-microservices _start-microservices setup-backend _stop-microservices setup-frontend
+	@sleep 15
 	@echo ""
-	@echo "  ✅  All projects configured and set up!"
-
-setup-microservices:
-	@echo "── Setup: AimlyMicroservices ──"
-	cd AimlyMicroservices && python3 env_generator.py
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml build email-microservice
-
-setup-backend:
-	@echo "── Setup: AimlyBackend ──"
-	cd AimlyBackend && python3 env_generator.py
-	cd AimlyBackend && python3 -m venv venv
-	cd AimlyBackend && ./venv/bin/pip install -r requirements.txt
-
-setup-frontend:
-	@echo "── Setup: AimlyFrontend ──"
-	cd AimlyFrontend && python3 env_generator.py
-	cd AimlyFrontend && npm install
+	@echo "── Step 6: Backend configuration ──"
+	.venv/bin/python3 env_generators/backend.py
+	@echo ""
+	@echo "── Step 7: Stopping temporary containers ──"
+	$(COMPOSE) stop email-microservice mysql
+	$(COMPOSE) rm -f email-microservice mysql
+	@echo ""
+	@echo "── Step 8: Frontend configuration ──"
+	.venv/bin/python3 env_generators/frontend.py
+	@echo ""
+	@echo "  ✅  Setup complete — run 'make build' then 'make up'"
 
 
 # ── BUILD ────────────────────────────────────────────────────
@@ -81,113 +86,193 @@ build: build-backend build-frontend build-microservices
 
 build-backend:
 	@echo "── Build: AimlyBackend ──"
-	cd AimlyBackend && docker build --no-cache -t outreach_agent -f docker/Dockerfile .
+	$(COMPOSE) build outreach_backend
 
 build-frontend:
 	@echo "── Build: AimlyFrontend ──"
-	cd AimlyFrontend && docker build -t outreach_ui -f docker/Dockerfile .
+	$(COMPOSE) build outreach_ui
 
 build-microservices:
 	@echo "── Build: AimlyMicroservices ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml build email-microservice
+	$(COMPOSE) build email-microservice
 
 
 # ── UP ───────────────────────────────────────────────────────
-up: up-microservices up-backend up-frontend
+up:
+	@echo "── Up: All services ──"
+	$(COMPOSE) up -d
 	@echo ""
 	@echo "  ✅  All Docker containers started!"
 
+up-db:
+	@echo "── Up: MySQL ──"
+	$(COMPOSE) up -d mysql
+
 up-microservices:
 	@echo "── Up: AimlyMicroservices ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml up -d email-microservice
+	$(COMPOSE) up -d email-microservice
 
 up-backend:
 	@echo "── Up: AimlyBackend ──"
-	cd AimlyBackend && docker compose -f docker/docker-compose.yml up -d
+	$(COMPOSE) up -d outreach_backend
 
 up-frontend:
 	@echo "── Up: AimlyFrontend ──"
-	cd AimlyFrontend && docker compose -f docker/docker-compose.yml up -d
+	$(COMPOSE) up -d outreach_ui
 
 
 # ── DOWN ─────────────────────────────────────────────────────
-down: down-backend down-frontend down-microservices
+down:
+	@echo "── Down: All services ──"
+	$(COMPOSE) down
 	@echo ""
 	@echo "  ✅  All Docker containers stopped!"
 
+down-db:
+	@echo "── Down: MySQL ──"
+	$(COMPOSE) stop mysql
+	$(COMPOSE) rm -f mysql
+
 down-backend:
 	@echo "── Down: AimlyBackend ──"
-	cd AimlyBackend && docker compose -f docker/docker-compose.yml down
+	$(COMPOSE) stop outreach_backend
+	$(COMPOSE) rm -f outreach_backend
 
 down-frontend:
 	@echo "── Down: AimlyFrontend ──"
-	cd AimlyFrontend && docker compose -f docker/docker-compose.yml down
+	$(COMPOSE) stop outreach_ui
+	$(COMPOSE) rm -f outreach_ui
 
 down-microservices:
 	@echo "── Down: AimlyMicroservices ──"
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml stop email-microservice
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml rm -f email-microservice
+	$(COMPOSE) stop email-microservice
+	$(COMPOSE) rm -f email-microservice
 
 
 # ── RESTART ──────────────────────────────────────────────────
-restart: restart-backend restart-frontend restart-microservices
+restart: down build up
 	@echo ""
 	@echo "  ✅  All services restarted!"
 
 restart-backend:       down-backend       build-backend       up-backend
 restart-frontend:      down-frontend      build-frontend      up-frontend
 restart-microservices: down-microservices build-microservices up-microservices
+restart-db:            down-db                                up-db
 
 
-# ── LOGS (Docker) ────────────────────────────────────────────
+# ── LOGS ─────────────────────────────────────────────────────
 logs:
 	@echo "  Tailing logs for all services (Ctrl+C to stop)..."
-	@$(MAKE) logs-backend       > /dev/null 2>&1 &
-	@$(MAKE) logs-microservices > /dev/null 2>&1 &
-	@$(MAKE) logs-frontend
+	$(COMPOSE) logs -f
 
 logs-backend:
-	cd AimlyBackend && docker compose -f docker/docker-compose.yml logs -f
+	$(COMPOSE) logs -f outreach_backend
 
 logs-frontend:
-	cd AimlyFrontend && docker compose -f docker/docker-compose.yml logs -f
+	$(COMPOSE) logs -f outreach_ui
 
 logs-microservices:
-	cd AimlyMicroservices && docker compose -f docker/docker-compose.yml logs -f email-microservice
+	$(COMPOSE) logs -f email-microservice
+
+logs-db:
+	$(COMPOSE) logs -f mysql
 
 
-# ── RUN (local dev, no Docker) ───────────────────────────────
-run:
+
+# ── BUILD ────────────────────────────────────────────────────
+build: build-backend build-frontend build-microservices
 	@echo ""
-	@echo "  🚀  Starting all services..."
-	@-pkill -f "outreach_agent/main.py" 2>/dev/null || true
-	@-pkill -f "AimlyMicroservices" 2>/dev/null || true
-	@-pkill -f "vite" 2>/dev/null || true
-	@sleep 1
-	@echo "  Ctrl+C to stop all services"
+	@echo "  ✅  All Docker images built!"
+
+build-backend:
+	@echo "── Build: AimlyBackend ──"
+	$(COMPOSE) build outreach_backend
+
+build-frontend:
+	@echo "── Build: AimlyFrontend ──"
+	$(COMPOSE) build outreach_ui
+
+build-microservices:
+	@echo "── Build: AimlyMicroservices ──"
+	$(COMPOSE) build email-microservice
+
+
+# ── UP ───────────────────────────────────────────────────────
+up:
+	@echo "── Up: All services ──"
+	$(COMPOSE) up -d
 	@echo ""
-	(cd AimlyMicroservices && ./venv/bin/python3 main.py 2>&1 | sed 's/^/[microservices] /') &
-	(cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py 2>&1 | sed 's/^/[backend]       /') &
-	(cd AimlyFrontend && npm run dev -- --port 8501 2>&1 | sed 's/^/[frontend]      /') &
-	wait
+	@echo "  ✅  All Docker containers started!"
 
-run-backend:
-	@echo "── Run: AimlyBackend ──"
-	cd AimlyBackend && ./venv/bin/python3 outreach_agent/main.py
+up-db:
+	@echo "── Up: MySQL ──"
+	$(COMPOSE) up -d mysql
 
-run-frontend:
-	@echo "── Run: AimlyFrontend ──"
-	cd AimlyFrontend && npm run dev -- --port 8501
+up-microservices:
+	@echo "── Up: AimlyMicroservices ──"
+	$(COMPOSE) up -d email-microservice
 
-run-microservices:
-	@echo "── Run: AimlyMicroservices ──"
-	cd AimlyMicroservices && ./venv/bin/python3 main.py
+up-backend:
+	@echo "── Up: AimlyBackend ──"
+	$(COMPOSE) up -d outreach_backend
+
+up-frontend:
+	@echo "── Up: AimlyFrontend ──"
+	$(COMPOSE) up -d outreach_ui
 
 
-# ── STOP (local dev) ─────────────────────────────────────────
-stop:
-	@echo "── Stopping all local processes ──"
-	@-pkill -f "outreach_agent/main.py" 2>/dev/null && echo "  stopped: backend"       || echo "  not running: backend"
-	@-pkill -f "main.py"               2>/dev/null && echo "  stopped: microservices" || echo "  not running: microservices"
-	@-pkill -f "vite"                  2>/dev/null && echo "  stopped: frontend"      || echo "  not running: frontend"
-	@echo "  ✅  Done"
+# ── DOWN ─────────────────────────────────────────────────────
+down:
+	@echo "── Down: All services ──"
+	$(COMPOSE) down
+	@echo ""
+	@echo "  ✅  All Docker containers stopped!"
+
+down-db:
+	@echo "── Down: MySQL ──"
+	$(COMPOSE) stop mysql
+	$(COMPOSE) rm -f mysql
+
+down-backend:
+	@echo "── Down: AimlyBackend ──"
+	$(COMPOSE) stop outreach_backend
+	$(COMPOSE) rm -f outreach_backend
+
+down-frontend:
+	@echo "── Down: AimlyFrontend ──"
+	$(COMPOSE) stop outreach_ui
+	$(COMPOSE) rm -f outreach_ui
+
+down-microservices:
+	@echo "── Down: AimlyMicroservices ──"
+	$(COMPOSE) stop email-microservice
+	$(COMPOSE) rm -f email-microservice
+
+
+# ── RESTART ──────────────────────────────────────────────────
+restart: down build up
+	@echo ""
+	@echo "  ✅  All services restarted!"
+
+restart-backend:       down-backend       build-backend       up-backend
+restart-frontend:      down-frontend      build-frontend      up-frontend
+restart-microservices: down-microservices build-microservices up-microservices
+restart-db:            down-db                                up-db
+
+
+# ── LOGS ─────────────────────────────────────────────────────
+logs:
+	@echo "  Tailing logs for all services (Ctrl+C to stop)..."
+	$(COMPOSE) logs -f
+
+logs-backend:
+	$(COMPOSE) logs -f outreach_backend
+
+logs-frontend:
+	$(COMPOSE) logs -f outreach_ui
+
+logs-microservices:
+	$(COMPOSE) logs -f email-microservice
+
+logs-db:
+	$(COMPOSE) logs -f mysql

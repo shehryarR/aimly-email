@@ -14,15 +14,15 @@ router = APIRouter(prefix="/optout", tags=["Opt-Out / Unsubscribe"])
 def _get_backend_api_key(backend_id: str) -> str:
     """Fetch the raw API key for a backend — used as the HMAC signing secret."""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT api_key FROM backends WHERE backend_id = ? AND active = TRUE",
-            (backend_id,),
-        )
-        result = cursor.fetchone()
-        if not result:
-            return None
-        return result[0]
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT api_key FROM backends WHERE backend_id = %s AND active = 1",
+                (backend_id,),
+            )
+            result = cursor.fetchone()
+            if not result:
+                return None
+            return result["api_key"]
 
 
 def _compute_sig(api_key: str, backend_id: str, sender_email: str, receiver_email: str) -> str:
@@ -34,15 +34,15 @@ def _compute_sig(api_key: str, backend_id: str, sender_email: str, receiver_emai
 def verify_backend_api_key(x_api_key: Annotated[str, Header()]):
     """Verify API key for the /check endpoint and return backend_id."""
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT backend_id FROM backends WHERE api_key = ? AND active = TRUE",
-            (x_api_key,),
-        )
-        result = cursor.fetchone()
-        if not result:
-            raise HTTPException(status_code=401, detail="Invalid API key")
-        return result[0]
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT backend_id FROM backends WHERE api_key = %s AND active = 1",
+                (x_api_key,),
+            )
+            result = cursor.fetchone()
+            if not result:
+                raise HTTPException(status_code=401, detail="Invalid API key")
+            return result["backend_id"]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -54,15 +54,6 @@ async def unsubscribe(
     receiver_email: str,
     sig: str = Query(..., description="HMAC-SHA256 signature"),
 ):
-    """
-    One-click unsubscribe link embedded in outgoing emails.
-    The sig param is HMAC-SHA256(api_key, backend_id + sender_email + receiver_email).
-
-    Your sending backend generates the URL like:
-      sig = hmac.new(api_key.encode(), f"{backend_id}{sender}{receiver}".encode(), sha256).hexdigest()
-      url = f"/optout/unsubscribe/{backend_id}/{sender}/{receiver}?sig={sig}"
-    """
-    # Fetch the backend's API key to use as signing secret
     api_key = _get_backend_api_key(backend_id)
     if not api_key:
         return HTMLResponse(
@@ -70,8 +61,6 @@ async def unsubscribe(
             status_code=404,
         )
 
-    # Verify signature — rejects any forged or tampered URLs
-    # Return 404 (same as invalid backend_id) to prevent enumeration via status code differences
     expected_sig = _compute_sig(api_key, backend_id, sender_email, receiver_email)
     if not hmac.compare_digest(expected_sig, sig):
         return HTMLResponse(
@@ -80,27 +69,27 @@ async def unsubscribe(
         )
 
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id FROM email_optouts
-            WHERE backend_id = ? AND sender_email = ? AND receiver_email = ?
-            """,
-            (backend_id, sender_email, receiver_email),
-        )
-
-        if cursor.fetchone():
-            message = "You have already unsubscribed. No further action needed."
-        else:
+        with conn.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO email_optouts (backend_id, sender_email, receiver_email, opted_out_at)
-                VALUES (?, ?, ?, ?)
+                SELECT id FROM email_optouts
+                WHERE backend_id = %s AND sender_email = %s AND receiver_email = %s
                 """,
-                (backend_id, sender_email, receiver_email, datetime.utcnow()),
+                (backend_id, sender_email, receiver_email),
             )
-            conn.commit()
-            message = "You have been successfully unsubscribed."
+
+            if cursor.fetchone():
+                message = "You have already unsubscribed. No further action needed."
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO email_optouts (backend_id, sender_email, receiver_email, opted_out_at)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (backend_id, sender_email, receiver_email, datetime.utcnow()),
+                )
+                conn.commit()
+                message = "You have been successfully unsubscribed."
 
     return HTMLResponse(content=_success_page(message, sender_email, receiver_email))
 
@@ -111,22 +100,16 @@ async def check_optout(
     receiver_email: str,
     backend_id: str = Depends(verify_backend_api_key),
 ):
-    """
-    Check whether a receiver has unsubscribed from a specific sender under this backend.
-    Secured with X-Api-Key header (backend API key).
-
-    Query params: ?sender_email=...&receiver_email=...
-    """
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT opted_out_at FROM email_optouts
-            WHERE backend_id = ? AND sender_email = ? AND receiver_email = ?
-            """,
-            (backend_id, sender_email, receiver_email),
-        )
-        result = cursor.fetchone()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT opted_out_at FROM email_optouts
+                WHERE backend_id = %s AND sender_email = %s AND receiver_email = %s
+                """,
+                (backend_id, sender_email, receiver_email),
+            )
+            result = cursor.fetchone()
 
     if result:
         return {
@@ -134,7 +117,7 @@ async def check_optout(
             "backend_id": backend_id,
             "sender_email": sender_email,
             "receiver_email": receiver_email,
-            "opted_out_at": result[0],
+            "opted_out_at": result["opted_out_at"],
             "should_send": False,
         }
 

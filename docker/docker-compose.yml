@@ -1,0 +1,79 @@
+services:
+
+  # ── MySQL ─────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: aimly_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ../data/mysql:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Microservice ──────────────────────────────────────────
+  email-microservice:
+    build:
+      context: ../AimlyMicroservices
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - ../.env
+    volumes:
+      - ../AimlyMicroservices/data:/app/data
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Backend ───────────────────────────────────────────────
+  outreach_backend:
+    build:
+      context: ../AimlyBackend
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    volumes:
+      - ../AimlyBackend/outreach_agent:/app/outreach_agent
+      - ../AimlyBackend/data:/app/data
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      email-microservice:
+        condition: service_healthy
+
+  # ── Frontend ──────────────────────────────────────────────
+  outreach_ui:
+    image: outreach_ui
+    container_name: outreach_ui
+    build:
+      context: ../AimlyFrontend
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../AimlyFrontend:/app
+      - ../.env:/app/.env
+      - /app/node_modules
+    entrypoint: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8501"]
+    restart: unless-stopped
+    depends_on:
+      - outreach_backend

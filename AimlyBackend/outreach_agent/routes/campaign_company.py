@@ -113,7 +113,7 @@ def get_campaign_companies(
 
         # ── Verify campaign exists ──────────────────────────────────────────────
         cursor.execute("""
-            SELECT id FROM campaigns WHERE id = ? AND user_id = ?
+            SELECT id FROM campaigns WHERE id = %s AND user_id = %s
         """, (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
@@ -141,8 +141,8 @@ def get_campaign_companies(
                 SELECT COUNT(*) as total 
                 FROM campaign_company cc
                 JOIN companies c ON cc.company_id = c.id
-                WHERE cc.campaign_id = ? AND c.user_id = ?
-                  AND (c.name LIKE ? OR c.email LIKE ?)
+                WHERE cc.campaign_id = %s AND c.user_id = %s
+                  AND (c.name LIKE %s OR c.email LIKE %s)
             """, (campaign_id, user_id, pattern, pattern))
             total = cursor.fetchone()["total"]
 
@@ -150,17 +150,17 @@ def get_campaign_companies(
                 SELECT c.* 
                 FROM campaign_company cc
                 JOIN companies c ON cc.company_id = c.id
-                WHERE cc.campaign_id = ? AND c.user_id = ?
-                  AND (c.name LIKE ? OR c.email LIKE ?)
+                WHERE cc.campaign_id = %s AND c.user_id = %s
+                  AND (c.name LIKE %s OR c.email LIKE %s)
                 {order_clause}
-                LIMIT ? OFFSET ?
+                LIMIT %s OFFSET %s
             """, (campaign_id, user_id, pattern, pattern, size, offset))
         else:
             cursor.execute("""
                 SELECT COUNT(*) as total 
                 FROM campaign_company cc
                 JOIN companies c ON cc.company_id = c.id
-                WHERE cc.campaign_id = ? AND c.user_id = ?
+                WHERE cc.campaign_id = %s AND c.user_id = %s
             """, (campaign_id, user_id))
             total = cursor.fetchone()["total"]
 
@@ -168,16 +168,16 @@ def get_campaign_companies(
                 SELECT c.* 
                 FROM campaign_company cc
                 JOIN companies c ON cc.company_id = c.id
-                WHERE cc.campaign_id = ? AND c.user_id = ?
+                WHERE cc.campaign_id = %s AND c.user_id = %s
                 {order_clause}
-                LIMIT ? OFFSET ?
+                LIMIT %s OFFSET %s
             """, (campaign_id, user_id, size, offset))
 
         companies = cursor.fetchall()
 
         # ── Fetch sender email from SMTP credentials for opt-out checks ─────────
         cursor.execute("""
-            SELECT email_address FROM user_keys WHERE user_id = ?
+            SELECT email_address FROM user_keys WHERE user_id = %s
         """, (user_id,))
         smtp_row = cursor.fetchone()
         sender_email = smtp_row["email_address"] if smtp_row and smtp_row["email_address"] else None
@@ -234,7 +234,7 @@ def add_companies_to_campaign(
 
         # Verify campaign exists and belongs to user
         cursor.execute("""
-            SELECT id FROM campaigns WHERE id = ? AND user_id = ?
+            SELECT id FROM campaigns WHERE id = %s AND user_id = %s
         """, (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
@@ -243,7 +243,7 @@ def add_companies_to_campaign(
             for company_id in company_ids:
                 # Verify company exists and belongs to user
                 cursor.execute("""
-                    SELECT id FROM companies WHERE id = ? AND user_id = ?
+                    SELECT id FROM companies WHERE id = %s AND user_id = %s
                 """, (company_id, user_id))
 
                 if not cursor.fetchone():
@@ -252,7 +252,7 @@ def add_companies_to_campaign(
                 # Check if relationship already exists
                 cursor.execute("""
                     SELECT id FROM campaign_company
-                    WHERE campaign_id = ? AND company_id = ?
+                    WHERE campaign_id = %s AND company_id = %s
                 """, (campaign_id, company_id))
 
                 if cursor.fetchone():
@@ -261,7 +261,7 @@ def add_companies_to_campaign(
                 # Create the relationship
                 cursor.execute("""
                     INSERT INTO campaign_company (campaign_id, company_id, inherit_campaign_attachments, inherit_campaign_branding)
-                    VALUES (?, ?, 1, 1)
+                    VALUES (%s, %s, 1, 1)
                 """, (campaign_id, company_id))
                 
                 cc_id = cursor.lastrowid
@@ -269,7 +269,7 @@ def add_companies_to_campaign(
                 # Create primary email for this relationship
                 cursor.execute("""
                     INSERT INTO emails (campaign_company_id, email_content, status)
-                    VALUES (?, '', 'primary')
+                    VALUES (%s, '', 'primary')
                 """, (cc_id,))
                 
                 created_count += 1
@@ -324,8 +324,8 @@ def get_campaign_company_settings(
             FROM campaign_company cc
             JOIN campaigns camp ON cc.campaign_id = camp.id
             JOIN companies comp ON cc.company_id = comp.id
-            WHERE cc.campaign_id = ? AND cc.company_id = ?
-              AND camp.user_id = ? AND comp.user_id = ?
+            WHERE cc.campaign_id = %s AND cc.company_id = %s
+              AND camp.user_id = %s AND comp.user_id = %s
         """, (campaign_id, company_id, user_id, user_id))
 
         row = cursor.fetchone()
@@ -385,8 +385,8 @@ def update_campaign_company(
             FROM campaign_company cc
             JOIN campaigns camp ON cc.campaign_id = camp.id
             JOIN companies comp ON cc.company_id = comp.id
-            WHERE cc.campaign_id = ? AND cc.company_id = ?
-              AND camp.user_id = ? AND comp.user_id = ?
+            WHERE cc.campaign_id = %s AND cc.company_id = %s
+              AND camp.user_id = %s AND comp.user_id = %s
         """, (campaign_id, company_id, user_id, user_id))
 
         row = cursor.fetchone()
@@ -396,9 +396,9 @@ def update_campaign_company(
         try:
             cursor.execute("""
                 UPDATE campaign_company
-                SET inherit_campaign_attachments = ?,
-                    inherit_campaign_branding = ?
-                WHERE id = ?
+                SET inherit_campaign_attachments = %s,
+                    inherit_campaign_branding = %s
+                WHERE id = %s
             """, (body.inherit_campaign_attachments, body.inherit_campaign_branding, row["id"]))
             conn.commit()
 
@@ -436,7 +436,7 @@ def remove_companies_from_campaign(
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id FROM campaigns WHERE id = ? AND user_id = ?
+            SELECT id FROM campaigns WHERE id = %s AND user_id = %s
         """, (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
@@ -445,7 +445,7 @@ def remove_companies_from_campaign(
             placeholders = ','.join(['?'] * len(company_ids))
             cursor.execute(f"""
                 DELETE FROM campaign_company
-                WHERE campaign_id = ? AND company_id IN ({placeholders})
+                WHERE campaign_id = %s AND company_id IN ({placeholders})
             """, [campaign_id] + company_ids)
 
             removed_count = cursor.rowcount
@@ -492,7 +492,7 @@ def get_company_campaigns(
 
         # ── Verify company exists ───────────────────────────────────────────────
         cursor.execute("""
-            SELECT id FROM companies WHERE id = ? AND user_id = ?
+            SELECT id FROM companies WHERE id = %s AND user_id = %s
         """, (company_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Company not found")
@@ -505,8 +505,8 @@ def get_company_campaigns(
                 SELECT c.* 
                 FROM campaign_company cc
                 JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE cc.company_id = ? AND c.user_id = ?
-                  AND c.name LIKE ?
+                WHERE cc.company_id = %s AND c.user_id = %s
+                  AND c.name LIKE %s
                 ORDER BY cc.created_at DESC
             """, (company_id, user_id, pattern))
         else:
@@ -514,7 +514,7 @@ def get_company_campaigns(
                 SELECT c.* 
                 FROM campaign_company cc
                 JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE cc.company_id = ? AND c.user_id = ?
+                WHERE cc.company_id = %s AND c.user_id = %s
                 ORDER BY cc.created_at DESC
             """, (company_id, user_id))
 

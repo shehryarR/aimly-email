@@ -99,7 +99,7 @@ def update_user(request: UserUpdateRequest, current_user: dict = Depends(get_cur
         cursor = conn.cursor()
         
         # Block Google users from modifying their profile
-        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
 
         if not user:
@@ -118,18 +118,18 @@ def update_user(request: UserUpdateRequest, current_user: dict = Depends(get_cur
         
         if request.username:
             # Check if username already exists for another user
-            cursor.execute("SELECT id FROM users WHERE username = ? AND id != ?", (request.username, user_id))
+            cursor.execute("SELECT id FROM users WHERE username = %s AND id != %s", (request.username, user_id))
             if cursor.fetchone():
                 raise HTTPException(status_code=409, detail="Username already exists")
-            update_fields.append("username = ?")
+            update_fields.append("username = %s")
             update_values.append(request.username)
             
         if request.email:
             # Check if email already exists for another user
-            cursor.execute("SELECT id FROM users WHERE user_email = ? AND id != ?", (request.email, user_id))
+            cursor.execute("SELECT id FROM users WHERE user_email = %s AND id != %s", (request.email, user_id))
             if cursor.fetchone():
                 raise HTTPException(status_code=409, detail="Email already exists")
-            update_fields.append("user_email = ?")
+            update_fields.append("user_email = %s")
             update_values.append(request.email)
         
         if request.new_password:
@@ -139,7 +139,7 @@ def update_user(request: UserUpdateRequest, current_user: dict = Depends(get_cur
             
             # Hash new password and add to update fields
             new_password_hash = hash_password(request.new_password)
-            update_fields.append("password_hash = ?")
+            update_fields.append("password_hash = %s")
             update_values.append(new_password_hash)
         
         if not update_fields:
@@ -147,7 +147,7 @@ def update_user(request: UserUpdateRequest, current_user: dict = Depends(get_cur
         
         # Update user
         update_values.append(user_id)
-        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?"
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
         
         try:
             cursor.execute(query, update_values)
@@ -186,7 +186,7 @@ def delete_user(request: DeleteAccountRequest, current_user: dict = Depends(get_
         cursor = conn.cursor()
         
         # Fetch user
-        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT password_hash FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -199,7 +199,7 @@ def delete_user(request: DeleteAccountRequest, current_user: dict = Depends(get_
         
         try:
             # Delete user (cascade will handle related records)
-            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
             
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="User not found")

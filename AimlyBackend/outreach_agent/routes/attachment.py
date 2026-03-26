@@ -64,7 +64,7 @@ async def upload_attachment(
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO attachments (name, user_id) VALUES (?, ?)",
+                "INSERT INTO attachments (name, user_id) VALUES (%s, %s)",
                 (file.filename, user_id)
             )
             attachment_id = cursor.lastrowid
@@ -110,7 +110,7 @@ async def delete_attachment(
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT name, user_id FROM attachments WHERE id = ?",
+                "SELECT name, user_id FROM attachments WHERE id = %s",
                 (attachment_id,)
             )
             result = cursor.fetchone()
@@ -128,7 +128,7 @@ async def delete_attachment(
             if file_path.exists():
                 os.remove(file_path)
 
-            cursor.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
+            cursor.execute("DELETE FROM attachments WHERE id = %s", (attachment_id,))
             conn.commit()
 
         return {
@@ -155,7 +155,7 @@ async def download_attachment(
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT name, user_id FROM attachments WHERE id = ?",
+                "SELECT name, user_id FROM attachments WHERE id = %s",
                 (attachment_id,)
             )
             result = cursor.fetchone()
@@ -240,11 +240,11 @@ async def list_attachments(
             # We need to pull all IDs first so we can compute file sizes and
             # campaign counts for sorting, then paginate.
 
-            base_where = "a.user_id = ?"
+            base_where = "a.user_id = %s"
             base_params: list = [user_id]
 
             if search and search.strip():
-                base_where += " AND a.name LIKE ?"
+                base_where += " AND a.name LIKE %s"
                 base_params.append(f"%{search.strip()}%")
 
             # ── Step 2: fetch full dataset with campaign link counts ────────────
@@ -285,7 +285,7 @@ async def list_attachments(
                     SELECT DISTINCT gsa.attachment_id
                     FROM global_settings_attachments gsa
                     JOIN global_settings gs ON gsa.global_settings_id = gs.id
-                    WHERE gs.user_id = ?
+                    WHERE gs.user_id = %s
                 """, (user_id,))
                 globally_linked_ids = {row["attachment_id"] for row in cursor.fetchall()}
             else:
@@ -299,7 +299,7 @@ async def list_attachments(
                         SELECT DISTINCT cpa.attachment_id
                         FROM campaign_preference_attachments cpa
                         JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-                        WHERE cp.campaign_id = ?
+                        WHERE cp.campaign_id = %s
                     """, (camp_id,))
                     campaign_linked_sets.append({row["attachment_id"] for row in cursor.fetchall()})
 
@@ -387,7 +387,7 @@ async def get_attachment_info(
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, name, user_id, created_at FROM attachments WHERE id = ?",
+                "SELECT id, name, user_id, created_at FROM attachments WHERE id = %s",
                 (attachment_id,)
             )
             result = cursor.fetchone()
@@ -434,7 +434,7 @@ async def update_attachment(
             cursor = conn.cursor()
 
             cursor.execute(
-                "SELECT name, user_id FROM attachments WHERE id = ?",
+                "SELECT name, user_id FROM attachments WHERE id = %s",
                 (attachment_id,)
             )
             result = cursor.fetchone()
@@ -464,7 +464,7 @@ async def update_attachment(
             full_new_name = f"{new_name}{original_extension}"
 
             cursor.execute(
-                "SELECT id FROM attachments WHERE user_id = ? AND name = ? AND id != ?",
+                "SELECT id FROM attachments WHERE user_id = %s AND name = %s AND id != %s",
                 (user_id, full_new_name, attachment_id)
             )
             if cursor.fetchone():
@@ -474,7 +474,7 @@ async def update_attachment(
                 )
 
             cursor.execute(
-                "UPDATE attachments SET name = ? WHERE id = ?",
+                "UPDATE attachments SET name = %s WHERE id = %s",
                 (full_new_name, attachment_id)
             )
             conn.commit()

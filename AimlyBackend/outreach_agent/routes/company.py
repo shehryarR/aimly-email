@@ -41,7 +41,7 @@ from pydantic import BaseModel, validator
 from typing import List, Optional, Set
 import re
 import json
-import sqlite3
+import pymysql
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 from routes.user_keys import _read_cookie_key, _LLM_COOKIE, _TAVILY_COOKIE, _encrypt_key, _decrypt_key
@@ -234,12 +234,12 @@ class AdditionStatusResponse(BaseModel):
 
 
 def get_existing_company_emails(cursor, user_id: int) -> Set[str]:
-    cursor.execute("SELECT email FROM companies WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT email FROM companies WHERE user_id = %s", (user_id,))
     return {row["email"].lower() for row in cursor.fetchall() if row["email"]}
 
 
 def get_existing_company_names(cursor, user_id: int) -> Set[str]:
-    cursor.execute("SELECT name FROM companies WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT name FROM companies WHERE user_id = %s", (user_id,))
     return {row["name"].lower() for row in cursor.fetchall() if row["name"]}
 
 
@@ -273,7 +273,7 @@ async def improve_prompt(
 
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
         user_keys = cursor.fetchone()
 
     if not llm_api_key:
@@ -322,7 +322,7 @@ def get_addition_status(
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT company_addition_active, company_addition_metadata FROM users WHERE id = ?",
+            "SELECT company_addition_active, company_addition_metadata FROM users WHERE id = %s",
             (user_id,)
         )
         row = cursor.fetchone()
@@ -369,7 +369,7 @@ def cancel_ai_search(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT company_addition_active FROM users WHERE id = ?",
+            "SELECT company_addition_active FROM users WHERE id = %s",
             (user_id,)
         )
         row = cursor.fetchone()
@@ -384,7 +384,7 @@ def cancel_ai_search(
             UPDATE users
             SET company_addition_active = 0,
                 company_addition_metadata = NULL
-            WHERE id = ?
+            WHERE id = %s
         """, (user_id,))
         conn.commit()
 
@@ -438,7 +438,7 @@ async def create_companies(
         # ── Validate campaign_id belongs to user ───────────────────────────────
         if campaign_id is not None:
             cursor.execute(
-                "SELECT id FROM campaigns WHERE id = ? AND user_id = ?",
+                "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
                 (campaign_id, user_id)
             )
             if not cursor.fetchone():
@@ -446,7 +446,7 @@ async def create_companies(
 
         # ── Reject if a prior addition is still processing ───────────────────
         cursor.execute(
-            "SELECT company_addition_active FROM users WHERE id = ?",
+            "SELECT company_addition_active FROM users WHERE id = %s",
             (user_id,)
         )
         user_row = cursor.fetchone()
@@ -462,7 +462,7 @@ async def create_companies(
         if companies_parsed:
             # Mark as in-progress with -1
             cursor.execute(
-                "UPDATE users SET company_addition_active = -1 WHERE id = ?",
+                "UPDATE users SET company_addition_active = -1 WHERE id = %s",
                 (user_id,)
             )
             conn.commit()
@@ -472,11 +472,11 @@ async def create_companies(
                     try:
                         cursor.execute("""
                             INSERT INTO companies (user_id, name, email, phone_number, address, company_info)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                         """, (user_id, company.name, company.email, company.phone_number, company.address, company.company_info))
                         created_count += 1
                         created_ids.append(cursor.lastrowid)
-                    except sqlite3.IntegrityError as e:
+                    except pymysql.err.IntegrityError as e:
                         if "UNIQUE constraint failed" in str(e):
                             skipped_count += 1
                         else:
@@ -488,9 +488,9 @@ async def create_companies(
                         try:
                             cursor.execute("""
                                 INSERT INTO campaign_company (campaign_id, company_id)
-                                VALUES (?, ?)
+                                VALUES (%s, %s)
                             """, (campaign_id, cid))
-                        except sqlite3.IntegrityError:
+                        except pymysql.err.IntegrityError:
                             pass
 
                 conn.commit()
@@ -503,7 +503,7 @@ async def create_companies(
                 raise HTTPException(status_code=500, detail=f"Failed to create companies: {str(e)}")
             finally:
                 cursor.execute(
-                    "UPDATE users SET company_addition_active = 0 WHERE id = ?",
+                    "UPDATE users SET company_addition_active = 0 WHERE id = %s",
                     (user_id,)
                 )
                 conn.commit()
@@ -525,7 +525,7 @@ async def create_companies(
 
             # Mark as in-progress with -1
             cursor.execute(
-                "UPDATE users SET company_addition_active = -1 WHERE id = ?",
+                "UPDATE users SET company_addition_active = -1 WHERE id = %s",
                 (user_id,)
             )
             conn.commit()
@@ -544,7 +544,7 @@ async def create_companies(
                     try:
                         cursor.execute("""
                             INSERT INTO companies (user_id, name, email, phone_number, address, company_info)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                         """, (
                             user_id,
                             name,
@@ -555,7 +555,7 @@ async def create_companies(
                         ))
                         created_count += 1
                         created_ids.append(cursor.lastrowid)
-                    except sqlite3.IntegrityError as e:
+                    except pymysql.err.IntegrityError as e:
                         if "UNIQUE constraint failed" in str(e):
                             skipped_count += 1
                         else:
@@ -567,9 +567,9 @@ async def create_companies(
                         try:
                             cursor.execute("""
                                 INSERT INTO campaign_company (campaign_id, company_id)
-                                VALUES (?, ?)
+                                VALUES (%s, %s)
                             """, (campaign_id, cid))
-                        except sqlite3.IntegrityError:
+                        except pymysql.err.IntegrityError:
                             pass
 
                 conn.commit()
@@ -582,7 +582,7 @@ async def create_companies(
                 raise HTTPException(status_code=500, detail=f"Failed to create companies: {str(e)}")
             finally:
                 cursor.execute(
-                    "UPDATE users SET company_addition_active = 0 WHERE id = ?",
+                    "UPDATE users SET company_addition_active = 0 WHERE id = %s",
                     (user_id,)
                 )
                 conn.commit()
@@ -595,7 +595,7 @@ async def create_companies(
             llm_api_key    = _read_cookie_key(http_request, _LLM_COOKIE)
             tavily_api_key = _read_cookie_key(http_request, _TAVILY_COOKIE)
 
-            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
             user_keys = cursor.fetchone()
 
             if not tavily_api_key:
@@ -617,9 +617,9 @@ async def create_companies(
             # Queue the job — worker picks it up
             cursor.execute("""
                 UPDATE users
-                SET company_addition_active = ?,
-                    company_addition_metadata = ?
-                WHERE id = ?
+                SET company_addition_active = %s,
+                    company_addition_metadata = %s
+                WHERE id = %s
             """, (ai_search_parsed.limit, metadata, user_id))
             conn.commit()
 
@@ -702,7 +702,7 @@ def update_companies(
         try:
             for company in companies:
                 cursor.execute("""
-                    SELECT id FROM companies WHERE id = ? AND user_id = ?
+                    SELECT id FROM companies WHERE id = %s AND user_id = %s
                 """, (company.id, user_id))
 
                 if not cursor.fetchone():
@@ -737,24 +737,24 @@ def update_companies(
 
                 # Required fields - add if sent
                 if name is not None:
-                    update_fields.append("name = ?")
+                    update_fields.append("name = %s")
                     update_values.append(name)
 
                 if email is not None:
-                    update_fields.append("email = ?")
+                    update_fields.append("email = %s")
                     update_values.append(email)
 
                 # Optional fields - use SENT tracking + normalized values
                 if phone_number_sent:
-                    update_fields.append("phone_number = ?")
+                    update_fields.append("phone_number = %s")
                     update_values.append(phone_number)  # None (→ NULL) or "value"
 
                 if address_sent:
-                    update_fields.append("address = ?")
+                    update_fields.append("address = %s")
                     update_values.append(address)  # None (→ NULL) or "value"
 
                 if company_info_sent:
-                    update_fields.append("company_info = ?")
+                    update_fields.append("company_info = %s")
                     update_values.append(company_info)  # None (→ NULL) or "value"
 
                 # Execute update only if there are fields to update
@@ -764,13 +764,13 @@ def update_companies(
                     query = f"""
                         UPDATE companies
                         SET {', '.join(update_fields)}
-                        WHERE id = ? AND user_id = ?
+                        WHERE id = %s AND user_id = %s
                     """
                     try:
                         cursor.execute(query, update_values)
                         if cursor.rowcount > 0:
                             updated_count += 1
-                    except sqlite3.IntegrityError as e:
+                    except pymysql.err.IntegrityError as e:
                         if "UNIQUE constraint failed" in str(e):
                             raise HTTPException(
                                 status_code=409,
@@ -847,7 +847,7 @@ def get_companies(
             placeholders = ','.join(['?'] * len(company_ids))
             cursor.execute(f"""
                 SELECT * FROM companies
-                WHERE user_id = ? AND id IN ({placeholders})
+                WHERE user_id = %s AND id IN ({placeholders})
                 ORDER BY created_at DESC
             """, [user_id] + company_ids)
 
@@ -893,11 +893,11 @@ def get_companies(
         use_cat_all_mode = category_filter_mode and category_filter_mode.strip().lower() == "all"
 
         # ── Build WHERE clause (user + optional text search) ───────────────────
-        where_parts  = ["c.user_id = ?"]
+        where_parts  = ["c.user_id = %s"]
         base_params: list = [user_id]
 
         if search and search.strip():
-            where_parts.append("(c.name LIKE ? OR c.email LIKE ?)")
+            where_parts.append("(c.name LIKE %s OR c.email LIKE %s)")
             pattern = f"%{search.strip()}%"
             base_params += [pattern, pattern]
 
@@ -905,7 +905,7 @@ def get_companies(
 
         # ── Campaign filter JOIN + HAVING (ANY = OR logic, ALL = AND logic) ───
         if campaign_filter_ids:
-            placeholders       = ",".join(["?"] * len(campaign_filter_ids))
+            placeholders       = ",".join(["%s"] * len(campaign_filter_ids))
             filter_join        = f"""
                 LEFT JOIN campaign_company cc_f
                     ON cc_f.company_id = c.id
@@ -923,7 +923,7 @@ def get_companies(
 
         # ── Category filter JOIN + HAVING ──────────────────────────────────────
         if category_filter_ids:
-            cat_placeholders    = ",".join(["?"] * len(category_filter_ids))
+            cat_placeholders    = ",".join(["%s"] * len(category_filter_ids))
             cat_filter_join     = f"""
                 LEFT JOIN category_company cat_f
                     ON cat_f.company_id = c.id
@@ -987,13 +987,13 @@ def get_companies(
             GROUP BY c.id
             {merged_having}
             {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         cursor.execute(data_query, data_params)
         rows = cursor.fetchall()
 
         # ── Fetch sender email from SMTP credentials for opt-out checks ─────
-        cursor.execute("SELECT email_address FROM user_keys WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT email_address FROM user_keys WHERE user_id = %s", (user_id,))
         smtp_row = cursor.fetchone()
         sender_email = smtp_row["email_address"] if smtp_row and smtp_row["email_address"] else None
 
@@ -1001,7 +1001,7 @@ def get_companies(
         company_ids_on_page = [r["id"] for r in rows]
         campaign_ids_map: dict[int, list[int]] = {r["id"]: [] for r in rows}
         if company_ids_on_page:
-            placeholders_ids = ",".join(["?"] * len(company_ids_on_page))
+            placeholders_ids = ",".join(["%s"] * len(company_ids_on_page))
             cursor.execute(f"""
                 SELECT company_id, campaign_id
                 FROM campaign_company
@@ -1050,7 +1050,7 @@ def delete_companies(
             placeholders = ','.join(['?'] * len(company_ids))
             cursor.execute(f"""
                 DELETE FROM companies
-                WHERE user_id = ? AND id IN ({placeholders})
+                WHERE user_id = %s AND id IN ({placeholders})
             """, [user_id] + company_ids)
 
             deleted_count = cursor.rowcount

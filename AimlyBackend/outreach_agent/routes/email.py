@@ -76,7 +76,7 @@ def get_campaign_emails(
 
         # Verify campaign belongs to user
         cursor.execute(
-            "SELECT id FROM campaigns WHERE id = ? AND user_id = ?",
+            "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
             (campaign_id, user_id)
         )
         if not cursor.fetchone():
@@ -84,8 +84,8 @@ def get_campaign_emails(
 
         # ── Build WHERE conditions ─────────────────────────────────────────────
         conditions = [
-            "cc.campaign_id = ?",
-            "camp.user_id = ?",
+            "cc.campaign_id = %s",
+            "camp.user_id = %s",
             "e.status != 'primary'",
         ]
         params: list = [campaign_id, user_id]
@@ -96,7 +96,7 @@ def get_campaign_emails(
                 int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()
             ]
             if co_id_list:
-                placeholders = ",".join(["?"] * len(co_id_list))
+                placeholders = ",".join(["%s"] * len(co_id_list))
                 conditions.append(f"co.id IN ({placeholders})")
                 params.extend(co_id_list)
 
@@ -106,13 +106,13 @@ def get_campaign_emails(
         else:
             valid_statuses = {"sent", "draft", "scheduled", "failed"}
             if status and status.strip() in valid_statuses:
-                conditions.append("e.status = ?")
+                conditions.append("e.status = %s")
                 params.append(status.strip())
 
         # Search filter — subject OR recipient email
         if search and search.strip():
             pattern = f"%{search.strip()}%"
-            conditions.append("(e.email_subject LIKE ? OR e.recipient_email LIKE ?)")
+            conditions.append("(e.email_subject LIKE %s OR e.recipient_email LIKE %s)")
             params.extend([pattern, pattern])
 
         where_clause = " AND ".join(conditions)
@@ -153,7 +153,7 @@ def get_campaign_emails(
             {join_clause}
             WHERE {where_clause}
             {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, params + [size, offset])
 
         rows = cursor.fetchall()
@@ -202,25 +202,25 @@ def get_company_emails(
 
         # Verify company belongs to user
         cursor.execute(
-            "SELECT id FROM companies WHERE id = ? AND user_id = ?",
+            "SELECT id FROM companies WHERE id = %s AND user_id = %s",
             (company_id, user_id)
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Company not found")
 
-        conditions = ["cc.company_id = ?", "camp.user_id = ?", "e.status != 'primary'"]
+        conditions = ["cc.company_id = %s", "camp.user_id = %s", "e.status != 'primary'"]
         params: list = [company_id, user_id]
 
         valid_statuses = {"sent", "draft", "scheduled", "failed"}
         if status and status.strip() in valid_statuses:
-            conditions.append("e.status = ?")
+            conditions.append("e.status = %s")
             params.append(status.strip())
 
         if campaign_ids and campaign_ids.strip():
             try:
                 cid_list = [int(x.strip()) for x in campaign_ids.split(",") if x.strip()]
                 if cid_list:
-                    placeholders = ",".join(["?"] * len(cid_list))
+                    placeholders = ",".join(["%s"] * len(cid_list))
                     conditions.append(f"camp.id IN ({placeholders})")
                     params.extend(cid_list)
             except ValueError:
@@ -260,7 +260,7 @@ def get_company_emails(
             {join_clause}
             WHERE {where_clause}
             {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, params + [size, offset])
 
         rows = cursor.fetchall()
@@ -304,17 +304,17 @@ def get_primary_email(
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id FROM campaigns WHERE id = ? AND user_id = ?", (campaign_id, user_id))
+        cursor.execute("SELECT id FROM campaigns WHERE id = %s AND user_id = %s", (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        cursor.execute("SELECT id FROM companies WHERE id = ? AND user_id = ?", (company_id, user_id))
+        cursor.execute("SELECT id FROM companies WHERE id = %s AND user_id = %s", (company_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Company not found")
 
         cursor.execute("""
             SELECT id, inherit_campaign_branding, inherit_campaign_attachments FROM campaign_company
-            WHERE campaign_id = ? AND company_id = ?
+            WHERE campaign_id = %s AND company_id = %s
         """, (campaign_id, company_id))
         cc_relationship = cursor.fetchone()
         if not cc_relationship:
@@ -328,7 +328,7 @@ def get_primary_email(
             SELECT id, email_subject, email_content, recipient_email, status,
                    timezone, sent_at, signature, logo, logo_mime_type, html_email
             FROM emails
-            WHERE campaign_company_id = ? AND status = 'primary'
+            WHERE campaign_company_id = %s AND status = 'primary'
         """, (cc_id,))
         primary_email = cursor.fetchone()
         if not primary_email:
@@ -336,12 +336,12 @@ def get_primary_email(
 
         cursor.execute("""
             SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-            FROM campaign_preferences WHERE campaign_id = ?
+            FROM campaign_preferences WHERE campaign_id = %s
         """, (campaign_id,))
         campaign_prefs = cursor.fetchone()
 
         cursor.execute("""
-            SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = ?
+            SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
         """, (user_id,))
         global_prefs = cursor.fetchone()
 
@@ -401,7 +401,7 @@ def update_email(
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = ? AND c.user_id = ?
+            WHERE e.id = %s AND c.user_id = %s
         """, (email_id, user_id))
 
         email = cursor.fetchone()
@@ -424,25 +424,25 @@ def update_email(
         update_values = []
 
         if request.email_subject is not None:
-            update_fields.append("email_subject = ?")
+            update_fields.append("email_subject = %s")
             update_values.append(request.email_subject)
 
         if request.email_content is not None:
-            update_fields.append("email_content = ?")
+            update_fields.append("email_content = %s")
             update_values.append(request.email_content)
 
         if request.recipient_email is not None:
-            update_fields.append("recipient_email = ?")
+            update_fields.append("recipient_email = %s")
             update_values.append(request.recipient_email)
 
         if request.status is not None:
             if request.status not in ["primary", "draft", "scheduled"]:
                 raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
-            update_fields.append("status = ?")
+            update_fields.append("status = %s")
             update_values.append(request.status)
 
         if request.timezone is not None:
-            update_fields.append("timezone = ?")
+            update_fields.append("timezone = %s")
             update_values.append(request.timezone)
 
         if request.time is not None:
@@ -452,19 +452,19 @@ def update_email(
                     status_code=400,
                     detail="time can only be set on scheduled emails."
                 )
-            update_fields.append("sent_at = ?")
+            update_fields.append("sent_at = %s")
             update_values.append(request.time)
 
         if request.signature is not None:
             # Empty string clears the signature
-            update_fields.append("signature = ?")
+            update_fields.append("signature = %s")
             update_values.append(request.signature if request.signature != '' else None)
 
         if request.logo_clear:
             # Explicitly clear logo fields
-            update_fields.append("logo = ?")
+            update_fields.append("logo = %s")
             update_values.append(None)
-            update_fields.append("logo_mime_type = ?")
+            update_fields.append("logo_mime_type = %s")
             update_values.append(None)
         elif request.logo_data is not None:
             # Decode base64 data URL back to BLOB
@@ -473,15 +473,15 @@ def update_email(
                 header, encoded = request.logo_data.split(",", 1)
                 mime_type = header.split(";")[0].replace("data:", "")
                 logo_blob = _b64.b64decode(encoded)
-                update_fields.append("logo = ?")
+                update_fields.append("logo = %s")
                 update_values.append(logo_blob)
-                update_fields.append("logo_mime_type = ?")
+                update_fields.append("logo_mime_type = %s")
                 update_values.append(mime_type)
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid logo_data format. Expected base64 data URL.")
 
         if request.html_email is not None:
-            update_fields.append("html_email = ?")
+            update_fields.append("html_email = %s")
             update_values.append(1 if request.html_email else 0)
 
         if not update_fields:
@@ -489,7 +489,7 @@ def update_email(
 
         try:
             update_values.append(email_id)
-            query = f"UPDATE emails SET {', '.join(update_fields)} WHERE id = ?"
+            query = f"UPDATE emails SET {', '.join(update_fields)} WHERE id = %s"
             cursor.execute(query, update_values)
             conn.commit()
 
@@ -521,14 +521,14 @@ def delete_emails(
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        placeholders = ",".join(["?"] * len(request.ids))
+        placeholders = ",".join(["%s"] * len(request.ids))
         cursor.execute(f"""
             SELECT e.id
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns camp      ON cc.campaign_id = camp.id
             WHERE e.id IN ({placeholders})
-              AND camp.user_id = ?
+              AND camp.user_id = %s
               AND e.status != 'primary'
         """, (*request.ids, user_id))
 
@@ -538,7 +538,7 @@ def delete_emails(
             return MessageResponse(message="0 emails deleted")
 
         try:
-            del_ph = ",".join(["?"] * len(ids_to_delete))
+            del_ph = ",".join(["%s"] * len(ids_to_delete))
             cursor.execute(f"DELETE FROM emails WHERE id IN ({del_ph})", ids_to_delete)
             deleted_count = cursor.rowcount
             conn.commit()
@@ -564,12 +564,12 @@ def get_email_ids(
 ):
     user_id = current_user["user_id"]
 
-    conditions = ["camp.user_id = ?", "e.status != 'primary'"]
+    conditions = ["camp.user_id = %s", "e.status != 'primary'"]
     params: list = [user_id]
 
     valid_statuses = {"sent", "draft", "scheduled", "failed"}
     if status and status.strip() in valid_statuses:
-        conditions.append("e.status = ?")
+        conditions.append("e.status = %s")
         params.append(status.strip())
 
     if company_ids and company_ids.strip():
@@ -586,7 +586,7 @@ def get_email_ids(
 
     if search and search.strip():
         pattern = f"%{search.strip()}%"
-        conditions.append("(e.email_subject LIKE ? OR e.recipient_email LIKE ?)")
+        conditions.append("(e.email_subject LIKE %s OR e.recipient_email LIKE %s)")
         params.extend([pattern, pattern])
 
     where_clause = " AND ".join(conditions)
@@ -660,7 +660,7 @@ def get_all_emails(
 
         # ── Build WHERE conditions ─────────────────────────────────────────────
         conditions = [
-            "camp.user_id = ?",
+            "camp.user_id = %s",
             "e.status != 'primary'",
         ]
         params: list = [user_id]
@@ -671,7 +671,7 @@ def get_all_emails(
                 int(x.strip()) for x in email_ids.split(",") if x.strip().isdigit()
             ]
             if em_id_list:
-                placeholders = ",".join(["?"] * len(em_id_list))
+                placeholders = ",".join(["%s"] * len(em_id_list))
                 conditions.append(f"e.id IN ({placeholders})")
                 params.extend(em_id_list)
 
@@ -681,7 +681,7 @@ def get_all_emails(
                 int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()
             ]
             if co_id_list:
-                placeholders = ",".join(["?"] * len(co_id_list))
+                placeholders = ",".join(["%s"] * len(co_id_list))
                 conditions.append(f"co.id IN ({placeholders})")
                 params.extend(co_id_list)
 
@@ -691,20 +691,20 @@ def get_all_emails(
                 int(x.strip()) for x in campaign_ids.split(",") if x.strip().isdigit()
             ]
             if ca_id_list:
-                placeholders = ",".join(["?"] * len(ca_id_list))
+                placeholders = ",".join(["%s"] * len(ca_id_list))
                 conditions.append(f"camp.id IN ({placeholders})")
                 params.extend(ca_id_list)
 
         # Status filter
         valid_statuses = {"sent", "draft", "scheduled", "failed"}
         if status and status.strip() in valid_statuses:
-            conditions.append("e.status = ?")
+            conditions.append("e.status = %s")
             params.append(status.strip())
 
         # Search filter — subject OR recipient email
         if search and search.strip():
             pattern = f"%{search.strip()}%"
-            conditions.append("(e.email_subject LIKE ? OR e.recipient_email LIKE ?)")
+            conditions.append("(e.email_subject LIKE %s OR e.recipient_email LIKE %s)")
             params.extend([pattern, pattern])
 
         where_clause = " AND ".join(conditions)
@@ -748,7 +748,7 @@ def get_all_emails(
             {join_clause}
             WHERE {where_clause}
             {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, params + [size, offset])
 
         rows = cursor.fetchall()

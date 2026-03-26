@@ -14,7 +14,6 @@ COPY email_read_router.py .
 COPY email_optout_router.py .
 COPY content/ .
 
-# Data directory — same as backend pattern
 RUN mkdir -p /app/data
 
 ENV MICROSERVICE_DB_PATH=./data/email_microservice.db

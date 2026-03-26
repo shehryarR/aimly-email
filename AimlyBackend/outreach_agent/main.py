@@ -5,9 +5,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pathlib import Path
+from dotenv import load_dotenv
+
+# ── Load env FIRST — before any other imports read os.getenv ─────────────────
+
+def load_env():
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=False)
+    else:
+        print(f"Warning: Could not find .env at {env_path}")
+
+load_env()
 
 # Database and core
-from core.database.connection import create_tables, load_env_json, reset_company_addition_flags
+from core.database.connection import create_tables, reset_company_addition_flags
 
 # Schedulers and workers
 from scheduler import email_scheduler
@@ -39,7 +52,6 @@ from routes.attachment_management import attachment_manager_router
 
 # ── Environment ───────────────────────────────────────────────────────────────
 
-load_env_json()
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8000")
 ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/attachments")
 

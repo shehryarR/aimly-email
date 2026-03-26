@@ -142,7 +142,7 @@ class CompanyAdderWorker:
 
             with get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+                cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
                 keys = cursor.fetchone()
 
             if not keys or not keys["llm_model"]:
@@ -164,7 +164,7 @@ class CompanyAdderWorker:
                 with get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT id FROM companies WHERE user_id = ? AND email = ?",
+                        "SELECT id FROM companies WHERE user_id = %s AND email = %s",
                         (user_id, email.lower().strip())
                     )
                     return cursor.fetchone() is not None
@@ -181,7 +181,7 @@ class CompanyAdderWorker:
                         cursor.execute("""
                             INSERT INTO companies (user_id, name, email, phone_number, address, company_info)
                             SELECT ?, ?, ?, ?, ?, ?
-                            WHERE (SELECT company_addition_active FROM users WHERE id = ?) > 0
+                            WHERE (SELECT company_addition_active FROM users WHERE id = %s) > 0
                         """, (
                             user_id,
                             company.get("name"),
@@ -199,20 +199,20 @@ class CompanyAdderWorker:
                         company_id_inserted = cursor.lastrowid
 
                         # Link to campaign if provided.
-                        # INSERT OR IGNORE handles the already-linked edge case.
+                        # INSERT IGNORE handles the already-linked edge case.
                         # Runs in the same transaction as company insert + decrement
                         # — all three commit together or not at all.
                         if campaign_id is not None:
                             cursor.execute("""
-                                INSERT OR IGNORE INTO campaign_company (campaign_id, company_id)
-                                VALUES (?, ?)
+                                INSERT IGNORE INTO campaign_company (campaign_id, company_id)
+                                VALUES (%s, %s)
                             """, (campaign_id, company_id_inserted))
 
                         # Decrement counter
                         cursor.execute("""
                             UPDATE users
                             SET company_addition_active = MAX(0, company_addition_active - 1)
-                            WHERE id = ?
+                            WHERE id = %s
                         """, (user_id,))
 
                         conn.commit()
@@ -227,7 +227,7 @@ class CompanyAdderWorker:
                 with get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT company_addition_active FROM users WHERE id = ?",
+                        "SELECT company_addition_active FROM users WHERE id = %s",
                         (user_id,)
                     )
                     row = cursor.fetchone()
@@ -251,7 +251,7 @@ class CompanyAdderWorker:
             with get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT company_addition_active FROM users WHERE id = ?",
+                    "SELECT company_addition_active FROM users WHERE id = %s",
                     (user_id,)
                 )
                 row = cursor.fetchone()
@@ -278,12 +278,13 @@ class CompanyAdderWorker:
         """Reset company addition state for a user — called on completion or failure."""
         try:
             with get_connection() as conn:
-                conn.execute("""
-                    UPDATE users
-                    SET company_addition_active = 0,
-                        company_addition_metadata = NULL
-                    WHERE id = ?
-                """, (user_id,))
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE users
+                        SET company_addition_active = 0,
+                            company_addition_metadata = NULL
+                        WHERE id = %s
+                    """, (user_id,))
                 conn.commit()
             print(f"🔄 User {user_id}: company_addition_active reset to 0")
         except Exception as exc:

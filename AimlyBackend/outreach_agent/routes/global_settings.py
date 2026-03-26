@@ -192,7 +192,7 @@ async def update_global_settings(
         cursor = conn.cursor()
         
         # Check if global_settings entry exists
-        cursor.execute("SELECT id FROM global_settings WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT id FROM global_settings WHERE user_id = %s", (user_id,))
         existing = cursor.fetchone()
         
         try:
@@ -219,21 +219,21 @@ async def update_global_settings(
                     ("signature", signature),
                 ]
                 for col, val in text_field_map:
-                    update_fields.append(f"{col} = ?")
+                    update_fields.append(f"{col} = %s")
                     update_values.append(val)  # None → NULL, "value" → "value"
                 
                 # LOGO FIELD - Added only if sent
                 if logo is not None:
-                    update_fields.append("logo = ?")
+                    update_fields.append("logo = %s")
                     update_values.append(logo_blob)  # None (→ NULL) or bytes
-                    update_fields.append("logo_mime_type = ?")
+                    update_fields.append("logo_mime_type = %s")
                     update_values.append(logo_mime_type)  # None (→ NULL) or mime_type
                 
                 if update_fields:
                     update_fields.append("updated_at = CURRENT_TIMESTAMP")
                     update_values.append(user_id)
                     
-                    query = f"UPDATE global_settings SET {', '.join(update_fields)} WHERE user_id = ?"
+                    query = f"UPDATE global_settings SET {', '.join(update_fields)} WHERE user_id = %s"
                     cursor.execute(query, update_values)
                 
             else:
@@ -245,7 +245,7 @@ async def update_global_settings(
                     INSERT INTO global_settings (
                         user_id, bcc, business_name, business_info, goal, value_prop,
                         tone, cta, extras, email_instruction, signature, logo, logo_mime_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     user_id, bcc, business_name, business_info, goal, value_prop,
                     tone, cta, extras, email_instruction, signature, logo_blob, logo_mime_type
@@ -281,7 +281,7 @@ def get_global_settings(current_user: dict = Depends(get_current_user)):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT * FROM global_settings WHERE user_id = ?
+            SELECT * FROM global_settings WHERE user_id = %s
         """, (user_id,))
         
         settings = cursor.fetchone()

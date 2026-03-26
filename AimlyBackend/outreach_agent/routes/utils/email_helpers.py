@@ -124,7 +124,7 @@ def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
         cursor.execute("""
             SELECT a.id, a.name FROM attachments a
             JOIN email_attachments ea ON a.id = ea.attachment_id
-            WHERE ea.email_id = ?
+            WHERE ea.email_id = %s
         """, (email_id,))
         for att in cursor.fetchall():
             attachment_set[att["id"]] = create_attachment_info(att["id"], att["name"])
@@ -135,7 +135,7 @@ def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
             SELECT a.id, a.name FROM attachments a
             JOIN campaign_preference_attachments cpa ON a.id = cpa.attachment_id
             JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-            WHERE cp.campaign_id = ?
+            WHERE cp.campaign_id = %s
         """, (campaign_id,))
         for att in cursor.fetchall():
             attachment_set[att["id"]] = create_attachment_info(att["id"], att["name"])
@@ -146,7 +146,7 @@ def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
         SELECT a.id, a.name FROM attachments a
         JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
         JOIN global_settings gs ON gsa.global_settings_id = gs.id
-        WHERE gs.user_id = ?
+        WHERE gs.user_id = %s
     """, (user_id,))
     for att in cursor.fetchall():
         attachment_set[att["id"]] = create_attachment_info(att["id"], att["name"])
@@ -169,7 +169,7 @@ def resolve_attachment_ids_for_primary(email_id, campaign_id, user_id, cursor,
     """
     if not inherit_campaign_attachments:
         cursor.execute("""
-            SELECT attachment_id FROM email_attachments WHERE email_id = ?
+            SELECT attachment_id FROM email_attachments WHERE email_id = %s
         """, (email_id,))
         return [row["attachment_id"] for row in cursor.fetchall()]
 
@@ -178,7 +178,7 @@ def resolve_attachment_ids_for_primary(email_id, campaign_id, user_id, cursor,
             SELECT a.id FROM attachments a
             JOIN campaign_preference_attachments cpa ON a.id = cpa.attachment_id
             JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-            WHERE cp.campaign_id = ?
+            WHERE cp.campaign_id = %s
         """, (campaign_id,))
         return [row["id"] for row in cursor.fetchall()]
 
@@ -187,7 +187,7 @@ def resolve_attachment_ids_for_primary(email_id, campaign_id, user_id, cursor,
         SELECT a.id FROM attachments a
         JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
         JOIN global_settings gs ON gsa.global_settings_id = gs.id
-        WHERE gs.user_id = ?
+        WHERE gs.user_id = %s
     """, (user_id,))
     return [row["id"] for row in cursor.fetchall()]
 
@@ -200,7 +200,7 @@ def get_own_attachments(email_id, cursor) -> List[AttachmentInfo]:
     cursor.execute("""
         SELECT a.id, a.name FROM attachments a
         JOIN email_attachments ea ON a.id = ea.attachment_id
-        WHERE ea.email_id = ?
+        WHERE ea.email_id = %s
     """, (email_id,))
     return [create_attachment_info(att["id"], att["name"]) for att in cursor.fetchall()]
 

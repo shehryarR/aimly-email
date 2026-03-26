@@ -65,14 +65,14 @@ def create_campaigns(
             for campaign in campaigns:
                 cursor.execute("""
                     INSERT INTO campaigns (user_id, name)
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                 """, (user_id, campaign.name))
 
                 campaign_id = cursor.lastrowid
 
                 cursor.execute("""
                     INSERT INTO campaign_preferences (campaign_id)
-                    VALUES (?)
+                    VALUES (%s)
                 """, (campaign_id,))
 
                 created_count += 1
@@ -108,7 +108,7 @@ def update_campaigns(
             for campaign in campaigns:
                 cursor.execute("""
                     SELECT id FROM campaigns
-                    WHERE id = ? AND user_id = ?
+                    WHERE id = %s AND user_id = %s
                 """, (campaign.id, user_id))
 
                 if not cursor.fetchone():
@@ -118,13 +118,13 @@ def update_campaigns(
                 update_values = []
 
                 if campaign.name is not None:
-                    update_fields.append("name = ?")
+                    update_fields.append("name = %s")
                     update_values.append(campaign.name.strip())
 
 
                 if update_fields:
                     update_values.append(campaign.id)
-                    query = f"UPDATE campaigns SET {', '.join(update_fields)} WHERE id = ?"
+                    query = f"UPDATE campaigns SET {', '.join(update_fields)} WHERE id = %s"
                     cursor.execute(query, update_values)
 
                     if cursor.rowcount > 0:
@@ -206,7 +206,7 @@ def get_campaigns(
             placeholders = ','.join(['?'] * len(campaign_ids))
             cursor.execute(f"""
                 SELECT * FROM campaigns
-                WHERE user_id = ? AND id IN ({placeholders})
+                WHERE user_id = %s AND id IN ({placeholders})
                 ORDER BY created_at DESC
             """, [user_id] + campaign_ids)
 
@@ -218,11 +218,11 @@ def get_campaigns(
             offset = (page - 1) * size
 
             # ── Build WHERE clause ─────────────────────────────────────────────
-            where_clause = "c.user_id = ?"
+            where_clause = "c.user_id = %s"
             where_values = [user_id]
 
             if search and search.strip():
-                where_clause += " AND c.name LIKE ?"
+                where_clause += " AND c.name LIKE %s"
                 where_values.append(f"%{search.strip()}%")
 
             # ── Build ORDER BY clause ──────────────────────────────────────────
@@ -261,7 +261,7 @@ def get_campaigns(
                     WHERE {where_clause}
                     GROUP BY c.id
                     ORDER BY {order_by_clause}
-                    LIMIT ? OFFSET ?
+                    LIMIT %s OFFSET %s
                 """
                 where_values.extend([size, offset])
                 
@@ -289,7 +289,7 @@ def get_campaigns(
                     FROM campaigns c
                     WHERE {where_clause}
                     ORDER BY {order_by_clause}
-                    LIMIT ? OFFSET ?
+                    LIMIT %s OFFSET %s
                 """
                 where_values.extend([size, offset])
 
@@ -328,7 +328,7 @@ def delete_campaigns(
             placeholders = ','.join(['?'] * len(campaign_ids))
             cursor.execute(f"""
                 DELETE FROM campaigns
-                WHERE user_id = ? AND id IN ({placeholders})
+                WHERE user_id = %s AND id IN ({placeholders})
             """, [user_id] + campaign_ids)
 
             deleted_count = cursor.rowcount

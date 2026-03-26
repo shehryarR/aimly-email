@@ -95,7 +95,7 @@ def _resolve_inline_image_attachments(
         cursor = conn.cursor()
         for filename in image_placeholders:
             cursor.execute(
-                "SELECT id, name FROM attachments WHERE user_id = ? AND name = ?",
+                "SELECT id, name FROM attachments WHERE user_id = %s AND name = %s",
                 (user_id, filename),
             )
             row = cursor.fetchone()
@@ -178,13 +178,13 @@ def generate_email(
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id FROM campaigns WHERE id = ? AND user_id = ?
+            SELECT id FROM campaigns WHERE id = %s AND user_id = %s
         """, (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
         cursor.execute("""
-            SELECT * FROM companies WHERE id = ? AND user_id = ?
+            SELECT * FROM companies WHERE id = %s AND user_id = %s
         """, (company_id, user_id))
         company = cursor.fetchone()
         if not company:
@@ -192,7 +192,7 @@ def generate_email(
 
         cursor.execute("""
             SELECT id, inherit_campaign_attachments, inherit_campaign_branding FROM campaign_company
-            WHERE campaign_id = ? AND company_id = ?
+            WHERE campaign_id = %s AND company_id = %s
         """, (campaign_id, company_id))
         cc_relationship = cursor.fetchone()
         if not cc_relationship:
@@ -215,7 +215,7 @@ def generate_email(
                     detail="No LLM API key configured. Please add one in Settings → API Keys."
                 )
 
-            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
             key_row = cursor.fetchone()
 
             llm_config = {
@@ -227,7 +227,7 @@ def generate_email(
                 SELECT business_name, business_info, goal, value_prop,
                        tone, cta, extras, email_instruction,
                        inherit_global_settings
-                FROM campaign_preferences WHERE campaign_id = ?
+                FROM campaign_preferences WHERE campaign_id = %s
             """, (campaign_id,))
             prefs = cursor.fetchone()
 
@@ -242,7 +242,7 @@ def generate_email(
                 cursor.execute("""
                     SELECT business_name, business_info, goal, value_prop,
                            tone, cta, extras, email_instruction
-                    FROM global_settings WHERE user_id = ?
+                    FROM global_settings WHERE user_id = %s
                 """, (user_id,))
                 global_prefs = cursor.fetchone()
 
@@ -296,7 +296,7 @@ def generate_email(
         else:  # query_type == "template"
             cursor.execute("""
                 SELECT template_email, template_html_email FROM campaign_preferences
-                WHERE campaign_id = ?
+                WHERE campaign_id = %s
             """, (campaign_id,))
             template_row = cursor.fetchone()
             if not template_row or not template_row["template_email"]:
@@ -322,7 +322,7 @@ def generate_email(
             cursor.execute("""
                 SELECT id, email_subject, email_content, recipient_email, html_email
                 FROM emails
-                WHERE campaign_company_id = ? AND status = 'primary'
+                WHERE campaign_company_id = %s AND status = 'primary'
             """, (cc_id,))
             existing = cursor.fetchone()
             if existing and existing["email_content"] and existing["email_content"].strip():
@@ -363,7 +363,7 @@ def generate_email(
         try:
             cursor.execute("""
                 SELECT id FROM emails
-                WHERE campaign_company_id = ? AND status = 'primary'
+                WHERE campaign_company_id = %s AND status = 'primary'
             """, (cc_id,))
             primary_email = cursor.fetchone()
 
@@ -377,15 +377,15 @@ def generate_email(
             if primary_email:
                 cursor.execute("""
                     UPDATE emails
-                    SET email_subject = ?, email_content = ?, recipient_email = ?, html_email = ?
-                    WHERE id = ?
+                    SET email_subject = %s, email_content = %s, recipient_email = %s, html_email = %s
+                    WHERE id = %s
                 """, (subject, body, company_email, html_email_flag, primary_email["id"]))
                 email_id = primary_email["id"]
             else:
                 cursor.execute("""
                     INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                        recipient_email, status, html_email)
-                    VALUES (?, ?, ?, ?, 'primary', ?)
+                    VALUES (%s, %s, %s, %s, 'primary', %s)
                 """, (cc_id, subject, body, company_email, html_email_flag))
                 email_id = cursor.lastrowid
 
@@ -432,7 +432,7 @@ def send_email(
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = ? AND c.user_id = ?
+            WHERE e.id = %s AND c.user_id = %s
         """, (email_id, user_id))
 
         email = cursor.fetchone()
@@ -454,7 +454,7 @@ def send_email(
 
         cursor.execute("""
             SELECT email_address, email_password, smtp_host, smtp_port
-            FROM user_keys WHERE user_id = ?
+            FROM user_keys WHERE user_id = %s
         """, (user_id,))
         smtp_row = cursor.fetchone()
 
@@ -467,9 +467,9 @@ def send_email(
         campaign_id = email["campaign_id"]
 
         # ── Resolve BCC ───────────────────────────────────────────────────────
-        cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = ?", (campaign_id,))
+        cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
         prefs_bcc_row = cursor.fetchone()
-        cursor.execute("SELECT bcc FROM global_settings WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
         global_bcc_row = cursor.fetchone()
         bcc_val = (
             (prefs_bcc_row["bcc"] if prefs_bcc_row else None)
@@ -493,7 +493,7 @@ def send_email(
                 cursor.execute("""
                     INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                        recipient_email, status, timezone)
-                    VALUES (?, ?, ?, ?, 'failed', 'UTC')
+                    VALUES (%s, %s, %s, %s, 'failed', 'UTC')
                 """, (
                     email["campaign_company_id"],
                     email["email_subject"],
@@ -502,10 +502,10 @@ def send_email(
                 ))
                 failed_id = cursor.lastrowid
             else:
-                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (email_id,))
+                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (email_id,))
                 failed_id = email_id
             cursor.execute(
-                "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
                 (failed_id, reason),
             )
             conn.commit()
@@ -518,7 +518,7 @@ def send_email(
         if email["status"] == "primary":
             cursor.execute("""
                 SELECT id, inherit_campaign_attachments, inherit_campaign_branding
-                FROM campaign_company WHERE id = ?
+                FROM campaign_company WHERE id = %s
             """, (email["campaign_company_id"],))
             cc_row = cursor.fetchone()
             inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
@@ -526,12 +526,12 @@ def send_email(
 
             cursor.execute("""
                 SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                FROM campaign_preferences WHERE campaign_id = ?
+                FROM campaign_preferences WHERE campaign_id = %s
             """, (campaign_id,))
             campaign_prefs = cursor.fetchone()
 
             cursor.execute("""
-                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = ?
+                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
             """, (user_id,))
             global_prefs = cursor.fetchone()
 
@@ -572,7 +572,7 @@ def send_email(
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,
                                            sent_at, html_email)
-                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -589,19 +589,19 @@ def send_email(
                     # Bake ALL resolved attachment IDs (own + inherited) into new row.
                     for att_id in baked_attachment_ids:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO email_attachments (email_id, attachment_id)
-                            VALUES (?, ?)
+                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                            VALUES (%s, %s)
                         """, (new_email_id, att_id))
 
                 elif email["status"] == "draft":
                     cursor.execute("""
-                        UPDATE emails SET status = 'scheduled', sent_at = ? WHERE id = ?
+                        UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
                     """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
                     new_email_id = email_id
 
                 elif email["status"] == "scheduled":
                     cursor.execute("""
-                        UPDATE emails SET sent_at = ? WHERE id = ?
+                        UPDATE emails SET sent_at = %s WHERE id = %s
                     """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
                     new_email_id = email_id
 
@@ -616,7 +616,7 @@ def send_email(
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,
                                            html_email)
-                        VALUES (?, ?, ?, ?, 'sending', 'UTC', ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, 'sending', 'UTC', %s, %s, %s, %s)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -632,19 +632,19 @@ def send_email(
                     # Bake ALL resolved attachment IDs into new row.
                     for att_id in baked_attachment_ids:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO email_attachments (email_id, attachment_id)
-                            VALUES (?, ?)
+                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                            VALUES (%s, %s)
                         """, (new_email_id, att_id))
 
                 elif email["status"] == "draft":
                     cursor.execute("""
-                        UPDATE emails SET status = 'sending' WHERE id = ?
+                        UPDATE emails SET status = 'sending' WHERE id = %s
                     """, (email_id,))
                     new_email_id = email_id
 
                 elif email["status"] in ("scheduled", "failed"):
                     cursor.execute("""
-                        UPDATE emails SET status = 'sending' WHERE id = ?
+                        UPDATE emails SET status = 'sending' WHERE id = %s
                     """, (email_id,))
                     new_email_id = email_id
 
@@ -687,9 +687,9 @@ def send_email(
             loop.close()
         except Exception as e:
             with get_connection() as conn:
-                conn.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (new_email_id,))
+                conn.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (new_email_id,))
                 conn.execute(
-                    "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                    "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
                     (new_email_id, f"SMTP exception: {e}"),
                 )
                 conn.commit()
@@ -699,12 +699,12 @@ def send_email(
             cursor = conn.cursor()
             if send_result.success:
                 cursor.execute("""
-                    UPDATE emails SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = ?
+                    UPDATE emails SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = %s
                 """, (new_email_id,))
             else:
-                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = ?", (new_email_id,))
+                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (new_email_id,))
                 cursor.execute(
-                    "INSERT INTO failed_emails (email_id, reason) VALUES (?, ?)",
+                    "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
                     (new_email_id, f"Send failed: {send_result.message}"),
                 )
             conn.commit()
@@ -746,7 +746,7 @@ def save_as_draft(
             FROM emails e
             JOIN campaign_company cc ON e.campaign_company_id = cc.id
             JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = ? AND c.user_id = ?
+            WHERE e.id = %s AND c.user_id = %s
         """, (email_id, user_id))
 
         email = cursor.fetchone()
@@ -763,7 +763,7 @@ def save_as_draft(
 
             cursor.execute("""
                 SELECT id, inherit_campaign_attachments, inherit_campaign_branding
-                FROM campaign_company WHERE id = ?
+                FROM campaign_company WHERE id = %s
             """, (email["campaign_company_id"],))
             cc_row = cursor.fetchone()
             inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
@@ -771,12 +771,12 @@ def save_as_draft(
 
             cursor.execute("""
                 SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                FROM campaign_preferences WHERE campaign_id = ?
+                FROM campaign_preferences WHERE campaign_id = %s
             """, (campaign_id,))
             campaign_prefs = cursor.fetchone()
 
             cursor.execute("""
-                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = ?
+                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
             """, (user_id,))
             global_prefs = cursor.fetchone()
 
@@ -806,7 +806,7 @@ def save_as_draft(
                 INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                    recipient_email, status, timezone, signature, logo, logo_mime_type,
                                    html_email)
-                VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s)
             """, (
                 email["campaign_company_id"],
                 email["email_subject"],
@@ -825,15 +825,15 @@ def save_as_draft(
                 # Primary: bake the fully resolved attachment set into the new draft row.
                 for att_id in baked_attachment_ids:
                     cursor.execute("""
-                        INSERT OR IGNORE INTO email_attachments (email_id, attachment_id)
-                        VALUES (?, ?)
+                        INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                        VALUES (%s, %s)
                     """, (draft_id, att_id))
             else:
                 # Sent/scheduled: copy the already-baked attachment rows as-is.
                 cursor.execute("""
                     INSERT INTO email_attachments (email_id, attachment_id, created_at)
-                    SELECT ?, attachment_id, created_at
-                    FROM email_attachments WHERE email_id = ?
+                    SELECT %s, attachment_id, created_at
+                    FROM email_attachments WHERE email_id = %s
                 """, (draft_id, email_id))
 
             conn.commit()
@@ -921,7 +921,7 @@ def smart_schedule_emails(
         cursor = conn.cursor()
         cursor.execute("""
             SELECT email_address, email_password, smtp_host, smtp_port
-            FROM user_keys WHERE user_id = ?
+            FROM user_keys WHERE user_id = %s
         """, (user_id,))
         smtp_row = cursor.fetchone()
 
@@ -945,7 +945,7 @@ def smart_schedule_emails(
                     FROM emails e
                     JOIN campaign_company cc ON e.campaign_company_id = cc.id
                     JOIN campaigns c ON cc.campaign_id = c.id
-                    WHERE e.id = ? AND c.user_id = ?
+                    WHERE e.id = %s AND c.user_id = %s
                 """, (email_id, user_id))
                 email = cursor.fetchone()
 
@@ -960,16 +960,16 @@ def smart_schedule_emails(
                 campaign_id = email["campaign_id"]
 
                 # ── Resolve BCC ───────────────────────────────────────────────
-                cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = ?", (campaign_id,))
+                cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
                 prefs_bcc_row = cursor.fetchone()
-                cursor.execute("SELECT bcc FROM global_settings WHERE user_id = ?", (user_id,))
+                cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
                 global_bcc_row = cursor.fetchone()
 
                 # ── Branding + attachment resolution (primary only) ───────────
                 if email["status"] == "primary":
                     cursor.execute("""
                         SELECT id, inherit_campaign_attachments, inherit_campaign_branding
-                        FROM campaign_company WHERE id = ?
+                        FROM campaign_company WHERE id = %s
                     """, (email["campaign_company_id"],))
                     cc_row = cursor.fetchone()
                     inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
@@ -977,12 +977,12 @@ def smart_schedule_emails(
 
                     cursor.execute("""
                         SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                        FROM campaign_preferences WHERE campaign_id = ?
+                        FROM campaign_preferences WHERE campaign_id = %s
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
                     cursor.execute("""
-                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = ?
+                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
                     """, (user_id,))
                     global_prefs = cursor.fetchone()
 
@@ -1006,7 +1006,7 @@ def smart_schedule_emails(
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,
                                            sent_at, html_email)
-                        VALUES (?, ?, ?, ?, 'scheduled', 'UTC', ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s)
                     """, (
                         email["campaign_company_id"],
                         email["email_subject"],
@@ -1022,18 +1022,18 @@ def smart_schedule_emails(
 
                     for att_id in baked_attachment_ids:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO email_attachments (email_id, attachment_id)
-                            VALUES (?, ?)
+                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                            VALUES (%s, %s)
                         """, (new_email_id, att_id))
 
                 elif email["status"] == "draft":
                     cursor.execute("""
-                        UPDATE emails SET status = 'scheduled', sent_at = ? WHERE id = ?
+                        UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
                     """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
 
                 elif email["status"] in ("scheduled", "failed"):
                     cursor.execute("""
-                        UPDATE emails SET status = 'scheduled', sent_at = ? WHERE id = ?
+                        UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
                     """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
 
                 conn.commit()

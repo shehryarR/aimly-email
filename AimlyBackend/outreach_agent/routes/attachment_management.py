@@ -29,7 +29,7 @@ def verify_attachments_owned_by_user(cursor, attachment_ids: List[int], user_id:
     placeholders = ','.join(['?'] * len(attachment_ids))
     cursor.execute(f"""
         SELECT id FROM attachments
-        WHERE id IN ({placeholders}) AND user_id = ?
+        WHERE id IN ({placeholders}) AND user_id = %s
     """, (*attachment_ids, user_id))
     found = {row['id'] for row in cursor.fetchall()}
     missing = set(attachment_ids) - found
@@ -72,7 +72,7 @@ async def update_email_attachments(
                 SELECT e.id FROM emails e
                 JOIN campaign_company cc ON e.campaign_company_id = cc.id
                 JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE e.id = ? AND c.user_id = ?
+                WHERE e.id = %s AND c.user_id = %s
             """, (email_id, user_id))
 
             if not cursor.fetchone():
@@ -82,12 +82,12 @@ async def update_email_attachments(
             verify_attachments_owned_by_user(cursor, attachment_ids, user_id)
 
             # Flush and replace
-            cursor.execute("DELETE FROM email_attachments WHERE email_id = ?", (email_id,))
+            cursor.execute("DELETE FROM email_attachments WHERE email_id = %s", (email_id,))
 
             for attachment_id in attachment_ids:
                 cursor.execute("""
                     INSERT INTO email_attachments (email_id, attachment_id)
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                 """, (email_id, attachment_id))
 
             conn.commit()
@@ -135,7 +135,7 @@ async def update_campaign_preference_attachments(
             cursor.execute("""
                 SELECT cp.id FROM campaign_preferences cp
                 JOIN campaigns c ON cp.campaign_id = c.id
-                WHERE cp.id = ? AND c.user_id = ?
+                WHERE cp.id = %s AND c.user_id = %s
             """, (preference_id, user_id))
 
             if not cursor.fetchone():
@@ -146,14 +146,14 @@ async def update_campaign_preference_attachments(
 
             # Flush and replace
             cursor.execute(
-                "DELETE FROM campaign_preference_attachments WHERE campaign_preference_id = ?",
+                "DELETE FROM campaign_preference_attachments WHERE campaign_preference_id = %s",
                 (preference_id,)
             )
 
             for attachment_id in attachment_ids:
                 cursor.execute("""
                     INSERT INTO campaign_preference_attachments (campaign_preference_id, attachment_id)
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                 """, (preference_id, attachment_id))
 
             conn.commit()
@@ -200,7 +200,7 @@ async def update_global_settings_attachments(
             # Verify the global settings exist and belong to the current user
             cursor.execute("""
                 SELECT id FROM global_settings
-                WHERE id = ? AND user_id = ?
+                WHERE id = %s AND user_id = %s
             """, (settings_id, user_id))
 
             if not cursor.fetchone():
@@ -211,14 +211,14 @@ async def update_global_settings_attachments(
 
             # Flush and replace
             cursor.execute(
-                "DELETE FROM global_settings_attachments WHERE global_settings_id = ?",
+                "DELETE FROM global_settings_attachments WHERE global_settings_id = %s",
                 (settings_id,)
             )
 
             for attachment_id in attachment_ids:
                 cursor.execute("""
                     INSERT INTO global_settings_attachments (global_settings_id, attachment_id)
-                    VALUES (?, ?)
+                    VALUES (%s, %s)
                 """, (settings_id, attachment_id))
 
             conn.commit()
@@ -254,7 +254,7 @@ async def get_email_attachments(
                 SELECT e.id FROM emails e
                 JOIN campaign_company cc ON e.campaign_company_id = cc.id
                 JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE e.id = ? AND c.user_id = ?
+                WHERE e.id = %s AND c.user_id = %s
             """, (email_id, user_id))
 
             if not cursor.fetchone():
@@ -264,7 +264,7 @@ async def get_email_attachments(
                 SELECT a.id, a.name, a.created_at
                 FROM attachments a
                 JOIN email_attachments ea ON a.id = ea.attachment_id
-                WHERE ea.email_id = ?
+                WHERE ea.email_id = %s
                 ORDER BY ea.created_at DESC
             """, (email_id,))
 
@@ -297,7 +297,7 @@ async def get_campaign_preference_attachments(
             cursor.execute("""
                 SELECT cp.id FROM campaign_preferences cp
                 JOIN campaigns c ON cp.campaign_id = c.id
-                WHERE cp.id = ? AND c.user_id = ?
+                WHERE cp.id = %s AND c.user_id = %s
             """, (preference_id, user_id))
 
             if not cursor.fetchone():
@@ -307,7 +307,7 @@ async def get_campaign_preference_attachments(
                 SELECT a.id, a.name, a.created_at
                 FROM attachments a
                 JOIN campaign_preference_attachments cpa ON a.id = cpa.attachment_id
-                WHERE cpa.campaign_preference_id = ?
+                WHERE cpa.campaign_preference_id = %s
                 ORDER BY cpa.created_at DESC
             """, (preference_id,))
 
@@ -339,7 +339,7 @@ async def get_global_settings_attachments(
 
             cursor.execute("""
                 SELECT id FROM global_settings
-                WHERE id = ? AND user_id = ?
+                WHERE id = %s AND user_id = %s
             """, (settings_id, user_id))
 
             if not cursor.fetchone():
@@ -349,7 +349,7 @@ async def get_global_settings_attachments(
                 SELECT a.id, a.name, a.created_at
                 FROM attachments a
                 JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
-                WHERE gsa.global_settings_id = ?
+                WHERE gsa.global_settings_id = %s
                 ORDER BY gsa.created_at DESC
             """, (settings_id,))
 

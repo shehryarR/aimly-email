@@ -279,7 +279,7 @@ async def update_campaign_preferences(
 
         # Verify campaign belongs to user
         cursor.execute(
-            "SELECT id FROM campaigns WHERE id = ? AND user_id = ?",
+            "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
             (campaign_id, user_id),
         )
         if not cursor.fetchone():
@@ -287,7 +287,7 @@ async def update_campaign_preferences(
 
         # Check if preferences row already exists
         cursor.execute(
-            "SELECT id FROM campaign_preferences WHERE campaign_id = ?",
+            "SELECT id FROM campaign_preferences WHERE campaign_id = %s",
             (campaign_id,),
         )
         existing = cursor.fetchone()
@@ -314,32 +314,32 @@ async def update_campaign_preferences(
                     ("email_instruction", email_instruction),
                     ("signature",         signature),
                 ]:
-                    update_fields.append(f"{col} = ?")
+                    update_fields.append(f"{col} = %s")
                     update_values.append(val)
 
                 # TEMPLATE EMAIL — only update if explicitly sent (separate save button)
                 if template_email_sent:
-                    update_fields.append("template_email = ?")
+                    update_fields.append("template_email = %s")
                     update_values.append(template_email)
 
                 if template_html_email_sent:
-                    update_fields.append("template_html_email = ?")
+                    update_fields.append("template_html_email = %s")
                     update_values.append(template_html_email)
 
                 # NUMERIC FIELDS — only update if sent (0 is a valid value)
                 if inherit_global_settings_sent:
-                    update_fields.append("inherit_global_settings = ?")
+                    update_fields.append("inherit_global_settings = %s")
                     update_values.append(inherit_global_settings)
 
                 if inherit_global_attachments_sent:
-                    update_fields.append("inherit_global_attachments = ?")
+                    update_fields.append("inherit_global_attachments = %s")
                     update_values.append(inherit_global_attachments)
 
                 # LOGO FIELD
                 if logo is not None:
-                    update_fields.append("logo = ?")
+                    update_fields.append("logo = %s")
                     update_values.append(logo_blob)
-                    update_fields.append("logo_mime_type = ?")
+                    update_fields.append("logo_mime_type = %s")
                     update_values.append(logo_mime_type)
 
                 if update_fields:
@@ -348,7 +348,7 @@ async def update_campaign_preferences(
                     query = (
                         f"UPDATE campaign_preferences "
                         f"SET {', '.join(update_fields)} "
-                        f"WHERE campaign_id = ?"
+                        f"WHERE campaign_id = %s"
                     )
                     cursor.execute(query, update_values)
 
@@ -365,7 +365,7 @@ async def update_campaign_preferences(
                         logo, logo_mime_type,
                         inherit_global_settings,
                         inherit_global_attachments
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         campaign_id,
@@ -438,7 +438,7 @@ def generate_template_email(
 
         # Verify campaign belongs to user
         cursor.execute(
-            "SELECT id FROM campaigns WHERE id = ? AND user_id = ?",
+            "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
             (campaign_id, user_id),
         )
         if not cursor.fetchone():
@@ -452,7 +452,7 @@ def generate_template_email(
                 detail="No LLM API key configured. Please add one in Settings → API Keys.",
             )
 
-        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
         key_row = cursor.fetchone()
 
         llm_config = {
@@ -467,7 +467,7 @@ def generate_template_email(
                    tone, cta, extras, email_instruction, signature,
                    inherit_global_settings
             FROM campaign_preferences
-            WHERE campaign_id = ?
+            WHERE campaign_id = %s
             """,
             (campaign_id,),
         )
@@ -491,7 +491,7 @@ def generate_template_email(
                 SELECT business_name, business_info, goal, value_prop, tone,
                        cta, extras, email_instruction, signature
                 FROM global_settings
-                WHERE user_id = ?
+                WHERE user_id = %s
                 """,
                 (user_id,),
             )
@@ -626,7 +626,7 @@ PLAIN TEXT RULES
 
     # Strip any rogue SUBJECT: lines the LLM may have leaked into the body
     import re
-    content = re.sub(r"(?im)^SUBJECT:.*\n?", "", content).strip()
+    content = re.sub(r"(%sim)^SUBJECT:.*\n?", "", content).strip()
 
     # Guarantee at least one {{company_name}} placeholder in the output
     if "{{company_name}}" not in subject and "{{company_name}}" not in content:
@@ -653,14 +653,14 @@ def get_campaign_preferences(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id FROM campaigns WHERE id = ? AND user_id = ?",
+            "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
             (campaign_id, user_id),
         )
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
         cursor.execute(
-            "SELECT * FROM campaign_preferences WHERE campaign_id = ?",
+            "SELECT * FROM campaign_preferences WHERE campaign_id = %s",
             (campaign_id,),
         )
         preferences = cursor.fetchone()
