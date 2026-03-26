@@ -845,7 +845,7 @@ def get_companies(
             if not company_ids:
                 return CompaniesListResponse(companies=[], total=0, page=page, size=size)
 
-            placeholders = ','.join(['?'] * len(company_ids))
+            placeholders = ','.join(['%s'] * len(company_ids))
             cursor.execute(f"""
                 SELECT * FROM companies
                 WHERE user_id = %s AND id IN ({placeholders})
@@ -967,7 +967,7 @@ def get_companies(
                 {where_str}
                 GROUP BY c.id
                 {merged_having}
-            )
+            ) AS subq
         """
         cursor.execute(count_query, count_params)
         total = cursor.fetchone()["total"]
@@ -1048,7 +1048,7 @@ def delete_companies(
         cursor = conn.cursor()
 
         try:
-            placeholders = ','.join(['?'] * len(company_ids))
+            placeholders = ','.join(['%s'] * len(company_ids))
             cursor.execute(f"""
                 DELETE FROM companies
                 WHERE user_id = %s AND id IN ({placeholders})

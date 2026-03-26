@@ -155,6 +155,9 @@ app.include_router(category_company_router)                    # /category/{id}/
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(f"❌ Unhandled exception on {request.method} {request.url}:")
+    traceback.print_exc()
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "message": str(exc)},

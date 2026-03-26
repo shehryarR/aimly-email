@@ -452,8 +452,12 @@ def update_email(
                     status_code=400,
                     detail="time can only be set on scheduled emails."
                 )
+            # Convert ISO 8601 to MySQL datetime format
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(request.time.replace('Z', '+00:00'))
+            mysql_datetime = dt.strftime('%Y-%m-%d %H:%M:%S')
             update_fields.append("sent_at = %s")
-            update_values.append(request.time)
+            update_values.append(mysql_datetime)
 
         if request.signature is not None:
             # Empty string clears the signature
@@ -495,6 +499,8 @@ def update_email(
 
         except Exception as e:
             conn.rollback()
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Failed to update email: {str(e)}")
 
     return MessageResponse(message="Email updated successfully")
@@ -575,13 +581,13 @@ def get_email_ids(
     if company_ids and company_ids.strip():
         co_list = [int(x) for x in company_ids.split(",") if x.strip().isdigit()]
         if co_list:
-            conditions.append(f"co.id IN ({','.join(['?']*len(co_list))})")
+            conditions.append(f"co.id IN ({','.join(['%s']*len(co_list))})")
             params.extend(co_list)
 
     if campaign_ids and campaign_ids.strip():
         ca_list = [int(x) for x in campaign_ids.split(",") if x.strip().isdigit()]
         if ca_list:
-            conditions.append(f"camp.id IN ({','.join(['?']*len(ca_list))})")
+            conditions.append(f"camp.id IN ({','.join(['%s']*len(ca_list))})")
             params.extend(ca_list)
 
     if search and search.strip():

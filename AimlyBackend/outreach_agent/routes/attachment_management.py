@@ -26,7 +26,7 @@ def verify_attachments_owned_by_user(cursor, attachment_ids: List[int], user_id:
     """
     if not attachment_ids:
         return
-    placeholders = ','.join(['?'] * len(attachment_ids))
+    placeholders = ','.join(['%s'] * len(attachment_ids))
     cursor.execute(f"""
         SELECT id FROM attachments
         WHERE id IN ({placeholders}) AND user_id = %s

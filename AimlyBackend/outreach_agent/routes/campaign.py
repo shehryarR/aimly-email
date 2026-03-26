@@ -204,7 +204,7 @@ def get_campaigns(
             if not campaign_ids:
                 return CampaignsListResponse(campaigns=[], total=0, page=page, size=size)
 
-            placeholders = ','.join(['?'] * len(campaign_ids))
+            placeholders = ','.join(['%s'] * len(campaign_ids))
             cursor.execute(f"""
                 SELECT * FROM campaigns
                 WHERE user_id = %s AND id IN ({placeholders})
@@ -326,7 +326,7 @@ def delete_campaigns(
         cursor = conn.cursor()
 
         try:
-            placeholders = ','.join(['?'] * len(campaign_ids))
+            placeholders = ','.join(['%s'] * len(campaign_ids))
             cursor.execute(f"""
                 DELETE FROM campaigns
                 WHERE user_id = %s AND id IN ({placeholders})

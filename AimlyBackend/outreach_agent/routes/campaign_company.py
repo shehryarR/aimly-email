@@ -443,7 +443,7 @@ def remove_companies_from_campaign(
             raise HTTPException(status_code=404, detail="Campaign not found")
 
         try:
-            placeholders = ','.join(['?'] * len(company_ids))
+            placeholders = ','.join(['%s'] * len(company_ids))
             cursor.execute(f"""
                 DELETE FROM campaign_company
                 WHERE campaign_id = %s AND company_id IN ({placeholders})

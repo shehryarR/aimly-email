@@ -41,6 +41,9 @@ class SendEmailRequest(BaseModel):
         if v:
             try:
                 dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+                # Ensure timezone-aware for comparison
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
                 if dt <= datetime.now(timezone.utc):
                     raise ValueError("Scheduled time must be in the future")
             except ValueError as e:
