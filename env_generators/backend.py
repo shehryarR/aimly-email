@@ -56,7 +56,8 @@ app_port      = ask("Backend Port",          default="8000")
 jwt_secret    = ask("JWT Secret Key",        default="123456789abcdef123456789abcdef")
 ms_port       = read_env_var("MICROSERVICE_PORT") or "8001"
 frontend_url  = ask("Frontend URL",          default="http://localhost:8501")
-ms_base_url   = ask("Microservice Base URL", default=f"http://email-microservice:{ms_port}")
+ms_base_url   = ask("Microservice Base URL (internal Docker)", default=f"http://email-microservice:{ms_port}")
+ms_public_url = ask("Microservice Public URL (in emails, browser-accessible)", default=f"http://localhost:{ms_port}")
 internal_key  = ask("Internal API Key",      default="some-strong-random-secret")
 cookie_secret = ask("Cookie Secret",         default="f4e8373350b504674fb13e0ec97055f0e6559fdd9b61eacfe449d2ad7802188e")
 env           = ask("ENV",                   default="development")
@@ -120,6 +121,7 @@ write_section("Backend", [
     f"JWT_SECRET_KEY={jwt_secret}",
     f"FRONTEND_URL={frontend_url}",
     f"MICROSERVICE_BASE_URL={ms_base_url}",
+    f"MICROSERVICE_PUBLIC_URL={ms_public_url}",
     f"MICROSERVICE_BACKEND_ID={ms_backend_id}",
     f"MICROSERVICE_API_KEY={ms_backend_key}",
     f"EMAIL_SMTP_SERVER={smtp_server}",

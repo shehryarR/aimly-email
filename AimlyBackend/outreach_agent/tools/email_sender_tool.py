@@ -113,14 +113,14 @@ def _tracking_html_and_plain(email_id: int) -> tuple[str, str]:
     Build the read-receipt confirmation button HTML and plain-text fallback.
     Returns ('', '') when microservice env vars are not configured.
     """
-    base_url   = os.getenv("MICROSERVICE_BASE_URL")
+    public_url = os.getenv("MICROSERVICE_PUBLIC_URL") or os.getenv("MICROSERVICE_BASE_URL")
     backend_id = os.getenv("MICROSERVICE_BACKEND_ID")
     api_key    = os.getenv("MICROSERVICE_API_KEY")
-    if not base_url or not backend_id or not api_key:
+    if not public_url or not backend_id or not api_key:
         return "", ""
 
     sig = _compute_read_sig(api_key, backend_id, email_id)
-    url = f"{base_url}/read-receipt/mark-read/{backend_id}/{email_id}?sig={sig}"
+    url = f"{public_url}/read-receipt/mark-read/{backend_id}/{email_id}?sig={sig}"
 
     html = f"""
 <div style="margin-top:30px;text-align:center;">
@@ -140,16 +140,16 @@ def _unsubscribe_html_and_plain(sender_email: str, receiver_email: str) -> tuple
     Build a sleek unsubscribe footer link.
     Returns ('', '') when microservice env vars are not configured.
     """
-    base_url   = os.getenv("MICROSERVICE_BASE_URL")
+    public_url = os.getenv("MICROSERVICE_PUBLIC_URL") or os.getenv("MICROSERVICE_BASE_URL")
     backend_id = os.getenv("MICROSERVICE_BACKEND_ID")
     api_key    = os.getenv("MICROSERVICE_API_KEY")
-    if not base_url or not backend_id or not api_key or not sender_email or not receiver_email:
+    if not public_url or not backend_id or not api_key or not sender_email or not receiver_email:
         return "", ""
 
     sig          = _compute_optout_sig(api_key, backend_id, sender_email, receiver_email)
     sender_enc   = quote(sender_email, safe="")
     receiver_enc = quote(receiver_email, safe="")
-    url          = f"{base_url}/optout/unsubscribe/{backend_id}/{sender_enc}/{receiver_enc}?sig={sig}"
+    url          = f"{public_url}/optout/unsubscribe/{backend_id}/{sender_enc}/{receiver_enc}?sig={sig}"
 
     html = f"""
 <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
