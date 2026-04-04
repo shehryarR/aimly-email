@@ -20,177 +20,123 @@ class MessageResponse(BaseModel):
 
 
 # ==================================================================================
-# POST /category/{category_id}/company/
-# Add companies to a category
+# POST /category/bulk-assign/ - Add companies to multiple categories at once
 # ==================================================================================
-@category_company_router.post("/category/{category_id}/company/", response_model=MessageResponse)
-def add_companies_to_category(
-    category_id: int,
-    company_ids: List[int],
+class BulkCategoryAssignRequest(BaseModel):
+    company_ids: List[int]
+    category_ids: List[int]
+
+@category_company_router.post("/category/bulk-assign/", response_model=MessageResponse)
+def bulk_assign_to_categories(
+    request: BulkCategoryAssignRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Add companies to a category.
-
-    - Companies already in the category are silently skipped.
-    - Company IDs not owned by the current user are silently skipped.
+    Add one or more companies to multiple categories in a single call.
+    Already-enrolled combinations are silently skipped.
     """
     user_id = current_user["user_id"]
 
-    if not company_ids:
-        raise HTTPException(status_code=400, detail="No company IDs provided")
+    if not request.company_ids:
+        raise HTTPException(status_code=400, detail="company_ids must not be empty")
+    if not request.category_ids:
+        raise HTTPException(status_code=400, detail="category_ids must not be empty")
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
+    total_added = 0
+    errors = []
 
-        cursor.execute(
-            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
-            (category_id, user_id),
-        )
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Category not found")
-
+    for category_id in request.category_ids:
         try:
-            added = 0
-            for company_id in company_ids:
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
                 cursor.execute(
-                    "SELECT id FROM companies WHERE id = %s AND user_id = %s",
-                    (company_id, user_id),
+                    "SELECT id FROM categories WHERE id = %s AND user_id = %s",
+                    (category_id, user_id),
                 )
                 if not cursor.fetchone():
+                    errors.append({"category_id": category_id, "reason": "Category not found"})
                     continue
 
-                cursor.execute(
-                    "INSERT IGNORE INTO category_company (category_id, company_id) VALUES (%s, %s)",
-                    (category_id, company_id),
-                )
-                if cursor.rowcount > 0:
-                    added += 1
+                for company_id in request.company_ids:
+                    cursor.execute(
+                        "SELECT id FROM companies WHERE id = %s AND user_id = %s",
+                        (company_id, user_id),
+                    )
+                    if not cursor.fetchone():
+                        continue
+                    cursor.execute(
+                        "INSERT IGNORE INTO category_company (category_id, company_id) VALUES (%s, %s)",
+                        (category_id, company_id),
+                    )
+                    if cursor.rowcount > 0:
+                        total_added += 1
 
-            conn.commit()
+                conn.commit()
 
         except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to add companies: {str(e)}")
+            errors.append({"category_id": category_id, "reason": str(e)})
+            continue
 
     return MessageResponse(
-        message=f"Successfully added {added} companies to category",
-        success=True,
-        added=added,
+        message=f"Added {total_added} company-category links" + (f", {len(errors)} categories failed" if errors else ""),
+        success=len(errors) == 0,
+        added=total_added,
     )
 
 
 # ==================================================================================
-# DELETE /category/{category_id}/company/
-# Remove companies from a category
+# POST /category/bulk-remove/ - Remove companies from multiple categories at once
 # ==================================================================================
-@category_company_router.delete("/category/{category_id}/company/", response_model=MessageResponse)
-def remove_companies_from_category(
-    category_id: int,
-    ids: str = Query(..., description="Comma-separated company IDs to remove"),
+class BulkCategoryRemoveRequest(BaseModel):
+    company_ids: List[int]
+    category_ids: List[int]
+
+@category_company_router.post("/category/bulk-remove/", response_model=MessageResponse)
+def bulk_remove_from_categories(
+    request: BulkCategoryRemoveRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Remove specific companies from a category.
-    The companies themselves are NOT deleted — only the membership is removed.
+    Remove one or more companies from multiple categories in a single call.
     """
     user_id = current_user["user_id"]
-    company_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
 
-    if not company_ids:
-        raise HTTPException(status_code=400, detail="No valid company IDs provided")
+    if not request.company_ids:
+        raise HTTPException(status_code=400, detail="company_ids must not be empty")
+    if not request.category_ids:
+        raise HTTPException(status_code=400, detail="category_ids must not be empty")
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
+    total_removed = 0
+    errors = []
 
-        cursor.execute(
-            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
-            (category_id, user_id),
-        )
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Category not found")
-
+    for category_id in request.category_ids:
         try:
-            placeholders = ",".join(["%s"] * len(company_ids))
-            cursor.execute(
-                f"""
-                DELETE FROM category_company
-                WHERE category_id = %s AND company_id IN ({placeholders})
-                """,
-                [category_id] + company_ids,
-            )
-            removed = cursor.rowcount
-            conn.commit()
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT id FROM categories WHERE id = %s AND user_id = %s",
+                    (category_id, user_id),
+                )
+                if not cursor.fetchone():
+                    errors.append({"category_id": category_id, "reason": "Category not found"})
+                    continue
+
+                ph = ",".join(["%s"] * len(request.company_ids))
+                cursor.execute(
+                    f"DELETE FROM category_company WHERE category_id = %s AND company_id IN ({ph})",
+                    [category_id] + request.company_ids,
+                )
+                total_removed += cursor.rowcount
+                conn.commit()
 
         except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to remove companies: {str(e)}")
+            errors.append({"category_id": category_id, "reason": str(e)})
+            continue
 
     return MessageResponse(
-        message=f"Successfully removed {removed} companies from category",
-        success=True,
-        removed=removed,
+        message=f"Removed {total_removed} company-category links" + (f", {len(errors)} categories failed" if errors else ""),
+        success=len(errors) == 0,
+        removed=total_removed,
     )
-
-
-# ==================================================================================
-# GET /category/{category_id}/company/
-# Get all companies belonging to a category
-# ==================================================================================
-@category_company_router.get("/category/{category_id}/company/")
-def get_category_companies(
-    category_id: int,
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=500),
-    search: Optional[str] = Query(None, description="Search by company name or email"),
-    current_user: dict = Depends(get_current_user),
-):
-    user_id = current_user["user_id"]
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT id FROM categories WHERE id = %s AND user_id = %s",
-            (category_id, user_id),
-        )
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Category not found")
-
-        conditions = ["cc.category_id = %s", "co.user_id = %s"]
-        params: list = [category_id, user_id]
-
-        if search and search.strip():
-            conditions.append("(co.name LIKE %s OR co.email LIKE %s)")
-            params.extend([f"%{search.strip()}%", f"%{search.strip()}%"])
-
-        where_str = " AND ".join(conditions)
-
-        cursor.execute(
-            f"SELECT COUNT(*) AS total FROM category_company cc JOIN companies co ON cc.company_id = co.id WHERE {where_str}",
-            params,
-        )
-        total = cursor.fetchone()["total"]
-
-        offset = (page - 1) * size
-        cursor.execute(
-            f"""
-            SELECT co.id, co.user_id, co.name, co.email, co.phone_number,
-                   co.address, co.company_info, co.created_at
-            FROM category_company cc
-            JOIN companies co ON cc.company_id = co.id
-            WHERE {where_str}
-            ORDER BY cc.created_at DESC
-            LIMIT %s OFFSET %s
-            """,
-            params + [size, offset],
-        )
-        rows = cursor.fetchall()
-
-    return {
-        "category_id": category_id,
-        "companies": [dict(r) for r in rows],
-        "total": total,
-        "page": page,
-        "size": size,
-    }

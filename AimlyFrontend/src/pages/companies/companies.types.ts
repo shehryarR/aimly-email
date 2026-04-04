@@ -24,6 +24,7 @@ export interface CampaignOption {
 /** A company enriched with the campaigns it belongs to (client-side join) */
 export interface CompanyWithCampaigns extends Company {
   campaign_ids: number[];
+  category_ids: number[];
 }
 
 export interface ToastState {

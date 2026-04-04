@@ -40,6 +40,7 @@ interface Company {
   company_info?: string;
   created_at: string;
   optedOut?: boolean;
+  category_ids?: number[];
 }
 
 interface CampaignDetails {
@@ -2574,7 +2575,6 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   const enrollDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [categories, setCategories]           = useState<Category[]>([]);
-  const [catCompanyMap, setCatCompanyMap]      = useState<Map<number, Set<number>>>(new Map());
   const [selectedCatIds, setSelectedCatIds]   = useState<Set<number>>(new Set());
   const [catFilterMode, setCatFilterMode]       = useState<'any' | 'all'>('any');
   const [catsLoading, setCatsLoading]         = useState(false);
@@ -2605,8 +2605,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   const resetAll = () => {
     setTab('enroll'); setResult(null);
     setEnrollSearch(''); setEnrollList([]); setEnrolledIds(new Set()); setSelectedIds(new Set()); setToRemoveIds(new Set());
-    setCategories([]); setCatCompanyMap(new Map());
-    setCatDropOpen(false); setCatDropSearch('');
+    setCategories([]); setCatDropOpen(false); setCatDropSearch('');
     setSelectedCatIds(new Set()); setCatFilterMode('any');
     setMan({ name: '', email: '', phone_number: '', address: '', company_info: '' });
     setCsvFile(null); setIsDrag(false);
@@ -2665,9 +2664,12 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
     try {
       const PAGE_SIZE = 100;
       const s = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : '';
+      const catQ = selectedCatIds.size > 0
+        ? `&filter_categories=${Array.from(selectedCatIds).join(',')}&category_filter_mode=${catFilterMode}`
+        : '';
       let allCos: EnrollableCompany[] = [], page = 1, total = Infinity;
       while (allCos.length < total) {
-        const r = await apiFetch(`${apiBase}/company/?page=${page}&size=${PAGE_SIZE}${s}`, { });
+        const r = await apiFetch(`${apiBase}/company/?page=${page}&size=${PAGE_SIZE}${s}${catQ}`, { });
         if (!r.ok) break;
         const d = await r.json(); total = d.total || 0;
         allCos = [...allCos, ...(d.companies || [])];
@@ -2675,7 +2677,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
       }
       let enrolled: EnrollableCompany[] = []; page = 1; total = Infinity;
       while (enrolled.length < total) {
-        const r = await apiFetch(`${apiBase}/campaign/${campaignId}/company/?page=${page}&size=${PAGE_SIZE}`, { });
+        const r = await apiFetch(`${apiBase}/company/?page=${page}&size=${PAGE_SIZE}&filter_campaigns=${campaignId}`, { });
         if (!r.ok) break;
         const d = await r.json(); total = d.total || 0;
         enrolled = [...enrolled, ...(d.companies || [])];
@@ -2690,7 +2692,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
     } catch { /* silent */ } finally { setEnrollLoading(false); }
   };
 
-  useEffect(() => { if (tab === 'enroll' && isOpen) loadEnrollList(''); }, [tab, isOpen, campaignId]);
+  useEffect(() => { if (tab === 'enroll' && isOpen) loadEnrollList(''); }, [tab, isOpen, campaignId, selectedCatIds, catFilterMode]);
   useEffect(() => {
     if (tab !== 'enroll' || !isOpen) return;
     if (enrollDebounce.current) clearTimeout(enrollDebounce.current);
@@ -2698,32 +2700,14 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
     return () => { if (enrollDebounce.current) clearTimeout(enrollDebounce.current); };
   }, [enrollSearch]);
 
-  // Load categories + build cat→company map once when enroll tab opens
+  // Load categories for filter dropdown
   const loadCategories = async () => {
     setCatsLoading(true);
     try {
       const r = await apiFetch(`${apiBase}/category/`, {});
       if (!r.ok) return;
       const d = await r.json();
-      const cats: Category[] = d.categories || d || [];
-      setCategories(cats);
-      // Build map: categoryId → Set<companyId>
-      const map = new Map<number, Set<number>>();
-      await Promise.all(cats.map(async (cat) => {
-        try {
-          let allIds: number[] = [], page = 1, total = Infinity;
-          while (allIds.length < total) {
-            const cr = await apiFetch(`${apiBase}/category/${cat.id}/company/?page=${page}&size=200`, {});
-            if (!cr.ok) break;
-            const cd = await cr.json();
-            total = cd.total || 0;
-            allIds = [...allIds, ...(cd.companies || []).map((c: any) => c.id)];
-            if (allIds.length >= total) break; page++;
-          }
-          map.set(cat.id, new Set(allIds));
-        } catch { map.set(cat.id, new Set()); }
-      }));
-      setCatCompanyMap(map);
+      setCategories(d.categories || d || []);
     } catch { /* silent */ } finally { setCatsLoading(false); }
   };
 
@@ -2756,16 +2740,17 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
     setLoading(true); setResult(null);
     try {
       if (toEnroll.length > 0) {
-        const r = await apiFetch(`${apiBase}/campaign/${campaignId}/company/`, {
+        const r = await apiFetch(`${apiBase}/campaign/bulk-enroll/`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(toEnroll),
+          body: JSON.stringify({ company_ids: toEnroll, campaign_ids: [campaignId] }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || 'Failed to enroll');
       }
       if (toUnenroll.length > 0) {
-        const r = await apiFetch(`${apiBase}/campaign/${campaignId}/company/?ids=${toUnenroll.join(',')}`, {
-          method: 'DELETE',
+        const r = await apiFetch(`${apiBase}/campaign/bulk-unenroll/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: toUnenroll, campaign_ids: [campaignId] }),
         });
         if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed to unenroll'); }
       }
@@ -2942,11 +2927,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
                     {enrollSearch ? `No companies match "${enrollSearch}"` : 'No companies found. Add some first.'}
                   </div>
                 ) : (() => {
-                  const filtered = selectedCatIds.size === 0
-                    ? enrollList
-                    : catFilterMode === 'any'
-                      ? enrollList.filter(c => Array.from(selectedCatIds).some(cid => catCompanyMap.get(cid)?.has(c.id)))
-                      : enrollList.filter(c => Array.from(selectedCatIds).every(cid => catCompanyMap.get(cid)?.has(c.id)));
+                  const filtered = enrollList;
                   const eOnes = filtered.filter(c => enrolledIds.has(c.id));
                   const uOnes = filtered.filter(c => !enrolledIds.has(c.id));
 
@@ -4585,6 +4566,7 @@ interface CompanyDetailModalProps {
   apiBase: string;
   onClose: () => void;
   onDownload: (company: Company) => void;
+  campaigns?: { id: number; name: string }[];
 }
 
 const CAMPAIGN_TAG_PALETTE = [
@@ -4604,7 +4586,7 @@ const CATEGORY_TAG_PALETTE = [
 const getCampaignTagColor = (id: number) => CAMPAIGN_TAG_PALETTE[id % CAMPAIGN_TAG_PALETTE.length];
 const getCategoryTagColor = (id: number) => CATEGORY_TAG_PALETTE[id % CATEGORY_TAG_PALETTE.length];
 
-const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({ company, isOpen, theme, apiBase, onClose, onDownload }) => {
+const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({ company, isOpen, theme, apiBase, onClose, onDownload, campaigns = [] }) => {
   const [detailCampaigns, setDetailCampaigns] = useState<{ id: number; name: string }[]>([]);
   const [detailCategories, setDetailCategories] = useState<{ id: number; name: string }[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -4612,26 +4594,18 @@ const CompanyDetailModal: React.FC<CompanyDetailModalProps> = ({ company, isOpen
   useEffect(() => {
     if (!isOpen || !company) return;
     setDetailCampaigns([]); setDetailCategories([]); setDetailLoading(true);
+    // Campaigns: use campaign_ids on company mapped against passed campaigns list
+    const memberCampaignIds = new Set<number>(company.campaign_ids ?? []);
+    setDetailCampaigns(campaigns.filter(c => memberCampaignIds.has(c.id)));
+    // Categories: use category_ids already on the company object
     (async () => {
       try {
-        // Campaigns this company belongs to
-        const cr = await apiFetch(`${apiBase}/company/${company.id}/campaign/`, {});
-        if (cr.ok) { const d = await cr.json(); setDetailCampaigns(d.campaigns || []); }
-        // Categories: fetch all, check membership
         const catr = await apiFetch(`${apiBase}/category/`, {});
         if (catr.ok) {
           const cd = await catr.json();
           const allCats: { id: number; name: string }[] = cd.categories || cd || [];
-          const memberOf: { id: number; name: string }[] = [];
-          await Promise.all(allCats.map(async (cat) => {
-            try {
-              const r = await apiFetch(`${apiBase}/category/${cat.id}/company/`, {});
-              if (!r.ok) return;
-              const d = await r.json();
-              const ids: number[] = (d.companies || []).map((c: any) => c.id);
-              if (ids.includes(company.id)) memberOf.push(cat);
-            } catch { /* silent */ }
-          }));
+          const memberIds = new Set<number>(company.category_ids ?? []);
+          const memberOf = allCats.filter(cat => memberIds.has(cat.id));
           setDetailCategories(memberOf.sort((a, b) => a.name.localeCompare(b.name)));
         }
       } catch { /* silent */ }
@@ -4960,7 +4934,6 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
 
   // Category filter state
   const [pageCategories, setPageCategories]         = useState<Category[]>([]);
-  const [pageCatCompanyMap, setPageCatCompanyMap]   = useState<Map<number, Set<number>>>(new Map());
   const [selCatIds, setSelCatIds]                   = useState<Set<number>>(new Set());
   const [catPageFilterMode, setCatPageFilterMode]   = useState<'any' | 'all'>('any');
   const [catPageDropOpen, setCatPageDropOpen]       = useState(false);
@@ -5006,7 +4979,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
     try {
       const s = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : '';
       const ids = Array.from(selectedCompanies).join(',');
-      const r = await apiFetch(`${API_BASE}/campaign/${campaignId}/company/?page=1&size=${selectedCompanies.size}&ids=${ids}${s}`);
+      const r = await apiFetch(`${API_BASE}/company/?page=1&size=${selectedCompanies.size}&ids=${ids}${s}&filter_campaigns=${campaignId}`);
       if (r.ok) { const d = await r.json(); downloadCSV(d.companies || [], `${campaign?.name || 'campaign'}_companies.csv`); }
     } catch { downloadCSV(selectedCompaniesList, `${campaign?.name || 'campaign'}_companies.csv`); }
   };
@@ -5137,17 +5110,12 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
       try {
         const s = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : '';
         const sortQ = sortKey ? `&sort_by=${sortKey}&sort_order=${sortDir}` : '';
-        const r = await apiFetch(`${API_BASE}/campaign/${campaignId}/company/?page=${currentPage}&size=${pageSize}${s}${sortQ}`, { });
+        const catQ = selCatIds.size > 0 ? `&filter_categories=${Array.from(selCatIds).join(',')}&category_filter_mode=${catPageFilterMode}` : '';
+        const r = await apiFetch(`${API_BASE}/company/?page=${currentPage}&size=${pageSize}&filter_campaigns=${campaignId}${s}${sortQ}${catQ}`, { });
         if (r.ok) {
           const d = await r.json();
           setTotalCompanies(d.total || 0);
-          let cos: Company[] = d.companies || [];
-          if (selCatIds.size > 0) {
-            cos = catPageFilterMode === 'any'
-              ? cos.filter(c => Array.from(selCatIds).some(cid => pageCatCompanyMap.get(cid)?.has(c.id)))
-              : cos.filter(c => Array.from(selCatIds).every(cid => pageCatCompanyMap.get(cid)?.has(c.id)));
-          }
-          setCompanies(cos);
+          setCompanies(d.companies || []);
         }
       } catch { /* silent */ }
       // Refresh stats on every companies reload
@@ -5156,11 +5124,11 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         if (r.ok) { const d = await r.json(); setCampaignStats(d); }
       } catch { /* silent */ }
     })();
-  }, [campaignId, refresh, currentPage, pageSize, searchTerm, sortKey, sortDir, selCatIds, catPageFilterMode, pageCatCompanyMap]);
+  }, [campaignId, refresh, currentPage, pageSize, searchTerm, sortKey, sortDir, selCatIds, catPageFilterMode]);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, sortKey, sortDir, selCatIds, catPageFilterMode]);
 
-  // Fetch categories + build company map for filter
+  // Fetch categories for filter dropdown
   useEffect(() => {
     if (!campaignId) return;
     (async () => {
@@ -5168,23 +5136,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         const r = await apiFetch(`${API_BASE}/category/`, {});
         if (!r.ok) return;
         const d = await r.json();
-        const cats: Category[] = d.categories || d || [];
-        setPageCategories(cats);
-        const map = new Map<number, Set<number>>();
-        await Promise.all(cats.map(async (cat) => {
-          try {
-            let ids: number[] = [], page = 1, total = Infinity;
-            while (ids.length < total) {
-              const cr = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${page}&size=200`, {});
-              if (!cr.ok) break;
-              const cd = await cr.json(); total = cd.total || 0;
-              ids = [...ids, ...(cd.companies || []).map((c: any) => c.id)];
-              if (ids.length >= total) break; page++;
-            }
-            map.set(cat.id, new Set(ids));
-          } catch { map.set(cat.id, new Set()); }
-        }));
-        setPageCatCompanyMap(map);
+        setPageCategories(d.categories || d || []);
       } catch { /* silent */ }
     })();
   }, [campaignId]);
@@ -5218,7 +5170,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
     setSelectingAll(true);
     try {
       const s = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : '';
-      const r = await apiFetch(`${API_BASE}/campaign/${campaignId}/company/?page=1&size=${totalCompanies || 1000}${s}`);
+      const r = await apiFetch(`${API_BASE}/company/?page=1&size=${totalCompanies || 1000}&filter_campaigns=${campaignId}${s}`);
       if (r.ok) {
         const d = await r.json();
         const all: Company[] = d.companies || [];
@@ -5239,8 +5191,9 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
       `Remove "${company.name}" from this campaign? The company will remain in your company pool.`,
       async () => {
         try {
-          const r = await apiFetch(`${API_BASE}/campaign/${campaignId}/company/?ids=${company.id}`, {
-            method: 'DELETE',
+          const r = await apiFetch(`${API_BASE}/campaign/bulk-unenroll/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_ids: [company.id], campaign_ids: [campaignId] }),
           });
           if (!r.ok) throw new Error('Failed to unenroll company');
           showToast('success', 'Unenrolled', `"${company.name}" removed from campaign`);
@@ -5260,9 +5213,10 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
       `Remove ${selectedCompanies.size} compan${selectedCompanies.size > 1 ? 'ies' : 'y'} from this campaign? They will remain in your company pool.`,
       async () => {
         try {
-          const ids = Array.from(selectedCompanies).join(',');
-          const r = await apiFetch(`${API_BASE}/campaign/${campaignId}/company/?ids=${ids}`, {
-            method: 'DELETE',
+          const ids = Array.from(selectedCompanies);
+          const r = await apiFetch(`${API_BASE}/campaign/bulk-unenroll/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_ids: ids, campaign_ids: [campaignId] }),
           });
           if (!r.ok) throw new Error('Failed to unenroll companies');
           showToast('success', 'Unenrolled', `${selectedCompanies.size} companies removed from campaign`);
@@ -5826,6 +5780,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         apiBase={API_BASE}
         onClose={closeDetailModal}
         onDownload={handleDownloadOne}
+        campaigns={campaign ? [{ id: campaign.id, name: campaign.name }] : []}
       />
 
     </PageWrapper>

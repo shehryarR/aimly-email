@@ -238,9 +238,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
   const { authReady } = useAuth();
 
   const [allCampaigns,        setAllCampaigns]        = useState<CampaignOption[]>([]);
-  const [campaignCompanyMap,  setCampaignCompanyMap]  = useState<Map<number, Set<number>>>(new Map()); void campaignCompanyMap;
   const [allCategories,       setAllCategories]       = useState<CampaignOption[]>([]);
-  const [categoryCompanyMap,  setCategoryCompanyMap]  = useState<Map<number, Set<number>>>(new Map());
   const [pageCompanies,      setPageCompanies]      = useState<CompanyWithCampaigns[]>([]);
   const [serverTotal,        setServerTotal]        = useState(0);
   const [loading,            setLoading]            = useState(false);
@@ -447,58 +445,6 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     };
     load();
   }, [refreshTrigger, authReady]);
-
-  // ── Build campaign→company map (for badge display only) ───
-  useEffect(() => {
-    if (!allCampaigns.length) return;
-    const build = async () => {
-      try {
-        const map = new Map<number, Set<number>>();
-        await Promise.allSettled(allCampaigns.map(async (c) => {
-          const ids = new Set<number>();
-          let page = 1;
-          while (true) {
-            const res = await apiFetch(`${API_BASE}/campaign/${c.id}/company/?page=${page}&size=100`);
-            if (!res.ok) break;
-            const d = await res.json();
-            const batch: any[] = d.companies ?? [];
-            batch.forEach((co: any) => ids.add(co.id));
-            if (batch.length < 100) break;
-            page++;
-          }
-          map.set(c.id, ids);
-        }));
-        setCampaignCompanyMap(map);
-      } catch { /* silent */ }
-    };
-    build();
-  }, [allCampaigns]);
-
-  // ── Build category→company map (for badge display only) ───
-  useEffect(() => {
-    if (!allCategories.length) return;
-    const build = async () => {
-      try {
-        const map = new Map<number, Set<number>>();
-        await Promise.allSettled(allCategories.map(async (cat) => {
-          const ids = new Set<number>();
-          let page = 1;
-          while (true) {
-            const res = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${page}&size=100`);
-            if (!res.ok) break;
-            const d = await res.json();
-            const batch: any[] = d.companies ?? [];
-            batch.forEach((co: any) => ids.add(co.id));
-            if (batch.length < 100) break;
-            page++;
-          }
-          map.set(cat.id, ids);
-        }));
-        setCategoryCompanyMap(map);
-      } catch { /* silent */ }
-    };
-    build();
-  }, [allCategories]);
 
   // ── Build server query params from current state ──────────
   const buildQueryParams = useCallback((
@@ -707,27 +653,21 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     if (!assignCompany) return;
     setAssignLoading(true);
     try {
-      const h: Record<string, string> = {};
-
-      for (const cid of toUnenroll) {
-        const res = await apiFetch(`${API_BASE}/campaign/${cid}/company/?ids=${assignCompany.id}`, { method: 'DELETE', });
+      if (toUnenroll.length) {
+        const res = await apiFetch(`${API_BASE}/campaign/bulk-unenroll/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: [assignCompany.id], campaign_ids: toUnenroll }),
+        });
         if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       }
-      for (const cid of toEnroll) {
-        const res = await apiFetch(`${API_BASE}/campaign/${cid}/company/`, {
-          method: 'POST',
-          headers: { ...h, 'Content-Type': 'application/json' },
-          body: JSON.stringify([assignCompany.id]),
+      if (toEnroll.length) {
+        const res = await apiFetch(`${API_BASE}/campaign/bulk-enroll/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: [assignCompany.id], campaign_ids: toEnroll }),
         });
         if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       }
 
-      setCampaignCompanyMap(prev => {
-        const next = new Map(prev);
-        for (const cid of toUnenroll) { const s = new Set(next.get(cid) ?? []); s.delete(assignCompany.id); next.set(cid, s); }
-        for (const cid of toEnroll)   { const s = new Set(next.get(cid) ?? []); s.add(assignCompany.id);    next.set(cid, s); }
-        return next;
-      });
       const newIds = [
         ...assignCompany.campaign_ids.filter(id => !toUnenroll.includes(id)),
         ...toEnroll,
@@ -753,21 +693,11 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
     const allIds = selectAllPages ? await fetchAllIds() : Array.from(selectedIds);
     const selectedCompanyIds = selectAllPages ? allIds : pageCompanies.filter(c => selectedIds.has(c.id) && !c.optedOut).map(c => c.id);
     try {
-      for (const cid of toEnroll) {
-        const res = await apiFetch(`${API_BASE}/campaign/${cid}/company/`, {
-          method: 'POST', body: JSON.stringify(selectedCompanyIds),
-        });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
-      }
-      setCampaignCompanyMap(prev => {
-        const next = new Map(prev);
-        for (const cid of toEnroll) {
-          const s = new Set(next.get(cid) ?? []);
-          selectedCompanyIds.forEach(id => s.add(id));
-          next.set(cid, s);
-        }
-        return next;
+      const res = await apiFetch(`${API_BASE}/campaign/bulk-enroll/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: selectedCompanyIds, campaign_ids: toEnroll }),
       });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       setPageCompanies(prev => prev.map(c =>
         !selectedIds.has(c.id) && !selectAllPages ? c : {
           ...c, campaign_ids: Array.from(new Set([...c.campaign_ids, ...toEnroll])),
@@ -1256,7 +1186,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
                   </CompanyInfo>
 
                   {(() => {
-                    const companyCategoryIds = allCategories.filter(cat => categoryCompanyMap.get(cat.id)?.has(company.id)).map(cat => cat.id);
+                    const companyCategoryIds = company.category_ids ?? [];
                     const hasCampaigns  = company.campaign_ids.length > 0;
                     const hasCategories = companyCategoryIds.length > 0;
                     if (!hasCampaigns && !hasCategories) return null;
@@ -1319,26 +1249,12 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
 
                   <CompanyActionButtons onClick={e => e.stopPropagation()}>
                     <IconButton theme={theme} $size="md" title="View details" disabled={isSelected}
-                      onClick={e => { e.stopPropagation(); setViewCompany(company); setViewCompanyCategories([]); setViewCategoriesLoading(true);
-                        (async () => {
-                          try {
-                            const cats: { id: number; name: string }[] = [];
-                            await Promise.allSettled(allCategories.map(async (cat) => {
-                              let page = 1;
-                              while (true) {
-                                const r = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${page}&size=100`);
-                                if (!r.ok) break;
-                                const d = await r.json();
-                                const found = (d.companies ?? []).some((c: any) => c.id === company.id);
-                                if (found) { cats.push({ id: cat.id, name: cat.name }); break; }
-                                if ((d.companies ?? []).length < 100) break;
-                                page++;
-                              }
-                            }));
-                            setViewCompanyCategories(cats.sort((a, b) => a.name.localeCompare(b.name)));
-                          } catch { setViewCompanyCategories([]); }
-                          finally { setViewCategoriesLoading(false); }
-                        })();
+                      onClick={e => { e.stopPropagation(); setViewCompany(company); setViewCategoriesLoading(false);
+                        const cats = allCategories
+                          .filter(cat => (company.category_ids ?? []).includes(cat.id))
+                          .map(cat => ({ id: cat.id, name: cat.name }))
+                          .sort((a, b) => a.name.localeCompare(b.name));
+                        setViewCompanyCategories(cats);
                       }}>
                       <EyeIcon />
                     </IconButton>

@@ -228,6 +228,8 @@ const Categories: React.FC = () => {
   const [detailModalTotal,     setDetailModalTotal]     = useState(0);
   const [detailModalLoading,   setDetailModalLoading]   = useState(false);
   const [detailModalSearch,    setDetailModalSearch]    = useState('');
+  const [detailModalPage,      setDetailModalPage]      = useState(1);
+  const DETAIL_PAGE_SIZE = 20;
 
   // ── Toast / confirm ────────────────────────────────────
   const [toast,   setToast]   = useState<ToastState>({ visible: false, type: 'info', title: '', message: '' });
@@ -378,9 +380,9 @@ const Categories: React.FC = () => {
   const fetchModalCompanies = async (catId: number, page: number, search: string) => {
     setModalLoading(true);
     try {
-      const p = new URLSearchParams({ page: String(page), size: '20' });
+      const p = new URLSearchParams({ page: String(page), size: '20', filter_categories: String(catId) });
       if (search.trim()) p.set('search', search.trim());
-      const res  = await apiFetch(`${API_BASE}/category/${catId}/company/?${p.toString()}`);
+      const res = await apiFetch(`${API_BASE}/company/?${p.toString()}`);
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
       setModalCompanies(data.companies ?? []);
@@ -403,36 +405,22 @@ const Categories: React.FC = () => {
   const _removeCompanyFromCategory = async (companyId: number) => {
     if (!companiesModal) return;
     try {
-      const res = await apiFetch(
-        `${API_BASE}/category/${companiesModal.id}/company/?ids=${companyId}`,
-        { method: 'DELETE' }
-      );
+      const res = await apiFetch(`${API_BASE}/category/bulk-remove/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [companyId], category_ids: [companiesModal.id] }),
+      });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       showToast('success', 'Company removed from category');
       fetchModalCompanies(companiesModal.id, modalPage, modalSearch);
-      setRefreshTrigger(p => p + 1); // refresh company_count on card
+      setRefreshTrigger(p => p + 1);
     } catch (err) { showToast('error', err instanceof Error ? err.message : 'Failed'); }
   };
   void _removeCompanyFromCategory;
 
   // ── Add companies modal ────────────────────────────────
-  const openAddCompaniesModal = async (cat: Category, e: React.MouseEvent) => {
+  const openAddCompaniesModal = (cat: Category, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      let all: any[] = [], page = 1, total = Infinity;
-      while (all.length < total) {
-        const res = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${page}&size=100`);
-        if (!res.ok) break;
-        const data = await res.json();
-        total = data.total ?? 0;
-        all = [...all, ...(data.companies ?? [])];
-        if (all.length >= total) break;
-        page++;
-      }
-      setAddCompaniesExistingIds(new Set<number>(all.map((c: any) => c.id as number)));
-    } catch {
-      setAddCompaniesExistingIds(new Set());
-    }
+    setAddCompaniesExistingIds(new Set()); // will be loaded inside AddCompaniesToCategoryModal
     setAddCompaniesModal(cat);
   };
 
@@ -449,29 +437,45 @@ const Categories: React.FC = () => {
   };
 
   // ── Detail modal ───────────────────────────────────────
-  const openDetailModal = async (cat: Category, e: React.MouseEvent) => {
+  const fetchDetailModalCompanies = async (catId: number, page: number, search: string) => {
+    setDetailModalLoading(true);
+    try {
+      const p = new URLSearchParams({ page: String(page), size: String(DETAIL_PAGE_SIZE), filter_categories: String(catId) });
+      if (search.trim()) p.set('search', search.trim());
+      const res = await apiFetch(`${API_BASE}/company/?${p.toString()}`);
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setDetailModalCompanies(data.companies ?? []);
+      setDetailModalTotal(data.total ?? 0);
+    } catch { setDetailModalCompanies([]); setDetailModalTotal(0); }
+    finally { setDetailModalLoading(false); }
+  };
+
+  const openDetailModal = (cat: Category, e: React.MouseEvent) => {
     e.stopPropagation();
     setDetailModal(cat);
     setDetailModalCompanies([]);
     setDetailModalTotal(0);
     setDetailModalSearch('');
-    setDetailModalLoading(true);
-    try {
-      let all: CompanyInCategory[] = [], page = 1, total = Infinity;
-      while (all.length < total) {
-        const res = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${page}&size=100`);
-        if (!res.ok) break;
-        const data = await res.json();
-        total = data.total ?? 0;
-        all = [...all, ...(data.companies ?? [])];
-        if (all.length >= total) break;
-        page++;
-      }
-      setDetailModalCompanies(all);
-      setDetailModalTotal(all.length);
-    } catch { setDetailModalCompanies([]); setDetailModalTotal(0); }
-    finally { setDetailModalLoading(false); }
+    setDetailModalPage(1);
+    fetchDetailModalCompanies(cat.id, 1, '');
   };
+
+  const detailModalSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!detailModal) return;
+    if (detailModalSearchTimer.current) clearTimeout(detailModalSearchTimer.current);
+    detailModalSearchTimer.current = setTimeout(() => {
+      setDetailModalPage(1);
+      fetchDetailModalCompanies(detailModal.id, 1, detailModalSearch);
+    }, 300);
+    return () => { if (detailModalSearchTimer.current) clearTimeout(detailModalSearchTimer.current); };
+  }, [detailModalSearch]);
+
+  useEffect(() => {
+    if (!detailModal) return;
+    fetchDetailModalCompanies(detailModal.id, detailModalPage, detailModalSearch);
+  }, [detailModalPage]);
 
   // ── Pagination helpers ─────────────────────────────────
   const renderPageNumbers = () => {
@@ -876,39 +880,39 @@ const Categories: React.FC = () => {
               {/* Divider */}
               <div style={{ height: 1, background: theme.colors.base[300], margin: '0 0 1.25rem' }} />
 
-              {/* Companies — scrollable list */}
+              {/* Companies — paginated list */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.625rem', gap: '0.5rem' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.45, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     Companies
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', background: theme.colors.primary.main, border: `1px solid ${theme.colors.primary.main}`, color: theme.colors.primary.content, textTransform: 'none', letterSpacing: 0 }}>
                       {detailModalTotal}
                     </span>
                   </div>
-                  {/* Inline search */}
-                  {detailModalCompanies.length > 0 && (
-                    <div style={{ position: 'relative' }}>
-                      <svg style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', width: 13, height: 13 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      </svg>
-                      <input
-                        type="text"
-                        placeholder="Search…"
-                        value={detailModalSearch ?? ''}
-                        onChange={e => setDetailModalSearch(e.target.value)}
-                        style={{
-                          paddingLeft: '1.75rem', paddingRight: '0.625rem',
-                          paddingTop: '0.3rem', paddingBottom: '0.3rem',
-                          fontSize: '0.8rem', width: '140px',
-                          border: `1px solid ${theme.colors.base[300]}`,
-                          borderRadius: theme.radius.field,
-                          background: theme.colors.base[400],
-                          color: theme.colors.base.content,
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
-                  )}
+                </div>
+
+                {/* Search bar — full width, same style as add modal */}
+                <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
+                  <svg style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none', width: 13, height: 13 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search by name or email…"
+                    value={detailModalSearch}
+                    onChange={e => setDetailModalSearch(e.target.value)}
+                    style={{
+                      width: '100%', boxSizing: 'border-box' as const,
+                      paddingLeft: '2rem', paddingRight: '0.875rem',
+                      paddingTop: '0.6rem', paddingBottom: '0.6rem',
+                      fontSize: '0.875rem',
+                      border: `1px solid ${theme.colors.base[300]}`,
+                      borderRadius: theme.radius.field,
+                      background: theme.colors.base[400],
+                      color: theme.colors.base.content,
+                      outline: 'none',
+                    }}
+                  />
                 </div>
 
                 {detailModalLoading ? (
@@ -917,30 +921,21 @@ const Categories: React.FC = () => {
                   </div>
                 ) : detailModalCompanies.length === 0 ? (
                   <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.875rem', opacity: 0.4, fontStyle: 'italic', border: `1px dashed ${theme.colors.base[300]}`, borderRadius: theme.radius.field }}>
-                    No companies in this category
+                    {detailModalSearch.trim() ? `No companies match "${detailModalSearch}"` : 'No companies in this category'}
                   </div>
-                ) : (() => {
-                  const q = (detailModalSearch ?? '').trim().toLowerCase();
-                  const filtered = q
-                    ? detailModalCompanies.filter(co => co.name.toLowerCase().includes(q) || co.email.toLowerCase().includes(q))
-                    : detailModalCompanies;
-                  return (
+                ) : (
+                  <>
                     <div style={{
-                      maxHeight: '320px', overflowY: 'auto',
                       border: `1px solid ${theme.colors.base[300]}`,
                       borderRadius: theme.radius.field,
                       background: theme.colors.base[200],
-                      scrollbarWidth: 'thin',
+                      scrollbarWidth: 'thin' as const,
                     }}>
-                      {filtered.length === 0 ? (
-                        <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.8125rem', opacity: 0.45 }}>
-                          No companies match "{detailModalSearch}"
-                        </div>
-                      ) : filtered.map((co, i) => (
+                      {detailModalCompanies.map((co, i) => (
                         <div key={co.id} style={{
                           display: 'flex', alignItems: 'center', gap: '0.75rem',
                           padding: '0.625rem 0.875rem',
-                          borderBottom: i < filtered.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none',
+                          borderBottom: i < detailModalCompanies.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none',
                         }}>
                           <div style={{
                             width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
@@ -961,8 +956,20 @@ const Categories: React.FC = () => {
                         </div>
                       ))}
                     </div>
-                  );
-                })()}
+                    {/* Pagination */}
+                    {detailModalTotal > DETAIL_PAGE_SIZE && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginTop: '0.75rem' }}>
+                        <button onClick={() => setDetailModalPage(p => Math.max(1, p - 1))} disabled={detailModalPage === 1}
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[300], color: theme.colors.base.content, cursor: detailModalPage === 1 ? 'not-allowed' : 'pointer', opacity: detailModalPage === 1 ? 0.4 : 1 }}>«</button>
+                        <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>
+                          {detailModalPage} / {Math.ceil(detailModalTotal / DETAIL_PAGE_SIZE)}
+                        </span>
+                        <button onClick={() => setDetailModalPage(p => p + 1)} disabled={detailModalPage >= Math.ceil(detailModalTotal / DETAIL_PAGE_SIZE)}
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[300], color: theme.colors.base.content, cursor: detailModalPage >= Math.ceil(detailModalTotal / DETAIL_PAGE_SIZE) ? 'not-allowed' : 'pointer', opacity: detailModalPage >= Math.ceil(detailModalTotal / DETAIL_PAGE_SIZE) ? 0.4 : 1 }}>»</button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
             </ModalBody>

@@ -537,11 +537,24 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               </PrimaryButton>
             </>)}
 
-            {isFailed && (
-              <DangerButton theme={theme} disabled={actionLoading} onClick={() => onDelete(activeEmail.id, `"${activeEmail.email_subject}"`)}>
-                {actionLoading ? <BtnSpinner /> : <TrashIcon />} Delete
-              </DangerButton>
-            )}
+            {isFailed && (<>
+              {reschedOpen ? (<>
+                <AutoSaveNote style={{ opacity: 1, marginRight: 'auto' }}>
+                  <FormInput theme={theme} type="datetime-local" value={reschedTime} min={minDT}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => onReschedTimeChange(e.target.value)}
+                    style={{ padding: '0.4rem 0.6rem', fontSize: '0.8125rem', marginBottom: 0 }} />
+                </AutoSaveNote>
+                <CancelButton theme={theme} disabled={actionLoading} onClick={onReschedClose}>Cancel</CancelButton>
+                <PrimaryButton theme={theme} disabled={!reschedTime || actionLoading} onClick={onRescheduleSubmit}>
+                  {actionLoading ? <BtnSpinner /> : <ScheduleIcon />} Confirm
+                </PrimaryButton>
+              </>) : (<>
+                <CancelButton theme={theme} disabled={actionLoading} onClick={onReschedOpen}><ScheduleIcon /> Reschedule</CancelButton>
+                <PrimaryButton theme={theme} disabled={actionLoading} onClick={() => onSend(activeEmail)}>
+                  {actionLoading ? <BtnSpinner /> : <SendIcon />} Send Now
+                </PrimaryButton>
+              </>)}
+            </>)}
           </ModalFooter>
         </>)}
 
@@ -1210,9 +1223,9 @@ const EmailHistory: React.FC = () => {
     if (cur === lastSaved.current) return;
     setAutoSaving(true);
     try {
-      const r = await apiFetch(`${API_BASE}/email/${activeEmail.id}/update/`, {
+      const r = await apiFetch(`${API_BASE}/email/bulk-update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_subject: editSubject, email_content: editContent, recipient_email: editRecipient }),
+        body: JSON.stringify({ updates: [{ email_id: activeEmail.id, email_subject: editSubject, email_content: editContent, recipient_email: editRecipient }] }),
       });
       if (r.ok) lastSaved.current = cur;
     } catch { /* silent */ } finally { setAutoSaving(false); }
@@ -1252,8 +1265,9 @@ const EmailHistory: React.FC = () => {
     if (!activeEmail) return;
     setAttachSaving(true); setAttachMsg(null);
     try {
-      const res = await apiFetch(`${API_BASE}/email/${activeEmail.id}/attachments/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Array.from(linkedAttachIds)),
+      const res = await apiFetch(`${API_BASE}/email/bulk-attachments/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ email_id: activeEmail.id, attachment_ids: Array.from(linkedAttachIds) }] }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       setAttachMsg({ type: 'success', text: 'Attachments saved' });
@@ -1279,8 +1293,9 @@ const EmailHistory: React.FC = () => {
       if (!upRes.ok) { const e = await upRes.json(); throw new Error(e.detail || 'Upload failed'); }
       const upData = await upRes.json();
       const newIds = Array.from(new Set([...Array.from(linkedAttachIds), upData.id as number]));
-      const attRes = await apiFetch(`${API_BASE}/email/${activeEmail.id}/attachments/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newIds),
+      const attRes = await apiFetch(`${API_BASE}/email/bulk-attachments/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ email_id: activeEmail.id, attachment_ids: newIds }] }),
       });
       if (attRes.ok) setLinkedAttachIds(new Set(newIds));
       await loadEmailAttachments(activeEmail.id);
@@ -1304,9 +1319,9 @@ const EmailHistory: React.FC = () => {
     if (!activeEmail) return;
     setBrandSaving(true); setBrandMsg(null);
     try {
-      const res = await apiFetch(`${API_BASE}/email/${activeEmail.id}/update/`, {
+      const res = await apiFetch(`${API_BASE}/email/bulk-update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature: brandSignature ?? '', ...(brandLogoData ? { logo_data: brandLogoData } : { logo_clear: true }) }),
+        body: JSON.stringify({ updates: [{ email_id: activeEmail.id, signature: brandSignature ?? '', ...(brandLogoData ? { logo_data: brandLogoData } : { logo_clear: true }) }] }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
       setBrandMsg({ type: 'success', text: 'Branding saved' });
@@ -1322,8 +1337,10 @@ const EmailHistory: React.FC = () => {
       setActionLoading(true);
       try {
         if (email.status === 'draft' || email.status === 'scheduled') await doAutoSave();
-        const r = await apiFetch(`${API_BASE}/email/${email.id}/send/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        const r = await apiFetch(`${API_BASE}/email/bulk-send/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email_ids: [email.id] }) });
         if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Send failed'); }
+        const d = await r.json();
+        if (d.sent === 0) throw new Error(d.errors?.[0]?.reason || 'Send failed');
         showToast('Email Sent', `Sent to ${email.recipient_email}`); closeModal(); refreshEmails();
       } catch (e: any) { showToast('Send Failed', e.message, 'error'); }
       finally { setActionLoading(false); }
@@ -1336,8 +1353,10 @@ const EmailHistory: React.FC = () => {
     setActionLoading(true);
     try {
       if (activeEmail.status === 'draft') await doAutoSave();
-      const r = await apiFetch(`${API_BASE}/email/${activeEmail.id}/send/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ time: toISO(schedTime) }) });
+      const r = await apiFetch(`${API_BASE}/email/bulk-send/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email_ids: [activeEmail.id], time: toISO(schedTime) }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Schedule failed'); }
+      const d = await r.json();
+      if (d.sent === 0) throw new Error(d.errors?.[0]?.reason || 'Schedule failed');
       showToast('Scheduled', `Will send at ${new Date(schedTime).toLocaleString()}`);
       setSchedOpen(false); setSchedTime(''); closeModal(); refreshEmails();
     } catch (e: any) { showToast('Schedule Failed', e.message, 'error'); }
@@ -1349,8 +1368,10 @@ const EmailHistory: React.FC = () => {
     if (!activeEmail) return;
     setActionLoading(true);
     try {
-      const r = await apiFetch(`${API_BASE}/email/${activeEmail.id}/update/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ time: toISO(reschedTime) }) });
+      const r = await apiFetch(`${API_BASE}/email/bulk-update/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: [{ email_id: activeEmail.id, status: 'scheduled', time: toISO(reschedTime) }] }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Reschedule failed'); }
+      const d = await r.json();
+      if (d.updated === 0) throw new Error(d.errors?.[0]?.reason || 'Reschedule failed');
       showToast('Rescheduled', `Will now send at ${new Date(reschedTime).toLocaleString()}`);
       setReschedOpen(false); setReschedTime(''); closeModal(); refreshEmails();
     } catch (e: any) { showToast('Reschedule Failed', e.message, 'error'); }
@@ -1360,8 +1381,10 @@ const EmailHistory: React.FC = () => {
   const handleSaveDraft = async (email: EmailRecord) => {
     setActionLoading(true);
     try {
-      const r = await apiFetch(`${API_BASE}/email/${email.id}/draft/`, { method: 'POST' });
+      const r = await apiFetch(`${API_BASE}/email/draft/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email_ids: [email.id] }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Failed'); }
+      const d = await r.json();
+      if (d.drafted === 0) throw new Error(d.errors?.[0]?.reason || 'Failed to create draft');
       showToast('Draft Created', 'A draft copy has been created'); closeModal(); refreshEmails();
     } catch (e: any) { showToast('Failed', e.message, 'error'); }
     finally { setActionLoading(false); }

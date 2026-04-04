@@ -200,6 +200,7 @@ class CompanyResponse(BaseModel):
     created_at: datetime
     optedOut: bool = False
     campaign_ids: List[int] = []
+    category_ids: List[int] = []
 
 
 class CompaniesListResponse(BaseModel):
@@ -1011,6 +1012,17 @@ def get_companies(
             for cc_row in cursor.fetchall():
                 campaign_ids_map[cc_row["company_id"]].append(cc_row["campaign_id"])
 
+        # ── Fetch category_ids for each company in one query ───────────────
+        category_ids_map: dict[int, list[int]] = {r["id"]: [] for r in rows}
+        if company_ids_on_page:
+            cursor.execute(f"""
+                SELECT company_id, category_id
+                FROM category_company
+                WHERE company_id IN ({placeholders_ids})
+            """, company_ids_on_page)
+            for cat_row in cursor.fetchall():
+                category_ids_map[cat_row["company_id"]].append(cat_row["category_id"])
+
         company_list = [
             CompanyResponse(
                 id=r["id"],
@@ -1023,6 +1035,7 @@ def get_companies(
                 created_at=r["created_at"],
                 optedOut=_is_opted_out(sender_email, r["email"]) if sender_email else False,
                 campaign_ids=campaign_ids_map.get(r["id"], []),
+                category_ids=category_ids_map.get(r["id"], []),
             )
             for r in rows
         ]

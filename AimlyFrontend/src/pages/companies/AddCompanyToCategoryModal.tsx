@@ -156,7 +156,7 @@ interface Category { id: number; name: string; detail: string | null; company_co
 export interface Props {
   isOpen: boolean;
   /** Single company — for individual assignment */
-  company?: { id: number; name: string } | null;
+  company?: { id: number; name: string; category_ids?: number[] } | null;
   /** Multiple company IDs — for bulk assignment */
   companyIds?: number[];
   /** Total count label shown when bulk */
@@ -212,28 +212,9 @@ const AddCompanyToCategoryModal: React.FC<Props> = ({
       }
       setTotalCats(all.length);
 
-      // For single company: figure out which categories it already belongs to
+      // For single company: use category_ids already returned by the company endpoint
       if (companyId && !isBulk) {
-        let enrolled: Category[] = []; page = 1; total = Infinity;
-        // We fetch all user categories and cross-check via category/{id}/company
-        // — instead use company's category list if available in a future endpoint.
-        // For now: check each category's companies for this company ID.
-        // More efficient: GET /category/?company_id={id} — but that's not in the backend yet.
-        // So we load each category's companies (only if category list is small).
-        const eIds = new Set<number>();
-        await Promise.allSettled(all.map(async (cat) => {
-          let cPage = 1, cTotal = Infinity;
-          while (cPage === 1 || enrolled.length < cTotal) {
-            const r = await apiFetch(`${API_BASE}/category/${cat.id}/company/?page=${cPage}&size=100`);
-            if (!r.ok) break;
-            const d = await r.json();
-            cTotal = d.total ?? 0;
-            const found = (d.companies ?? []).some((c: any) => c.id === companyId);
-            if (found) { eIds.add(cat.id); break; }
-            if ((d.companies ?? []).length < 100) break;
-            cPage++;
-          }
-        }));
+        const eIds = new Set<number>(company?.category_ids ?? []);
         setEnrolledIds(eIds);
         // Sort: already-enrolled first, then alphabetically
         all.sort((a, b) => {
@@ -286,19 +267,19 @@ const AddCompanyToCategoryModal: React.FC<Props> = ({
 
     setSaving(true); setResult(null);
     try {
-      for (const catId of toAdd) {
-        const res = await apiFetch(`${API_BASE}/category/${catId}/company/`, {
-          method: 'POST',
-          body: JSON.stringify(ids),
+      if (toAdd.length) {
+        const res = await apiFetch(`${API_BASE}/category/bulk-assign/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: ids, category_ids: toAdd }),
         });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || 'Failed to add');
       }
-      for (const catId of toRemove) {
-        const res = await apiFetch(
-          `${API_BASE}/category/${catId}/company/?ids=${ids.join(',')}`,
-          { method: 'DELETE' }
-        );
+      if (toRemove.length) {
+        const res = await apiFetch(`${API_BASE}/category/bulk-remove/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: ids, category_ids: toRemove }),
+        });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || 'Failed to remove');
       }

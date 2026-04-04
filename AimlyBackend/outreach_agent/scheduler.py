@@ -74,31 +74,60 @@ class EmailScheduler:
 
         for email in scheduled:
             try:
-                print(f"🕐 Due: email ID={email['id']}")
                 self._dispatch_email(email["id"], email["user_id"])
             except Exception as exc:
                 print(f"❌ Error processing email {email['id']}: {exc}")
                 traceback.print_exc()
 
     def _dispatch_email(self, email_id: int, user_id: int):
-        """Call the send endpoint internally using the internal API key."""
+        """Call the bulk-send endpoint internally using the internal API key."""
         headers = {
             "X-Internal-Key": INTERNAL_API_KEY,
             "X-User-Id":      str(user_id),
+            "Content-Type":   "application/json",
         }
 
-        with httpx.Client() as client:
-            response = client.post(
-                f"{BASE_URL}/email/{email_id}/send/",
-                headers=headers,
-                json={},       # no scheduled time = send immediately
-                timeout=60.0,
-            )
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{BASE_URL}/email/bulk-send/",
+                    headers=headers,
+                    json={"email_ids": [email_id]},
+                    timeout=60.0,
+                )
+        except Exception as exc:
+            print(f"❌ Email {email_id} network error: {exc}")
+            reason = "Unknown Error: You may retry later or report to us"
+            try:
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (email_id,))
+                    cursor.execute(
+                        "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
+                        (email_id, reason),
+                    )
+                    conn.commit()
+            except Exception as db_exc:
+                print(f"❌ Failed to mark email {email_id} as failed in DB: {db_exc}")
+            return
 
         if response.status_code == 200:
-            print(f"✅ Email {email_id} dispatched successfully")
+            pass  # bulk-send handles status updates and logging internally
+
         else:
-            print(f"❌ Email {email_id} dispatch failed: {response.status_code} — {response.text}")
+            reason = "Unknown Error: You may retry later or report to us"
+            print(f"❌ Email {email_id} dispatch failed ({response.status_code}): {reason}")
+            try:
+                with get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (email_id,))
+                    cursor.execute(
+                        "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
+                        (email_id, reason),
+                    )
+                    conn.commit()
+            except Exception as db_exc:
+                print(f"❌ Failed to mark email {email_id} as failed in DB: {db_exc}")
 
 
 # =============================================================================

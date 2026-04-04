@@ -183,7 +183,7 @@ const AddCompaniesToCategoryModal: React.FC<Props> = ({
       // Companies already in this category (paginated)
       let enrolled: Company[] = []; page = 1; total = Infinity;
       while (enrolled.length < total) {
-        const r = await apiFetch(`${API_BASE}/category/${category.id}/company/?page=${page}&size=${PAGE_SIZE}`);
+        const r = await apiFetch(`${API_BASE}/company/?page=${page}&size=${PAGE_SIZE}&filter_categories=${category.id}`);
         if (!r.ok) break;
         const d = await r.json();
         total = d.total || 0;
@@ -236,18 +236,18 @@ const AddCompaniesToCategoryModal: React.FC<Props> = ({
     setSaving(true); setResult(null);
     try {
       if (toAdd.length > 0) {
-        const res = await apiFetch(`${API_BASE}/category/${category!.id}/company/`, {
-          method: 'POST',
-          body: JSON.stringify(toAdd),
+        const res = await apiFetch(`${API_BASE}/category/bulk-assign/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: toAdd, category_ids: [category!.id] }),
         });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || 'Failed to add');
       }
       if (toRemove.length > 0) {
-        const res = await apiFetch(
-          `${API_BASE}/category/${category!.id}/company/?ids=${toRemove.join(',')}`,
-          { method: 'DELETE' }
-        );
+        const res = await apiFetch(`${API_BASE}/category/bulk-remove/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: toRemove, category_ids: [category!.id] }),
+        });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || 'Failed to remove');
       }
