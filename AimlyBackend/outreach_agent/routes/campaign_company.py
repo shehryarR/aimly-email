@@ -77,10 +77,6 @@ class MessageResponse(BaseModel):
 
 
 # ==================================================================================
-# GET /campaign/{campaign_id}/company - Get all companies in a campaign
-# UPDATED: Added `search` query param - filters by name OR email (case-insensitive)
-# ==================================================================================
-# ==================================================================================
 # POST /campaign/{campaign_id}/company/inherit/ - Get inherit flags for multiple companies
 # ==================================================================================
 class BulkInheritRequest(BaseModel):
