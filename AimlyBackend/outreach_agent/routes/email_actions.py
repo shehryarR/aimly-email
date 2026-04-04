@@ -719,132 +719,156 @@ def send_email(
 
 
 # ==================================================================================
-# POST /email/{email_id}/draft - Save email as draft
+# POST /email/draft/ - Save one or more emails as drafts (bulk)
 # ==================================================================================
-@email_actions_router.post("/{email_id}/draft/", response_model=MessageResponse)
-def save_as_draft(
-    email_id: int,
+
+class BulkDraftRequest(BaseModel):
+    email_ids: List[int]
+
+class BulkDraftResponse(BaseModel):
+    drafted: int
+    failed: int
+    draft_ids: List[int]
+    errors: List[dict]
+
+@email_actions_router.post("/draft/", response_model=BulkDraftResponse)
+def save_as_draft_bulk(
+    request: BulkDraftRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Save an email as a draft.
+    Save one or more emails as drafts.
 
-    Behavior:
+    Accepts a list of email_ids. For each:
     - If primary email: Creates a new draft copy (primary remains unchanged)
-    - If sent email: Creates a new draft copy (sent remains unchanged)
-    - If scheduled email: Creates a new draft copy (scheduled remains unchanged)
+    - If sent/scheduled/failed email: Creates a new draft copy (original remains unchanged)
+    - If already a draft: logged as error, skipped
+    - If not found or DB error: logged as error, skipped
 
-    Attachments are copied to the new draft email.
+    Returns a summary of drafted count, failed count, new draft IDs, and per-email errors.
     """
     user_id = current_user["user_id"]
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
+    if not request.email_ids:
+        raise HTTPException(status_code=400, detail="email_ids must not be empty")
 
-        cursor.execute("""
-            SELECT e.*, cc.campaign_id, c.user_id
-            FROM emails e
-            JOIN campaign_company cc ON e.campaign_company_id = cc.id
-            JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = %s AND c.user_id = %s
-        """, (email_id, user_id))
+    draft_ids: List[int] = []
+    errors: List[dict] = []
 
-        email = cursor.fetchone()
-        if not email:
-            raise HTTPException(status_code=404, detail="Email not found")
-
-        if email["status"] == "draft":
-            raise HTTPException(status_code=400, detail="Email is already a draft")
-
-        # For primary emails, resolve branding and attachments exactly as send/schedule does,
-        # so the new draft entry has the fully baked values rather than NULLs.
-        if email["status"] == "primary":
-            campaign_id = email["campaign_id"]
-
-            cursor.execute("""
-                SELECT id, inherit_campaign_attachments, inherit_campaign_branding
-                FROM campaign_company WHERE id = %s
-            """, (email["campaign_company_id"],))
-            cc_row = cursor.fetchone()
-            inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
-            inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
-
-            cursor.execute("""
-                SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                FROM campaign_preferences WHERE campaign_id = %s
-            """, (campaign_id,))
-            campaign_prefs = cursor.fetchone()
-
-            cursor.execute("""
-                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-            """, (user_id,))
-            global_prefs = cursor.fetchone()
-
-            signature, logo_blob, logo_mime_type = resolve_branding(
-                email, campaign_prefs, global_prefs, inherit_campaign_branding
-            )
-
-            inherit_global_attachments = (
-                campaign_prefs["inherit_global_attachments"]
-                if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
-                else 1
-            )
-
-            baked_attachment_ids = resolve_attachment_ids_for_primary(
-                email_id, campaign_id, user_id, cursor,
-                inherit_campaign_attachments, inherit_global_attachments
-            )
-        else:
-            # Sent, scheduled, or failed emails already have branding + attachments baked in their own row.
-            signature            = email["signature"]
-            logo_blob            = email["logo"]
-            logo_mime_type       = email["logo_mime_type"]
-            baked_attachment_ids = None
-
+    for email_id in request.email_ids:
         try:
-            cursor.execute("""
-                INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                   recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                   html_email)
-                VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s)
-            """, (
-                email["campaign_company_id"],
-                email["email_subject"],
-                email["email_content"],
-                email["recipient_email"],
-                email["timezone"],
-                signature,
-                logo_blob,
-                logo_mime_type,
-                email["html_email"],
-            ))
+            with get_connection() as conn:
+                cursor = conn.cursor()
 
-            draft_id = cursor.lastrowid
-
-            if baked_attachment_ids is not None:
-                # Primary: bake the fully resolved attachment set into the new draft row.
-                for att_id in baked_attachment_ids:
-                    cursor.execute("""
-                        INSERT IGNORE INTO email_attachments (email_id, attachment_id)
-                        VALUES (%s, %s)
-                    """, (draft_id, att_id))
-            else:
-                # Sent/scheduled: copy the already-baked attachment rows as-is.
                 cursor.execute("""
-                    INSERT INTO email_attachments (email_id, attachment_id, created_at)
-                    SELECT %s, attachment_id, created_at
-                    FROM email_attachments WHERE email_id = %s
-                """, (draft_id, email_id))
+                    SELECT e.*, cc.campaign_id, c.user_id
+                    FROM emails e
+                    JOIN campaign_company cc ON e.campaign_company_id = cc.id
+                    JOIN campaigns c ON cc.campaign_id = c.id
+                    WHERE e.id = %s AND c.user_id = %s
+                """, (email_id, user_id))
 
-            conn.commit()
+                email = cursor.fetchone()
+                if not email:
+                    errors.append({"email_id": email_id, "reason": "Email not found"})
+                    continue
+
+                if email["status"] == "draft":
+                    errors.append({"email_id": email_id, "reason": "Email is already a draft"})
+                    continue
+
+                # For primary emails, resolve branding and attachments exactly as send/schedule does,
+                # so the new draft entry has the fully baked values rather than NULLs.
+                if email["status"] == "primary":
+                    campaign_id = email["campaign_id"]
+
+                    cursor.execute("""
+                        SELECT id, inherit_campaign_attachments, inherit_campaign_branding
+                        FROM campaign_company WHERE id = %s
+                    """, (email["campaign_company_id"],))
+                    cc_row = cursor.fetchone()
+                    inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
+                    inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
+
+                    cursor.execute("""
+                        SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
+                        FROM campaign_preferences WHERE campaign_id = %s
+                    """, (campaign_id,))
+                    campaign_prefs = cursor.fetchone()
+
+                    cursor.execute("""
+                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
+                    """, (user_id,))
+                    global_prefs = cursor.fetchone()
+
+                    signature, logo_blob, logo_mime_type = resolve_branding(
+                        email, campaign_prefs, global_prefs, inherit_campaign_branding
+                    )
+
+                    inherit_global_attachments = (
+                        campaign_prefs["inherit_global_attachments"]
+                        if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
+                        else 1
+                    )
+
+                    baked_attachment_ids = resolve_attachment_ids_for_primary(
+                        email_id, campaign_id, user_id, cursor,
+                        inherit_campaign_attachments, inherit_global_attachments
+                    )
+                else:
+                    # Sent, scheduled, or failed emails already have branding + attachments baked in their own row.
+                    signature            = email["signature"]
+                    logo_blob            = email["logo"]
+                    logo_mime_type       = email["logo_mime_type"]
+                    baked_attachment_ids = None
+
+                cursor.execute("""
+                    INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                       recipient_email, status, timezone, signature, logo, logo_mime_type,
+                                       html_email)
+                    VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s)
+                """, (
+                    email["campaign_company_id"],
+                    email["email_subject"],
+                    email["email_content"],
+                    email["recipient_email"],
+                    email["timezone"],
+                    signature,
+                    logo_blob,
+                    logo_mime_type,
+                    email["html_email"],
+                ))
+
+                draft_id = cursor.lastrowid
+
+                if baked_attachment_ids is not None:
+                    # Primary: bake the fully resolved attachment set into the new draft row.
+                    for att_id in baked_attachment_ids:
+                        cursor.execute("""
+                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                            VALUES (%s, %s)
+                        """, (draft_id, att_id))
+                else:
+                    # Sent/scheduled: copy the already-baked attachment rows as-is.
+                    cursor.execute("""
+                        INSERT INTO email_attachments (email_id, attachment_id, created_at)
+                        SELECT %s, attachment_id, created_at
+                        FROM email_attachments WHERE email_id = %s
+                    """, (draft_id, email_id))
+
+                conn.commit()
+                draft_ids.append(draft_id)
 
         except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to create draft: {str(e)}")
+            print(f"[BulkDraft] email_id={email_id} failed: {e}")
+            errors.append({"email_id": email_id, "reason": str(e)})
+            continue
 
-    return MessageResponse(
-        message="Draft created successfully",
-        email_id=draft_id
+    return BulkDraftResponse(
+        drafted=len(draft_ids),
+        failed=len(errors),
+        draft_ids=draft_ids,
+        errors=errors,
     )
 
 # =============================================================================

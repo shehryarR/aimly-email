@@ -566,6 +566,7 @@ const IcoPersonal  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill=
 const IcoTemplate  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
 const IcoSend      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
 const IcoCal       = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/></svg>;
+const IcoDraft     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
 const IcoCheck     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 const IcoUpload    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 const IcoSearch    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -663,7 +664,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const [activeIdx,  setActiveIdx]  = useState(0);
 
   // footer state
-  const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'gen-p'|'gen-t'|'gen-h'|null>(null);
+  const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'draft'|'gen-p'|'gen-t'|'gen-h'|null>(null);
   const [schedTime,  setSchedTime]  = useState('');
   const [genProg,    setGenProg]    = useState({ done:0, total:0 });
 
@@ -900,6 +901,37 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       onToast('error', 'Smart Schedule Failed', 'Unexpected error');
     }
     setBulkActing(null);
+  };
+
+  // ── draft all ────────────────────────────────────────────────
+  const handleDraftAll = async () => {
+    if (bulkActing) return;
+    const readyIds = entries.filter(e => e.phase === 'ready' && e.emailId).map(e => e.emailId as number);
+    if (!readyIds.length) return;
+    setBulkActing('draft');
+    await saveAllEdits();
+    try {
+      const r = await apiFetch(`${apiBase}/email/draft/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_ids: readyIds }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.drafted > 0) {
+          onToast('success', 'Drafts Saved', `${d.drafted} draft${d.drafted > 1 ? 's' : ''} saved${d.failed ? `, ${d.failed} failed` : ''}`);
+        } else {
+          onToast('error', 'Draft Failed', `All ${d.failed} failed`);
+        }
+      } else {
+        const err = await r.json();
+        onToast('error', 'Draft Failed', err.detail || 'Failed to save drafts');
+      }
+    } catch {
+      onToast('error', 'Draft Failed', 'Unexpected error');
+    }
+    setBulkActing(null);
+    onClose();
   };
 
   // ── bulk generate all ────────────────────────────────────────
@@ -1918,6 +1950,11 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   </SplitMenu>
                 )}
               </SplitGroup>
+              {/* Draft All */}
+              <Btn theme={theme} $v="default" disabled={!!bulkActing||readyCount===0} onClick={handleDraftAll}>
+                {bulkActing==='draft'?<MiniSpinner/>:<IcoDraft/>}
+                Draft All ({readyCount})
+              </Btn>
               {/* Send All */}
               <Btn theme={theme} $v="primary" disabled={!!bulkActing||readyCount===0} onClick={handleSendAll}>
                 {bulkActing==='send'?<MiniSpinner/>:<IcoSend/>}

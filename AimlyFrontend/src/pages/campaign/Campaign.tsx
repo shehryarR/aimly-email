@@ -3754,6 +3754,28 @@ const EmailModal: React.FC<EmailModalProps> = ({
     } finally { setActing(null); }
   };
 
+  const handleDraft = async () => {
+    if (!email || acting) return;
+    setActing('draft'); await saveEdits();
+    try {
+      const res = await apiFetch(`${apiBase}/email/draft/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_ids: [email.id] }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Draft failed');
+      if (d.drafted > 0) {
+        onToast('success', 'Draft Saved', `Draft saved for ${company?.email}`);
+        onClose();
+      } else {
+        const reason = d.errors?.[0]?.reason || 'Failed to save draft';
+        throw new Error(reason);
+      }
+    } catch (err) {
+      onToast('error', 'Draft Failed', err instanceof Error ? err.message : 'Failed to save draft');
+    } finally { setActing(null); }
+  };
+
   // ── Attachment tab helpers (mirrors settings modal exactly) ───────────────────
   const handleAttachFilePick = (file: File) => {
     setUploadMsg(null);
@@ -4456,6 +4478,14 @@ const EmailModal: React.FC<EmailModalProps> = ({
                 </>
               ) : (
                 <>
+                  <EActionBtn theme={theme} disabled={!!acting} onClick={handleDraft}>
+                    {acting === 'draft' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                      </svg>
+                    )}
+                    Draft
+                  </EActionBtn>
                   <EActionBtn theme={theme} disabled={!!acting} onClick={() => { setShowSched(true); setTimeout(() => schedInputRef.current?.focus(), 80); }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
