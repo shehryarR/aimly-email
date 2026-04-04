@@ -26,7 +26,7 @@ ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/a
 ATTACHMENT_UPLOAD_DIR = Path(ATTACHMENT_STORAGE_PATH)
 os.makedirs(ATTACHMENT_UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".csv", ".jpg", ".jpeg", ".png", ".gif", ".webp"}
+ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".csv", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -57,7 +57,7 @@ async def upload_attachment(
     if file_extension not in ALLOWED_ATTACHMENT_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_ATTACHMENT_EXTENSIONS)}"
+            detail=f"Invalid file type. Allowed: {', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))}"
         )
 
     try:

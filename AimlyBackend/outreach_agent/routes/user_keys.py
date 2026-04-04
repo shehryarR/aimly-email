@@ -498,10 +498,13 @@ def _check_llm_status(keys: dict) -> KeyStatus:
             from google import genai
             # Call directly — ThreadPoolExecutor conflicts with genai's internal async client
             client = genai.Client(api_key=llm_api_key)
-            client.models.generate_content(
-                model=llm_model or "gemini-2.0-flash", contents="test"
-            )
-            return KeyStatus(status_text="Working", status_code=1)
+            try:
+                client.models.generate_content(
+                    model=llm_model or "gemini-2.0-flash", contents="test"
+                )
+                return KeyStatus(status_text="Working", status_code=1)
+            finally:
+                client.close()
 
         except ImportError:
             return KeyStatus(status_text="Working (format valid)", status_code=1)

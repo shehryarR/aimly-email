@@ -1115,7 +1115,6 @@ const AttachEmpty = styled.div<{ theme: any }>`
 `;
 
 const VALID_TONES = ['Professional', 'Professional but friendly', 'Enthusiastic', 'Concise', 'Formal', 'Casual'];
-const ALLOWED_ATTACH_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const getExt = (filename: string) => filename.split('.').pop()?.toLowerCase() || '';
 
 // ─────────────────────────────────────────────────────────────
@@ -1516,11 +1515,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
   // ── File upload ─────────────────────────────────────────────
   const handleAttachFilePick = (file: File) => {
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!ALLOWED_ATTACH_EXTS.includes(ext)) {
-      onToast('error', 'Attachments', `Invalid file type. Allowed: ${ALLOWED_ATTACH_EXTS.join(', ')}`);
-      return;
-    }
     if (file.size > 5 * 1024 * 1024) {
       onToast('error', 'Attachments', 'File size must be less than 5MB');
       return;
@@ -2357,7 +2351,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         <input
                           ref={uploadFileInputRef}
                           type="file"
-                          accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp"
+                          accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg"
                           style={{ display: 'none' }}
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleAttachFilePick(f); }}
                           disabled={uploading}
@@ -3785,11 +3779,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
   // ── Attachment tab helpers (mirrors settings modal exactly) ───────────────────
   const handleAttachFilePick = (file: File) => {
     setUploadMsg(null);
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!ALLOWED_ATTACH_EXTS.includes(ext)) {
-      setUploadMsg({ type: 'error', text: `Invalid file type. Allowed: ${ALLOWED_ATTACH_EXTS.join(', ')}` });
-      return;
-    }
     if (file.size > 5 * 1024 * 1024) {
       setUploadMsg({ type: 'error', text: 'File size must be less than 5MB' });
       return;
@@ -4159,7 +4148,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
                         onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = theme.colors.base[100]; e.currentTarget.style.color = theme.colors.base.content; e.currentTarget.style.borderColor = theme.colors.base[300]; }}
                       >✕</button>
                     )}
-                    <input ref={uploadFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }}
+                    <input ref={uploadFileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: 'none' }}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleAttachFilePick(f); }} disabled={uploading} />
                   </div>
 

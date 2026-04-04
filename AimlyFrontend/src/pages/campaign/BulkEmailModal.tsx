@@ -1126,8 +1126,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   };
 
   const pickBulkFile = (f: File) => {
-    const ext='.'+f.name.split('.').pop()?.toLowerCase();
-    if (!ALLOWED_EXTS.includes(ext)){setBulkUploadMsg({ok:false,text:`Invalid type. Allowed: ${ALLOWED_EXTS.join(', ')}`});return;}
     if (f.size>5*1024*1024){setBulkUploadMsg({ok:false,text:'File must be under 5 MB'});return;}
     setBulkUploadFile(f); setBulkUploadMsg(null); markDirty();
   };
@@ -1190,8 +1188,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
   // ── per-company helpers ──────────────────────────────────────
   const pickFile = (idx: number, f: File) => {
-    const ext='.'+f.name.split('.').pop()?.toLowerCase();
-    if(!ALLOWED_EXTS.includes(ext)){upd(idx,{uploadMsg:{type:'error',text:`Invalid type. Allowed: ${ALLOWED_EXTS.join(', ')}`}});return;}
     if(f.size>5*1024*1024){upd(idx,{uploadMsg:{type:'error',text:'File must be under 5 MB'}});return;}
     upd(idx,{uploadFile:f,uploadMsg:null}); markDirty();
   };
@@ -1302,7 +1298,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const isGenning   = bulkActing==='gen-p'||bulkActing==='gen-t'||bulkActing==='gen-h';
   const allSettled  = entries.length > 0 && entries.every(e => e.phase === 'ready' || e.phase === 'error');
   const doneCount   = entries.filter(e => e.phase === 'ready' || e.phase === 'error').length;
-  const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
 
   if (!isOpen) return null;
 
@@ -1511,7 +1506,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                                   {entry.uploadFile?<><div style={{fontSize:'0.84rem',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.uploadFile.name}</div><div style={{fontSize:'0.73rem',opacity:0.5}}>{(entry.uploadFile.size/1024).toFixed(0)} KB</div></>
                                     :<><div style={{fontSize:'0.84rem',fontWeight:600,opacity:0.65}}>Click or drag to upload</div><div style={{fontSize:'0.73rem',opacity:0.4,marginTop:'1px'}}>PDF, DOC, DOCX, TXT, CSV · Max 5 MB</div></>}
                                 </div>
-                                <input ref={el=>{uploadRefs.current[activeIdx]=el;}} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)pickFile(activeIdx,f);e.target.value='';}} disabled={entry.uploading}/>
+                                <input ref={el=>{uploadRefs.current[activeIdx]=el;}} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)pickFile(activeIdx,f);e.target.value='';}} disabled={entry.uploading}/>
                               </div>
                               {entry.uploadFile&&<div style={{marginTop:'0.5rem'}}><SaveBtn theme={theme} onClick={()=>uploadFile(activeIdx)} disabled={entry.uploading} style={{padding:'0.45rem 0.9rem',fontSize:'0.8rem'}}>{entry.uploading?'Uploading…':'Upload & Attach'}</SaveBtn></div>}
                               {entry.uploadMsg&&<InlineBanner theme={theme} $t={entry.uploadMsg.type}>{entry.uploadMsg.text}</InlineBanner>}
@@ -1799,7 +1794,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                           ? <><div style={{ fontSize: '0.84rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bulkUploadFile.name}</div><div style={{ fontSize: '0.73rem', opacity: 0.5 }}>{(bulkUploadFile.size / 1024).toFixed(0)} KB</div></>
                           : <><div style={{ fontSize: '0.84rem', fontWeight: 600, opacity: 0.65 }}>Click or drag to upload</div><div style={{ fontSize: '0.73rem', opacity: 0.4, marginTop: '1px' }}>PDF, DOC, DOCX, TXT, CSV · Max 5 MB</div></>}
                       </div>
-                      <input ref={bulkUpRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) pickBulkFile(f); e.target.value = ''; }} disabled={bulkUploading} />
+                      <input ref={bulkUpRef} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) pickBulkFile(f); e.target.value = ''; }} disabled={bulkUploading} />
                     </div>
                     {bulkUploadFile && <div style={{ marginTop: '0.5rem' }}><SaveBtn theme={theme} onClick={handleBulkUpload} disabled={bulkUploading} style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }}>{bulkUploading ? 'Uploading…' : 'Upload & Attach to All'}</SaveBtn></div>}
                     {bulkUploadMsg && <InlineBanner theme={theme} $t={bulkUploadMsg.ok ? 'success' : 'error'}>{bulkUploadMsg.text}</InlineBanner>}

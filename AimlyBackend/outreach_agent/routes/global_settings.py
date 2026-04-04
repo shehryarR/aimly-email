@@ -39,7 +39,7 @@ VALID_TONES = {
     "Casual",
 }
 
-ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -50,7 +50,8 @@ def get_mime_type_from_extension(extension: str) -> str:
         '.jpeg': 'image/jpeg',
         '.png': 'image/png',
         '.gif': 'image/gif',
-        '.webp': 'image/webp'
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
     }
     return mime_map.get(extension.lower(), 'application/octet-stream')
 
@@ -178,7 +179,7 @@ async def update_global_settings(
             if file_extension not in ALLOWED_IMAGE_EXTENSIONS:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Invalid logo file type. Allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
+                    detail=f"Invalid logo file type. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}"
                 )
             
             # Read logo content
