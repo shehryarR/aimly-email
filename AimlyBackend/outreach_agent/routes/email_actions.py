@@ -29,7 +29,7 @@ import asyncio
 import os
 import re
 import requests
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -41,7 +41,6 @@ from services.email_service import (
     send_email as svc_send_email,
 )
 from .utils.email_helpers import (
-    SendEmailRequest,
     MessageResponse,
     resolve_branding,
     resolve_attachments_for_primary,
@@ -146,259 +145,6 @@ def _is_opted_out(sender_email: str, receiver_email: str) -> bool:
     except Exception as exc:
         print(f"[OptOut] Check failed — allowing send: {exc}")
     return False
-
-
-# ==================================================================================
-# POST /email/campaign/{campaign_id}/company/{company_id}/generate-email
-# ==================================================================================
-@email_actions_router.post("/campaign/{campaign_id}/company/{company_id}/generate-email/", response_model=MessageResponse)
-def generate_email(
-    campaign_id: int,
-    company_id: int,
-    http_request: Request,
-    query_type: str = Query("plain", description="Email generation mode: 'plain' = LLM plain text, 'html' = LLM styled HTML, 'template' = use campaign template"),
-    force: bool = Query(False, description="If True, always regenerate even if a matching email already exists"),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Generate an email for a specific company within a campaign.
-
-    Parameters:
-    - query_type:
-        * 'plain':    Use LLM to generate a plain text email
-        * 'html':     Use LLM to generate a styled HTML email
-        * 'template': Use campaign email template, replace {{company_name}} placeholder
-
-    Stores only core email content (subject, body, recipient). Branding and attachments
-    are resolved at send time based on inheritance flags.
-    """
-    user_id = current_user["user_id"]
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id FROM campaigns WHERE id = %s AND user_id = %s
-        """, (campaign_id, user_id))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Campaign not found")
-
-        cursor.execute("""
-            SELECT * FROM companies WHERE id = %s AND user_id = %s
-        """, (company_id, user_id))
-        company = cursor.fetchone()
-        if not company:
-            raise HTTPException(status_code=404, detail="Company not found")
-
-        cursor.execute("""
-            SELECT id, inherit_campaign_attachments, inherit_campaign_branding FROM campaign_company
-            WHERE campaign_id = %s AND company_id = %s
-        """, (campaign_id, company_id))
-        cc_relationship = cursor.fetchone()
-        if not cc_relationship:
-            raise HTTPException(status_code=404, detail="Company not associated with this campaign")
-
-        cc_id = cc_relationship["id"]
-        inherit_campaign_attachments = cc_relationship["inherit_campaign_attachments"]
-
-        company_name  = company["name"]
-        company_email = company["email"]
-
-        if query_type not in ("plain", "html", "template"):
-            raise HTTPException(status_code=400, detail="query_type must be 'plain', 'html', or 'template'")
-
-        if query_type in ("plain", "html"):
-            llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
-            if not llm_api_key:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No LLM API key configured. Please add one in Settings → API Keys."
-                )
-
-            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
-            key_row = cursor.fetchone()
-
-            llm_config = {
-                "api_key": llm_api_key,
-                "model":   (key_row["llm_model"] if key_row else None) or "gemini-2.0-flash",
-            }
-
-            cursor.execute("""
-                SELECT business_name, business_info, goal, value_prop,
-                       tone, cta, extras, email_instruction,
-                       inherit_global_settings
-                FROM campaign_preferences WHERE campaign_id = %s
-            """, (campaign_id,))
-            prefs = cursor.fetchone()
-
-            inherit_global_settings = (
-                prefs["inherit_global_settings"]
-                if prefs and prefs["inherit_global_settings"] is not None
-                else 1
-            )
-
-            global_prefs = None
-            if inherit_global_settings:
-                cursor.execute("""
-                    SELECT business_name, business_info, goal, value_prop,
-                           tone, cta, extras, email_instruction
-                    FROM global_settings WHERE user_id = %s
-                """, (user_id,))
-                global_prefs = cursor.fetchone()
-
-            def get_pref(field):
-                if inherit_global_settings:
-                    val = global_prefs[field] if global_prefs else None
-                else:
-                    val = prefs[field] if prefs else None
-                return val
-
-            PREF_DEFAULTS = {
-                "business_name":     "Our Company",
-                "business_info":     "A professional services company",
-                "goal":              "Generate leads and start a conversation",
-                "value_prop":        "We provide high-quality solutions tailored to your needs",
-                "cta":               "Schedule a quick call to learn more",
-                "tone":              "Professional",
-                "extras":            None,
-                "email_instruction": None,
-            }
-
-            def get_pref_with_default(field):
-                val = get_pref(field)
-                return val if val is not None else PREF_DEFAULTS.get(field)
-
-            context_parts = []
-            if get_pref_with_default("business_name"):
-                context_parts.append(f"Business Name: {get_pref_with_default('business_name')}")
-            if get_pref_with_default("business_info"):
-                context_parts.append(f"Business Info: {get_pref_with_default('business_info')}")
-            if get_pref_with_default("goal"):
-                context_parts.append(f"Goal: {get_pref_with_default('goal')}")
-            if get_pref_with_default("value_prop"):
-                context_parts.append(f"Value Proposition: {get_pref_with_default('value_prop')}")
-            if get_pref_with_default("cta"):
-                context_parts.append(f"Call to Action: {get_pref_with_default('cta')}")
-            if get_pref_with_default("tone"):
-                context_parts.append(f"Tone: {get_pref_with_default('tone')}")
-            if get_pref_with_default("extras"):
-                context_parts.append(f"Additional Context: {get_pref_with_default('extras')}")
-            if get_pref_with_default("email_instruction"):
-                context_parts.append(f"Email Instructions: {get_pref_with_default('email_instruction')}")
-
-            user_instruction = (
-                "\n".join(context_parts)
-                or f"Write a professional outreach email to {company_name}."
-            )
-
-            company_details = company["company_info"] or None
-
-        else:  # query_type == "template"
-            cursor.execute("""
-                SELECT template_email, template_html_email FROM campaign_preferences
-                WHERE campaign_id = %s
-            """, (campaign_id,))
-            template_row = cursor.fetchone()
-            if not template_row or not template_row["template_email"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No email template found for this campaign. Please generate one first."
-                )
-
-            template_email = template_row["template_email"]
-            template_html_email_flag = int(template_row["template_html_email"]) if template_row["template_html_email"] is not None else 0
-            content = template_email.replace("{{company_name}}", company_name)
-
-            if content.startswith("SUBJECT:"):
-                lines = content.split("\n", 1)
-                subject = lines[0].replace("SUBJECT:", "").strip()
-                body = lines[1].strip() if len(lines) > 1 else ""
-            else:
-                subject = f"Reaching out to {company_name}"
-                body = content
-
-        # For plain/html: check existing primary email before calling LLM (skip if force=True)
-        if query_type in ("plain", "html") and not force:
-            cursor.execute("""
-                SELECT id, email_subject, email_content, recipient_email, html_email
-                FROM emails
-                WHERE campaign_company_id = %s AND status = 'primary'
-            """, (cc_id,))
-            existing = cursor.fetchone()
-            if existing and existing["email_content"] and existing["email_content"].strip():
-                existing_is_html = bool(existing["html_email"])
-                requested_html   = (query_type == "html")
-                if existing_is_html == requested_html:
-                    # Type matches — return existing without LLM call
-                    return MessageResponse(
-                        message=f"Email loaded ({query_type})",
-                        email_id=existing["id"]
-                    )
-
-    # Outside the first connection — now open a second one to write
-    if query_type in ("plain", "html"):
-        try:
-            loop = asyncio.new_event_loop()
-            email_result, _ = loop.run_until_complete(
-                svc_generate_email(
-                    company_name=company_name,
-                    user_instruction=user_instruction,
-                    llm_config=llm_config,
-                    company_details=company_details,
-                    html_email=(query_type == "html"),
-                )
-            )
-            loop.close()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Email generation failed: {str(e)}")
-
-        subject = email_result.get("subject") or f"Reaching out to {company_name}"
-        body = email_result.get("content") or ""
-
-        if not body:
-            raise HTTPException(status_code=500, detail="Email generation returned empty content.")
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute("""
-                SELECT id FROM emails
-                WHERE campaign_company_id = %s AND status = 'primary'
-            """, (cc_id,))
-            primary_email = cursor.fetchone()
-
-            if query_type == "html":
-                html_email_flag = 1
-            elif query_type == "template":
-                html_email_flag = template_html_email_flag
-            else:
-                html_email_flag = 0
-
-            if primary_email:
-                cursor.execute("""
-                    UPDATE emails
-                    SET email_subject = %s, email_content = %s, recipient_email = %s, html_email = %s
-                    WHERE id = %s
-                """, (subject, body, company_email, html_email_flag, primary_email["id"]))
-                email_id = primary_email["id"]
-            else:
-                cursor.execute("""
-                    INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                       recipient_email, status, html_email)
-                    VALUES (%s, %s, %s, %s, 'primary', %s)
-                """, (cc_id, subject, body, company_email, html_email_flag))
-                email_id = cursor.lastrowid
-
-            conn.commit()
-
-        except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to save generated email: {str(e)}")
-
-    return MessageResponse(
-        message=f"Email generated successfully ({query_type})",
-        email_id=email_id
-    )
 
 
 # ==================================================================================
@@ -661,268 +407,241 @@ def bulk_generate_emails(
 
 
 # ==================================================================================
-# POST /email/{email_id}/send - Send or schedule an email
+# POST /email/bulk-send/ - Send or schedule multiple emails in one call
 # ==================================================================================
-@email_actions_router.post("/{email_id}/send/", response_model=MessageResponse)
-def send_email(
-    email_id: int,
-    request: SendEmailRequest,
+
+class BulkSendRequest(BaseModel):
+    email_ids: List[int]
+    time: Optional[str] = None  # ISO datetime string; absent = send now
+
+class BulkSendResponse(BaseModel):
+    sent: int
+    failed: int
+    errors: List[dict]
+
+@email_actions_router.post("/bulk-send/", response_model=BulkSendResponse)
+def bulk_send_emails(
+    request: BulkSendRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Send or schedule an email.
+    Send or schedule multiple emails in a single API call.
 
-    Behavior:
-    - For primary emails: Creates a new entry with status 'sending' (immediate) or 'scheduled'
-    - For draft emails: Converts the draft to 'sending' (immediate) or 'scheduled'
-    - For scheduled emails: Only accepts requests with no time set (send now), converts to 'sending'
+    - time absent  → send immediately (same logic as /{email_id}/send/ with no time)
+    - time present → schedule (same logic as /{email_id}/send/ with time)
 
-    For primary emails, resolved attachments (own + inherited) are baked into
-    email_attachments on the new row at creation time, so history is always complete.
-    Branding is baked into the row's columns (unchanged).
+    Iterates email_ids server-side, skips failures with logged errors,
+    and returns a summary of sent/scheduled count, failed count, and per-email errors.
     """
     user_id = current_user["user_id"]
 
+    if not request.email_ids:
+        raise HTTPException(status_code=400, detail="email_ids must not be empty")
+
+    # ── Parse scheduled_at once if time is provided ───────────────────────────
+    scheduled_at = None
+    if request.time:
+        try:
+            scheduled_at = datetime.fromisoformat(request.time.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid time format. Use ISO 8601.")
+
+    # ── Load SMTP credentials once ────────────────────────────────────────────
     with get_connection() as conn:
         cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT e.*, cc.campaign_id, c.user_id
-            FROM emails e
-            JOIN campaign_company cc ON e.campaign_company_id = cc.id
-            JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = %s AND c.user_id = %s
-        """, (email_id, user_id))
-
-        email = cursor.fetchone()
-        if not email:
-            raise HTTPException(status_code=404, detail="Email not found")
-
-        if email["status"] == "primary":
-            pass
-        elif email["status"] == "draft":
-            pass
-        elif email["status"] == "scheduled":
-            if request.time:
-                raise HTTPException(status_code=400, detail="Scheduled emails can only be sent immediately (no time parameter)")
-        elif email["status"] == "failed":
-            if request.time:
-                raise HTTPException(status_code=400, detail="Failed emails can only be retried immediately (no time parameter)")
-        else:
-            raise HTTPException(status_code=400, detail=f"Cannot send email with status '{email['status']}'")
-
         cursor.execute("""
             SELECT email_address, email_password, smtp_host, smtp_port
             FROM user_keys WHERE user_id = %s
         """, (user_id,))
         smtp_row = cursor.fetchone()
 
-        if not smtp_row or not smtp_row["email_address"] or not smtp_row["email_password"]:
-            raise HTTPException(
-                status_code=400,
-                detail="No SMTP credentials configured. Please add them in Settings → API Keys."
-            )
-
-        campaign_id = email["campaign_id"]
-
-        # ── Resolve BCC ───────────────────────────────────────────────────────
-        cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
-        prefs_bcc_row = cursor.fetchone()
-        cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
-        global_bcc_row = cursor.fetchone()
-        bcc_val = (
-            (prefs_bcc_row["bcc"] if prefs_bcc_row else None)
-            or (global_bcc_row["bcc"] if global_bcc_row else None)
+    if not smtp_row or not smtp_row["email_address"] or not smtp_row["email_password"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No SMTP credentials configured. Please add them in Settings → API Keys."
         )
 
-        smtp_config = {
-            "sender_email":    smtp_row["email_address"],
-            "sender_password": smtp_row["email_password"],
-            "smtp_host":       smtp_row["smtp_host"] or "smtp.gmail.com",
-            "smtp_port":       smtp_row["smtp_port"] or 587,
-            "bcc":             bcc_val,
-        }
+    sender_email = smtp_row["email_address"]
 
-        # ── Opt-out check ─────────────────────────────────────────────────────
-        recipient_email = email["recipient_email"]
-        sender_email    = smtp_row["email_address"]
-        if not request.time and _is_opted_out(sender_email, recipient_email):
-            reason = f"Recipient {recipient_email} has unsubscribed from {sender_email}"
-            if email["status"] == "primary":
+    sent_count = 0
+    errors: List[dict] = []
+
+    for email_id in request.email_ids:
+        try:
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
                 cursor.execute("""
-                    INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                       recipient_email, status, timezone)
-                    VALUES (%s, %s, %s, %s, 'failed', 'UTC')
-                """, (
-                    email["campaign_company_id"],
-                    email["email_subject"],
-                    email["email_content"],
-                    email["recipient_email"],
-                ))
-                failed_id = cursor.lastrowid
-            else:
-                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (email_id,))
-                failed_id = email_id
-            cursor.execute(
-                "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
-                (failed_id, reason),
-            )
-            conn.commit()
-            raise HTTPException(
-                status_code=403,
-                detail=f"{recipient_email} has unsubscribed and will not receive emails from {sender_email}."
-            )
+                    SELECT e.*, cc.campaign_id, c.user_id
+                    FROM emails e
+                    JOIN campaign_company cc ON e.campaign_company_id = cc.id
+                    JOIN campaigns c ON cc.campaign_id = c.id
+                    WHERE e.id = %s AND c.user_id = %s
+                """, (email_id, user_id))
+                email = cursor.fetchone()
 
-        # ── Branding + Attachment resolution ─────────────────────────────────
-        if email["status"] == "primary":
-            cursor.execute("""
-                SELECT id, inherit_campaign_attachments, inherit_campaign_branding
-                FROM campaign_company WHERE id = %s
-            """, (email["campaign_company_id"],))
-            cc_row = cursor.fetchone()
-            inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
-            inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
+                if not email:
+                    errors.append({"email_id": email_id, "reason": "Email not found"})
+                    continue
 
-            cursor.execute("""
-                SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                FROM campaign_preferences WHERE campaign_id = %s
-            """, (campaign_id,))
-            campaign_prefs = cursor.fetchone()
+                status = email["status"]
 
-            cursor.execute("""
-                SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-            """, (user_id,))
-            global_prefs = cursor.fetchone()
+                if status not in ("primary", "draft", "scheduled", "failed"):
+                    errors.append({"email_id": email_id, "reason": f"Cannot send email with status '{status}'"})
+                    continue
 
-            signature, logo_blob, logo_mime_type = resolve_branding(
-                email, campaign_prefs, global_prefs, inherit_campaign_branding
-            )
+                if status == "scheduled" and scheduled_at:
+                    errors.append({"email_id": email_id, "reason": "Scheduled emails can only be sent immediately"})
+                    continue
 
-            inherit_global_attachments = (
-                campaign_prefs["inherit_global_attachments"]
-                if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
-                else 1
-            )
+                campaign_id = email["campaign_id"]
 
-            # Resolve attachment IDs inside DB block so they can be baked into
-            # email_attachments on the new row (history fidelity).
-            # Returns plain ints — no AttachmentInfo dependency.
-            baked_attachment_ids = resolve_attachment_ids_for_primary(
-                email_id, campaign_id, user_id, cursor,
-                inherit_campaign_attachments, inherit_global_attachments
-            )
+                # ── Resolve BCC ───────────────────────────────────────────────
+                cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
+                prefs_bcc_row = cursor.fetchone()
+                cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
+                global_bcc_row = cursor.fetchone()
+                bcc_val = (
+                    (prefs_bcc_row["bcc"] if prefs_bcc_row else None)
+                    or (global_bcc_row["bcc"] if global_bcc_row else None)
+                )
 
-        else:
-            # Draft, scheduled, or failed — updated in place, existing email_attachments correct.
-            # No baking needed. Attachments for SMTP fetched after new_email_id is known.
-            signature            = email["signature"]
-            logo_blob            = email["logo"]
-            baked_attachment_ids = None  # not primary — no baking needed
+                smtp_config = {
+                    "sender_email":    smtp_row["email_address"],
+                    "sender_password": smtp_row["email_password"],
+                    "smtp_host":       smtp_row["smtp_host"] or "smtp.gmail.com",
+                    "smtp_port":       smtp_row["smtp_port"] or 587,
+                    "bcc":             bcc_val,
+                }
 
-        email_data = dict(email)
-
-        try:
-            if request.time:
-                scheduled_at = datetime.fromisoformat(request.time.replace('Z', '+00:00'))
-
-                if email["status"] == "primary":
-                    # Create new scheduled email with branding baked in
-                    cursor.execute("""
-                        INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                           recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                           sent_at, html_email)
-                        VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s)
-                    """, (
-                        email["campaign_company_id"],
-                        email["email_subject"],
-                        email["email_content"],
-                        email["recipient_email"],
-                        signature,
-                        logo_blob,
-                        logo_mime_type,
-                        scheduled_at.strftime('%Y-%m-%d %H:%M:%S'),
-                        email["html_email"],
-                    ))
-                    new_email_id = cursor.lastrowid
-
-                    # Bake ALL resolved attachment IDs (own + inherited) into new row.
-                    for att_id in baked_attachment_ids:
+                # ── Opt-out check (immediate sends only) ──────────────────────
+                recipient_email = email["recipient_email"]
+                if not scheduled_at and _is_opted_out(sender_email, recipient_email):
+                    reason = f"Recipient {recipient_email} has unsubscribed from {sender_email}"
+                    if status == "primary":
                         cursor.execute("""
-                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
-                            VALUES (%s, %s)
-                        """, (new_email_id, att_id))
+                            INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                               recipient_email, status, timezone)
+                            VALUES (%s, %s, %s, %s, 'failed', 'UTC')
+                        """, (email["campaign_company_id"], email["email_subject"],
+                              email["email_content"], email["recipient_email"]))
+                        failed_id = cursor.lastrowid
+                    else:
+                        cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (email_id,))
+                        failed_id = email_id
+                    cursor.execute(
+                        "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
+                        (failed_id, reason),
+                    )
+                    conn.commit()
+                    errors.append({"email_id": email_id, "reason": reason})
+                    continue
 
-                elif email["status"] == "draft":
+                # ── Branding + attachment resolution ──────────────────────────
+                if status == "primary":
                     cursor.execute("""
-                        UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
-                    """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
-                    new_email_id = email_id
+                        SELECT id, inherit_campaign_attachments, inherit_campaign_branding
+                        FROM campaign_company WHERE id = %s
+                    """, (email["campaign_company_id"],))
+                    cc_row = cursor.fetchone()
+                    inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
+                    inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
-                elif email["status"] == "scheduled":
                     cursor.execute("""
-                        UPDATE emails SET sent_at = %s WHERE id = %s
-                    """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
-                    new_email_id = email_id
+                        SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
+                        FROM campaign_preferences WHERE campaign_id = %s
+                    """, (campaign_id,))
+                    campaign_prefs = cursor.fetchone()
 
-                conn.commit()
-                message = f"Email scheduled for {scheduled_at.strftime('%Y-%m-%d %H:%M UTC')}"
-
-            else:
-                # Send immediately
-                if email["status"] == "primary":
-                    # Create new sending email with branding baked in
                     cursor.execute("""
-                        INSERT INTO emails (campaign_company_id, email_subject, email_content,
-                                           recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                           html_email)
-                        VALUES (%s, %s, %s, %s, 'sending', 'UTC', %s, %s, %s, %s)
-                    """, (
-                        email["campaign_company_id"],
-                        email["email_subject"],
-                        email["email_content"],
-                        email["recipient_email"],
-                        signature,
-                        logo_blob,
-                        logo_mime_type,
-                        email["html_email"],
-                    ))
-                    new_email_id = cursor.lastrowid
+                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
+                    """, (user_id,))
+                    global_prefs = cursor.fetchone()
 
-                    # Bake ALL resolved attachment IDs into new row.
-                    for att_id in baked_attachment_ids:
+                    signature, logo_blob, logo_mime_type = resolve_branding(
+                        email, campaign_prefs, global_prefs, inherit_campaign_branding
+                    )
+
+                    inherit_global_attachments = (
+                        campaign_prefs["inherit_global_attachments"]
+                        if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
+                        else 1
+                    )
+
+                    baked_attachment_ids = resolve_attachment_ids_for_primary(
+                        email_id, campaign_id, user_id, cursor,
+                        inherit_campaign_attachments, inherit_global_attachments
+                    )
+                else:
+                    signature            = email["signature"]
+                    logo_blob            = email["logo"]
+                    logo_mime_type       = email.get("logo_mime_type")
+                    baked_attachment_ids = None
+
+                email_data = dict(email)
+
+                # ── Schedule or send ──────────────────────────────────────────
+                if scheduled_at:
+                    if status == "primary":
                         cursor.execute("""
-                            INSERT IGNORE INTO email_attachments (email_id, attachment_id)
-                            VALUES (%s, %s)
-                        """, (new_email_id, att_id))
+                            INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                               recipient_email, status, timezone, signature, logo, logo_mime_type,
+                                               sent_at, html_email)
+                            VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s)
+                        """, (
+                            email["campaign_company_id"], email["email_subject"], email["email_content"],
+                            email["recipient_email"], signature, logo_blob, logo_mime_type,
+                            scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email["html_email"],
+                        ))
+                        new_email_id = cursor.lastrowid
+                        for att_id in baked_attachment_ids:
+                            cursor.execute("""
+                                INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                                VALUES (%s, %s)
+                            """, (new_email_id, att_id))
+                    elif status == "draft":
+                        cursor.execute("""
+                            UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
+                        """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
+                        new_email_id = email_id
+                    else:  # scheduled
+                        cursor.execute("""
+                            UPDATE emails SET sent_at = %s WHERE id = %s
+                        """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
+                        new_email_id = email_id
 
-                elif email["status"] == "draft":
-                    cursor.execute("""
-                        UPDATE emails SET status = 'sending' WHERE id = %s
-                    """, (email_id,))
-                    new_email_id = email_id
+                    conn.commit()
+                    sent_count += 1
+                    continue  # no SMTP call needed for scheduling
 
-                elif email["status"] in ("scheduled", "failed"):
-                    cursor.execute("""
-                        UPDATE emails SET status = 'sending' WHERE id = %s
-                    """, (email_id,))
-                    new_email_id = email_id
+                else:
+                    # Immediate send
+                    if status == "primary":
+                        cursor.execute("""
+                            INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                               recipient_email, status, timezone, signature, logo, logo_mime_type,
+                                               html_email)
+                            VALUES (%s, %s, %s, %s, 'sending', 'UTC', %s, %s, %s, %s)
+                        """, (
+                            email["campaign_company_id"], email["email_subject"], email["email_content"],
+                            email["recipient_email"], signature, logo_blob, logo_mime_type, email["html_email"],
+                        ))
+                        new_email_id = cursor.lastrowid
+                        for att_id in baked_attachment_ids:
+                            cursor.execute("""
+                                INSERT IGNORE INTO email_attachments (email_id, attachment_id)
+                                VALUES (%s, %s)
+                            """, (new_email_id, att_id))
+                    else:  # draft, scheduled, failed
+                        cursor.execute("UPDATE emails SET status = 'sending' WHERE id = %s", (email_id,))
+                        new_email_id = email_id
 
-                conn.commit()
-                message = "Email sending initiated"
+                    conn.commit()
 
-        except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to prepare email: {str(e)}")
-
-    # ── SMTP call outside DB context (immediate sends only) ───────────────────
-    if not request.time:
-        try:
-            # Fetch AttachmentInfo objects for SMTP — always from the new row's
-            # own email_attachments (which for primary now contains the full baked set).
+            # ── SMTP call outside DB context ──────────────────────────────────
             with get_connection() as conn:
                 resolved_attachments = get_own_attachments(new_email_id, conn.cursor())
 
-            # Resolve any {{filename}} inline image placeholders from user's library
             inline_image_attachments = _resolve_inline_image_attachments(
                 email_data["email_content"], user_id
             )
@@ -944,36 +663,33 @@ def send_email(
                 )
             )
             loop.close()
-        except Exception as e:
+
             with get_connection() as conn:
-                conn.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (new_email_id,))
-                conn.execute(
-                    "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
-                    (new_email_id, f"SMTP exception: {e}"),
-                )
-                conn.commit()
-            raise HTTPException(status_code=500, detail=f"SMTP error: {str(e)}")
+                cursor = conn.cursor()
+                if send_result.success:
+                    cursor.execute("""
+                        UPDATE emails SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = %s
+                    """, (new_email_id,))
+                    conn.commit()
+                    sent_count += 1
+                else:
+                    cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (new_email_id,))
+                    cursor.execute(
+                        "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
+                        (new_email_id, f"Send failed: {send_result.message}"),
+                    )
+                    conn.commit()
+                    errors.append({"email_id": email_id, "reason": send_result.message})
 
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            if send_result.success:
-                cursor.execute("""
-                    UPDATE emails SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = %s
-                """, (new_email_id,))
-            else:
-                cursor.execute("UPDATE emails SET status = 'failed' WHERE id = %s", (new_email_id,))
-                cursor.execute(
-                    "INSERT INTO failed_emails (email_id, reason) VALUES (%s, %s)",
-                    (new_email_id, f"Send failed: {send_result.message}"),
-                )
-            conn.commit()
+        except Exception as e:
+            print(f"[BulkSend] email_id={email_id} failed: {e}")
+            errors.append({"email_id": email_id, "reason": str(e)})
+            continue
 
-        if not send_result.success:
-            raise HTTPException(status_code=500, detail=f"Failed to send email: {send_result.message}")
-
-    return MessageResponse(
-        message=message,
-        email_id=new_email_id
+    return BulkSendResponse(
+        sent=sent_count,
+        failed=len(errors),
+        errors=errors,
     )
 
 

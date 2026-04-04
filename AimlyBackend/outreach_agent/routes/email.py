@@ -20,8 +20,9 @@ from typing import Optional, List
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 from .utils.email_helpers import (
-    EmailUpdateRequest,
     MessageResponse,
+    BulkUpdateRequest,
+    BulkUpdateResponse,
     resolve_branding,
     resolve_attachment_ids_for_primary,
 )
@@ -274,32 +275,30 @@ def get_company_emails(
 
 
 # ==================================================================================
-# GET /email/campaign/{campaign_id}/company/{company_id}/primary - Get primary email
+# POST /email/campaign/{campaign_id}/primaries/ - Get primary emails for many companies
 # ==================================================================================
-@email_router.get("/campaign/{campaign_id}/company/{company_id}/primary/")
-def get_primary_email(
+
+class BulkPrimaryRequest(BaseModel):
+    company_ids: List[int]
+
+@email_router.post("/campaign/{campaign_id}/primaries/")
+def get_primary_emails_bulk(
     campaign_id: int,
-    company_id: int,
+    request: BulkPrimaryRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get the primary email for a specific company within a campaign,
-    including resolved branding (signature + logo as base64) and attachment IDs.
-
-    Branding resolution:
-      inherit_campaign_branding = 0 → email's own signature/logo
-      inherit_campaign_branding = 1:
-        inherit_global_settings = 0 → campaign signature/logo
-        inherit_global_settings = 1 → global signature/logo
-    No fallback to defaults — returns None if not set at the chosen level.
-
-    Attachment resolution:
-      inherit_campaign_attachments = 0 → email's own attachments
-      inherit_campaign_attachments = 1:
-        inherit_global_attachments = 0 → campaign attachments
-        inherit_global_attachments = 1 → global attachments
+    Get primary emails for multiple companies in a campaign in one call.
+    Returns a list of results keyed by company_id.
+    Companies with no primary email are omitted from the response.
+    Branding and attachment resolution follows the same rules as the single endpoint.
     """
+    import base64 as _b64
+
     user_id = current_user["user_id"]
+
+    if not request.company_ids:
+        raise HTTPException(status_code=400, detail="company_ids must not be empty")
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -308,32 +307,7 @@ def get_primary_email(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        cursor.execute("SELECT id FROM companies WHERE id = %s AND user_id = %s", (company_id, user_id))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Company not found")
-
-        cursor.execute("""
-            SELECT id, inherit_campaign_branding, inherit_campaign_attachments FROM campaign_company
-            WHERE campaign_id = %s AND company_id = %s
-        """, (campaign_id, company_id))
-        cc_relationship = cursor.fetchone()
-        if not cc_relationship:
-            raise HTTPException(status_code=404, detail="Company not associated with this campaign")
-
-        cc_id = cc_relationship["id"]
-        inherit_campaign_branding = cc_relationship["inherit_campaign_branding"]
-        inherit_campaign_attachments = cc_relationship["inherit_campaign_attachments"]
-
-        cursor.execute("""
-            SELECT id, email_subject, email_content, recipient_email, status,
-                   timezone, sent_at, signature, logo, logo_mime_type, html_email
-            FROM emails
-            WHERE campaign_company_id = %s AND status = 'primary'
-        """, (cc_id,))
-        primary_email = cursor.fetchone()
-        if not primary_email:
-            raise HTTPException(status_code=404, detail="Primary email not found")
-
+        # Load campaign prefs and global prefs once
         cursor.execute("""
             SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
             FROM campaign_preferences WHERE campaign_id = %s
@@ -345,170 +319,226 @@ def get_primary_email(
         """, (user_id,))
         global_prefs = cursor.fetchone()
 
-        signature, logo_blob, logo_mime_type = resolve_branding(
-            primary_email, campaign_prefs, global_prefs, inherit_campaign_branding
-        )
+        # Fetch all campaign_company rows for the requested companies in one query
+        placeholders = ",".join(["%s"] * len(request.company_ids))
+        cursor.execute(f"""
+            SELECT cc.id, cc.company_id, cc.inherit_campaign_branding, cc.inherit_campaign_attachments
+            FROM campaign_company cc
+            WHERE cc.campaign_id = %s AND cc.company_id IN ({placeholders})
+        """, [campaign_id] + request.company_ids)
+        cc_rows = {row["company_id"]: row for row in cursor.fetchall()}
 
-        logo_data = None
-        if logo_blob and logo_mime_type:
-            try:
-                import base64 as _b64
-                logo_data = f"data:{logo_mime_type};base64,{_b64.b64encode(logo_blob).decode()}"
-            except Exception:
-                logo_data = None
+        # Fetch all primary emails for those campaign_company rows in one query
+        cc_ids = [row["id"] for row in cc_rows.values()]
+        if not cc_ids:
+            return {"primaries": []}
+
+        ph2 = ",".join(["%s"] * len(cc_ids))
+        cursor.execute(f"""
+            SELECT e.id, e.campaign_company_id, e.email_subject, e.email_content,
+                   e.recipient_email, e.status, e.timezone, e.sent_at,
+                   e.signature, e.logo, e.logo_mime_type, e.html_email
+            FROM emails e
+            WHERE e.campaign_company_id IN ({ph2}) AND e.status = 'primary'
+        """, cc_ids)
+        emails_by_cc = {row["campaign_company_id"]: row for row in cursor.fetchall()}
+
+        # Fetch linked attachment IDs for all primary emails in one query
+        email_ids = [row["id"] for row in emails_by_cc.values()]
+        linked_by_email: dict = {eid: [] for eid in email_ids}
+        if email_ids:
+            ph3 = ",".join(["%s"] * len(email_ids))
+            cursor.execute(f"""
+                SELECT email_id, attachment_id FROM email_attachments
+                WHERE email_id IN ({ph3})
+            """, email_ids)
+            for row in cursor.fetchall():
+                linked_by_email[row["email_id"]].append(row["attachment_id"])
+
+        # Map company_id -> cc_id for reverse lookup
+        cc_id_to_company_id = {row["id"]: cid for cid, row in cc_rows.items()}
 
         inherit_global_attachments = (
             campaign_prefs["inherit_global_attachments"]
             if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
             else 1
         )
-        attachment_ids = resolve_attachment_ids_for_primary(
-            primary_email["id"], campaign_id, user_id, cursor,
-            inherit_campaign_attachments, inherit_global_attachments
-        )
 
-    result = dict(primary_email)
-    result["signature"] = signature
-    result["logo_data"] = logo_data
-    result["attachment_ids"] = attachment_ids
-    result.pop("logo", None)
-    result.pop("logo_mime_type", None)
-    return result
+        results = []
+        for cc_id, email_row in emails_by_cc.items():
+            company_id = cc_id_to_company_id.get(cc_id)
+            if not company_id:
+                continue
+            cc = cc_rows[company_id]
+
+            signature, logo_blob, logo_mime_type = resolve_branding(
+                email_row, campaign_prefs, global_prefs, cc["inherit_campaign_branding"]
+            )
+
+            logo_data = None
+            if logo_blob and logo_mime_type:
+                try:
+                    logo_data = f"data:{logo_mime_type};base64,{_b64.b64encode(logo_blob).decode()}"
+                except Exception:
+                    logo_data = None
+
+            attachment_ids = resolve_attachment_ids_for_primary(
+                email_row["id"], campaign_id, user_id, cursor,
+                cc["inherit_campaign_attachments"], inherit_global_attachments
+            )
+
+            r = dict(email_row)
+            r["company_id"] = company_id
+            r["signature"] = signature
+            r["logo_data"] = logo_data
+            r["attachment_ids"] = attachment_ids
+            r["linked_attachment_ids"] = linked_by_email.get(email_row["id"], [])
+            r["inherit_campaign_attachments"] = cc["inherit_campaign_attachments"]
+            r["inherit_campaign_branding"] = cc["inherit_campaign_branding"]
+            r.pop("logo", None)
+            r.pop("logo_mime_type", None)
+            results.append(r)
+
+    return {"primaries": results}
 
 
 # ==================================================================================
-# PUT /email/{email_id}/update - Update an email
+# PUT /email/bulk-update/ - Update multiple emails in one call
 # ==================================================================================
-@email_router.put("/{email_id}/update/", response_model=MessageResponse)
-def update_email(
-    email_id: int,
-    request: EmailUpdateRequest,
+@email_router.put("/bulk-update/", response_model=BulkUpdateResponse)
+def bulk_update_emails(
+    request: BulkUpdateRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Update an email.
-    Allowed for: primary, draft, scheduled emails.
-    When email is primary and inherit_campaign_branding = 1, signature and logo cannot be edited.
+    Update multiple emails in a single call.
+    Each item in updates must include email_id plus any fields to update.
+    Skips failures with logged errors and returns a summary.
+    Allowed statuses: primary, draft, scheduled.
+    When primary and inherit_campaign_branding = 1, signature/logo cannot be edited.
     """
+    import base64 as _b64
+    from datetime import datetime
+
     user_id = current_user["user_id"]
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="updates must not be empty")
 
-        # Get email and verify ownership
-        cursor.execute("""
-            SELECT e.*, cc.campaign_id, cc.inherit_campaign_branding, c.user_id
-            FROM emails e
-            JOIN campaign_company cc ON e.campaign_company_id = cc.id
-            JOIN campaigns c ON cc.campaign_id = c.id
-            WHERE e.id = %s AND c.user_id = %s
-        """, (email_id, user_id))
+    updated_count = 0
+    errors = []
 
-        email = cursor.fetchone()
-        if not email:
-            raise HTTPException(status_code=404, detail="Email not found")
-
-        if email["status"] not in ["primary", "draft", "scheduled"]:
-            raise HTTPException(status_code=400, detail=f"Cannot update email with status '{email['status']}'")
-
-        # Block branding edits on primary when inherit_campaign_branding = 1
-        if email["status"] == "primary" and email["inherit_campaign_branding"]:
-            if request.signature is not None or request.logo_data is not None or request.logo_clear:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot edit signature or logo on a primary email while inherit_campaign_branding is enabled."
-                )
-
-        # Build update query dynamically
-        update_fields = []
-        update_values = []
-
-        if request.email_subject is not None:
-            update_fields.append("email_subject = %s")
-            update_values.append(request.email_subject)
-
-        if request.email_content is not None:
-            update_fields.append("email_content = %s")
-            update_values.append(request.email_content)
-
-        if request.recipient_email is not None:
-            update_fields.append("recipient_email = %s")
-            update_values.append(request.recipient_email)
-
-        if request.status is not None:
-            if request.status not in ["primary", "draft", "scheduled"]:
-                raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
-            update_fields.append("status = %s")
-            update_values.append(request.status)
-
-        if request.timezone is not None:
-            update_fields.append("timezone = %s")
-            update_values.append(request.timezone)
-
-        if request.time is not None:
-            effective_status = request.status or email["status"]
-            if effective_status != "scheduled":
-                raise HTTPException(
-                    status_code=400,
-                    detail="time can only be set on scheduled emails."
-                )
-            # Convert ISO 8601 to MySQL datetime format
-            from datetime import datetime, timezone
-            dt = datetime.fromisoformat(request.time.replace('Z', '+00:00'))
-            mysql_datetime = dt.strftime('%Y-%m-%d %H:%M:%S')
-            update_fields.append("sent_at = %s")
-            update_values.append(mysql_datetime)
-
-        if request.signature is not None:
-            # Empty string clears the signature
-            update_fields.append("signature = %s")
-            update_values.append(request.signature if request.signature != '' else None)
-
-        if request.logo_clear:
-            # Explicitly clear logo fields
-            update_fields.append("logo = %s")
-            update_values.append(None)
-            update_fields.append("logo_mime_type = %s")
-            update_values.append(None)
-        elif request.logo_data is not None:
-            # Decode base64 data URL back to BLOB
-            import base64 as _b64
-            try:
-                header, encoded = request.logo_data.split(",", 1)
-                mime_type = header.split(";")[0].replace("data:", "")
-                logo_blob = _b64.b64decode(encoded)
-                update_fields.append("logo = %s")
-                update_values.append(logo_blob)
-                update_fields.append("logo_mime_type = %s")
-                update_values.append(mime_type)
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid logo_data format. Expected base64 data URL.")
-
-        if request.html_email is not None:
-            update_fields.append("html_email = %s")
-            update_values.append(1 if request.html_email else 0)
-
-        if not update_fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
-
+    for item in request.updates:
+        email_id = item.email_id
         try:
-            update_values.append(email_id)
-            query = f"UPDATE emails SET {', '.join(update_fields)} WHERE id = %s"
-            cursor.execute(query, update_values)
-            conn.commit()
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT e.*, cc.campaign_id, cc.inherit_campaign_branding, c.user_id
+                    FROM emails e
+                    JOIN campaign_company cc ON e.campaign_company_id = cc.id
+                    JOIN campaigns c ON cc.campaign_id = c.id
+                    WHERE e.id = %s AND c.user_id = %s
+                """, (email_id, user_id))
+
+                email = cursor.fetchone()
+                if not email:
+                    errors.append({"email_id": email_id, "reason": "Email not found"})
+                    continue
+
+                if email["status"] not in ["primary", "draft", "scheduled"]:
+                    errors.append({"email_id": email_id, "reason": f"Cannot update email with status '{email['status']}'"})
+                    continue
+
+                if email["status"] == "primary" and email["inherit_campaign_branding"]:
+                    if item.signature is not None or item.logo_data is not None or item.logo_clear:
+                        errors.append({"email_id": email_id, "reason": "Cannot edit signature or logo while inherit_campaign_branding is enabled"})
+                        continue
+
+                update_fields = []
+                update_values = []
+
+                if item.email_subject is not None:
+                    update_fields.append("email_subject = %s")
+                    update_values.append(item.email_subject)
+
+                if item.email_content is not None:
+                    update_fields.append("email_content = %s")
+                    update_values.append(item.email_content)
+
+                if item.recipient_email is not None:
+                    update_fields.append("recipient_email = %s")
+                    update_values.append(item.recipient_email)
+
+                if item.status is not None:
+                    if item.status not in ["primary", "draft", "scheduled"]:
+                        errors.append({"email_id": email_id, "reason": f"Invalid status: {item.status}"})
+                        continue
+                    update_fields.append("status = %s")
+                    update_values.append(item.status)
+
+                if item.timezone is not None:
+                    update_fields.append("timezone = %s")
+                    update_values.append(item.timezone)
+
+                if item.time is not None:
+                    effective_status = item.status or email["status"]
+                    if effective_status != "scheduled":
+                        errors.append({"email_id": email_id, "reason": "time can only be set on scheduled emails"})
+                        continue
+                    dt = datetime.fromisoformat(item.time.replace("Z", "+00:00"))
+                    update_fields.append("sent_at = %s")
+                    update_values.append(dt.strftime("%Y-%m-%d %H:%M:%S"))
+
+                if item.signature is not None:
+                    update_fields.append("signature = %s")
+                    update_values.append(item.signature if item.signature != "" else None)
+
+                if item.logo_clear:
+                    update_fields.append("logo = %s")
+                    update_values.append(None)
+                    update_fields.append("logo_mime_type = %s")
+                    update_values.append(None)
+                elif item.logo_data is not None:
+                    try:
+                        header, encoded = item.logo_data.split(",", 1)
+                        mime_type = header.split(";")[0].replace("data:", "")
+                        logo_blob = _b64.b64decode(encoded)
+                        update_fields.append("logo = %s")
+                        update_values.append(logo_blob)
+                        update_fields.append("logo_mime_type = %s")
+                        update_values.append(mime_type)
+                    except Exception:
+                        errors.append({"email_id": email_id, "reason": "Invalid logo_data format. Expected base64 data URL."})
+                        continue
+
+                if item.html_email is not None:
+                    update_fields.append("html_email = %s")
+                    update_values.append(1 if item.html_email else 0)
+
+                if not update_fields:
+                    updated_count += 1
+                    continue
+
+                update_values.append(email_id)
+                cursor.execute(
+                    f"UPDATE emails SET {', '.join(update_fields)} WHERE id = %s",
+                    update_values
+                )
+                conn.commit()
+                updated_count += 1
 
         except Exception as e:
-            conn.rollback()
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to update email: {str(e)}")
+            print(f"[BulkUpdate] email_id={email_id} failed: {e}")
+            errors.append({"email_id": email_id, "reason": str(e)})
+            continue
 
-    return MessageResponse(message="Email updated successfully")
-
-
-
-
-
+    return BulkUpdateResponse(
+        updated=updated_count,
+        failed=len(errors),
+        errors=errors,
+    )
 
 
 # ==================================================================================

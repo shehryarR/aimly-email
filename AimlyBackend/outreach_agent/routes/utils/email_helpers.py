@@ -67,6 +67,27 @@ class MessageResponse(BaseModel):
     success: bool = True
     email_id: Optional[int] = None
 
+class BulkUpdateItem(BaseModel):
+    email_id: int
+    email_subject: Optional[str] = None
+    email_content: Optional[str] = None
+    recipient_email: Optional[str] = None
+    status: Optional[str] = None
+    timezone: Optional[str] = None
+    signature: Optional[str] = None
+    logo_data: Optional[str] = None
+    logo_clear: Optional[bool] = None
+    time: Optional[str] = None
+    html_email: Optional[bool] = None
+
+class BulkUpdateRequest(BaseModel):
+    updates: List[BulkUpdateItem]
+
+class BulkUpdateResponse(BaseModel):
+    updated: int
+    failed: int
+    errors: List[dict]
+
 
 # ==================================================================================
 # Helper: resolve branding (signature + logo) based on inherit flags

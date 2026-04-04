@@ -50,9 +50,7 @@ styleElement.textContent = globalStyles;
 document.head.appendChild(styleElement);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
     <GoogleReCaptchaProvider reCaptchaKey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}>
       <App />
     </GoogleReCaptchaProvider>
-  </React.StrictMode>
 );

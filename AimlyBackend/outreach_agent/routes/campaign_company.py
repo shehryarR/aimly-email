@@ -287,134 +287,121 @@ def add_companies_to_campaign(
         created=created_count
     )
 # ==================================================================================
-# GET /campaign/{campaign_id}/company/{company_id} - Get campaign-company settings
+# POST /campaign/{campaign_id}/company/inherit/ - Get inherit flags for multiple companies
 # ==================================================================================
-class CampaignCompanySettingsResponse(BaseModel):
-    campaign_id: int
+class BulkInheritRequest(BaseModel):
+    company_ids: List[int]
+
+@campaign_company_router.post("/campaign/{campaign_id}/company/inherit/")
+def get_bulk_inherit_flags(
+    campaign_id: int,
+    request: BulkInheritRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get inherit_campaign_attachments and inherit_campaign_branding for multiple
+    companies in a campaign in a single query.
+
+    Returns a dict keyed by company_id.
+    """
+    user_id = current_user["user_id"]
+
+    if not request.company_ids:
+        raise HTTPException(status_code=400, detail="company_ids must not be empty")
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        placeholders = ",".join(["%s"] * len(request.company_ids))
+        cursor.execute(f"""
+            SELECT cc.company_id, cc.inherit_campaign_attachments, cc.inherit_campaign_branding
+            FROM campaign_company cc
+            JOIN campaigns camp ON cc.campaign_id = camp.id
+            JOIN companies comp ON cc.company_id = comp.id
+            WHERE cc.campaign_id = %s AND cc.company_id IN ({placeholders})
+              AND camp.user_id = %s AND comp.user_id = %s
+        """, [campaign_id] + request.company_ids + [user_id, user_id])
+
+        rows = cursor.fetchall()
+
+    return {
+        row["company_id"]: {
+            "inherit_campaign_attachments": row["inherit_campaign_attachments"],
+            "inherit_campaign_branding": row["inherit_campaign_branding"],
+        }
+        for row in rows
+    }
+
+
+# PUT /campaign/{campaign_id}/company/inherit/bulk/ - Bulk update inherit flags
+# ==================================================================================
+class BulkInheritUpdateItem(BaseModel):
     company_id: int
     inherit_campaign_attachments: int
     inherit_campaign_branding: int
 
-@campaign_company_router.get(
-    "/campaign/{campaign_id}/company/{company_id}/",
-    response_model=CampaignCompanySettingsResponse
-)
-def get_campaign_company_settings(
+class BulkInheritUpdateRequest(BaseModel):
+    updates: List[BulkInheritUpdateItem]
+
+@campaign_company_router.put("/campaign/{campaign_id}/company/inherit/bulk/")
+def bulk_update_inherit_flags(
     campaign_id: int,
-    company_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get inherit settings for a specific campaign-company relationship.
-
-    Args:
-        campaign_id: ID of the campaign
-        company_id:  ID of the company
-
-    Returns:
-        inherit_campaign_attachments and inherit_campaign_branding values
-    """
-    user_id = current_user["user_id"]
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT cc.campaign_id, cc.company_id,
-                   cc.inherit_campaign_attachments, cc.inherit_campaign_branding
-            FROM campaign_company cc
-            JOIN campaigns camp ON cc.campaign_id = camp.id
-            JOIN companies comp ON cc.company_id = comp.id
-            WHERE cc.campaign_id = %s AND cc.company_id = %s
-              AND camp.user_id = %s AND comp.user_id = %s
-        """, (campaign_id, company_id, user_id, user_id))
-
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Campaign-company relationship not found")
-
-    return CampaignCompanySettingsResponse(**dict(row))
-# ==================================================================================
-# PUT /campaign/{campaign_id}/company/{company_id} - Update campaign-company settings
-# ==================================================================================
-class CampaignCompanyUpdateRequest(BaseModel):
-    inherit_campaign_attachments: int  # 0 or 1
-    inherit_campaign_branding: int     # 0 or 1
-
-class CampaignCompanyUpdateResponse(BaseModel):
-    message: str
-    success: bool = True
-    inherit_campaign_attachments: int
-    inherit_campaign_branding: int
-
-@campaign_company_router.put(
-    "/campaign/{campaign_id}/company/{company_id}/",
-    response_model=CampaignCompanyUpdateResponse
-)
-def update_campaign_company(
-    campaign_id: int,
-    company_id: int,
-    body: CampaignCompanyUpdateRequest,
+    request: BulkInheritUpdateRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Update inherit_campaign_attachments and inherit_campaign_branding
-    for a specific campaign-company relationship.
-
-    Args:
-        campaign_id: ID of the campaign
-        company_id:  ID of the company
-        body:        Both fields required
-
-    Returns:
-        Updated values for both fields
+    for multiple companies in a campaign in a single call.
+    Skips failures with logged errors and returns a summary.
     """
     user_id = current_user["user_id"]
 
-    if body.inherit_campaign_attachments not in (0, 1):
-        raise HTTPException(status_code=400, detail="inherit_campaign_attachments must be 0 or 1")
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="updates must not be empty")
 
-    if body.inherit_campaign_branding not in (0, 1):
-        raise HTTPException(status_code=400, detail="inherit_campaign_branding must be 0 or 1")
+    updated = 0
+    errors = []
 
-    with get_connection() as conn:
-        cursor = conn.cursor()
-
-        # Verify the relationship exists and belongs to the user
-        cursor.execute("""
-            SELECT cc.id
-            FROM campaign_company cc
-            JOIN campaigns camp ON cc.campaign_id = camp.id
-            JOIN companies comp ON cc.company_id = comp.id
-            WHERE cc.campaign_id = %s AND cc.company_id = %s
-              AND camp.user_id = %s AND comp.user_id = %s
-        """, (campaign_id, company_id, user_id, user_id))
-
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Campaign-company relationship not found")
+    for item in request.updates:
+        if item.inherit_campaign_attachments not in (0, 1):
+            errors.append({"company_id": item.company_id, "reason": "inherit_campaign_attachments must be 0 or 1"})
+            continue
+        if item.inherit_campaign_branding not in (0, 1):
+            errors.append({"company_id": item.company_id, "reason": "inherit_campaign_branding must be 0 or 1"})
+            continue
 
         try:
-            cursor.execute("""
-                UPDATE campaign_company
-                SET inherit_campaign_attachments = %s,
-                    inherit_campaign_branding = %s
-                WHERE id = %s
-            """, (body.inherit_campaign_attachments, body.inherit_campaign_branding, row["id"]))
-            conn.commit()
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT cc.id FROM campaign_company cc
+                    JOIN campaigns camp ON cc.campaign_id = camp.id
+                    JOIN companies comp ON cc.company_id = comp.id
+                    WHERE cc.campaign_id = %s AND cc.company_id = %s
+                      AND camp.user_id = %s AND comp.user_id = %s
+                """, (campaign_id, item.company_id, user_id, user_id))
+
+                row = cursor.fetchone()
+                if not row:
+                    errors.append({"company_id": item.company_id, "reason": "Campaign-company relationship not found"})
+                    continue
+
+                cursor.execute("""
+                    UPDATE campaign_company
+                    SET inherit_campaign_attachments = %s,
+                        inherit_campaign_branding = %s
+                    WHERE id = %s
+                """, (item.inherit_campaign_attachments, item.inherit_campaign_branding, row["id"]))
+                conn.commit()
+                updated += 1
 
         except Exception as e:
-            conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Failed to update: {str(e)}")
+            errors.append({"company_id": item.company_id, "reason": str(e)})
 
-    return CampaignCompanyUpdateResponse(
-        message="Campaign-company settings updated successfully",
-        success=True,
-        inherit_campaign_attachments=body.inherit_campaign_attachments,
-        inherit_campaign_branding=body.inherit_campaign_branding
-    )
+    return {"updated": updated, "failed": len(errors), "errors": errors}
 
-# ==================================================================================
+
 # DELETE /campaign/{campaign_id}/company - Remove companies from campaign
 # ==================================================================================
 @campaign_company_router.delete("/campaign/{campaign_id}/company/", response_model=MessageResponse)

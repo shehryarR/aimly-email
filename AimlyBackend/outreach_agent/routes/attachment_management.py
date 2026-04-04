@@ -41,67 +41,69 @@ def verify_attachments_owned_by_user(cursor, attachment_ids: List[int], user_id:
 
 
 # ==================================================================================
-# PUT /email/{email_id}/attachments - Update email attachments
+# PUT /email/bulk-attachments/ - Update attachments for multiple emails in one call
 # ==================================================================================
-@attachment_manager_router.put("/email/{email_id}/attachments/")
-async def update_email_attachments(
-    email_id: int,
-    attachment_ids: List[int],
+from pydantic import BaseModel
+
+class EmailAttachmentUpdate(BaseModel):
+    email_id: int
+    attachment_ids: List[int]
+
+class BulkEmailAttachmentsRequest(BaseModel):
+    updates: List[EmailAttachmentUpdate]
+
+@attachment_manager_router.put("/email/bulk-attachments/")
+async def bulk_update_email_attachments(
+    request: BulkEmailAttachmentsRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Update attachments for a specific email.
-    
-    Behavior:
-    - Flushes all existing attachments
-    - Adds the new ones in the list
-    - Only attachments owned by the current user can be attached
-    
-    attachment_ids: List of attachment IDs to attach to this email
-    - Empty list [] → Removes all attachments from this email
-    - Non-empty list [1, 2, 3] → Replaces all attachments with these IDs
+    Update attachments for multiple emails in a single call.
+    For each item: flushes existing attachments and replaces with the provided list.
+    Skips failures with logged errors and returns a summary.
     """
     user_id = current_user["user_id"]
 
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
+    if not request.updates:
+        raise HTTPException(status_code=400, detail="updates must not be empty")
 
-            # Verify the email exists and belongs to the current user
-            cursor.execute("""
-                SELECT e.id FROM emails e
-                JOIN campaign_company cc ON e.campaign_company_id = cc.id
-                JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE e.id = %s AND c.user_id = %s
-            """, (email_id, user_id))
+    updated = 0
+    errors = []
 
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Email not found or access denied")
+    for item in request.updates:
+        try:
+            with get_connection() as conn:
+                cursor = conn.cursor()
 
-            # Verify all attachments exist and are owned by this user
-            verify_attachments_owned_by_user(cursor, attachment_ids, user_id)
-
-            # Flush and replace
-            cursor.execute("DELETE FROM email_attachments WHERE email_id = %s", (email_id,))
-
-            for attachment_id in attachment_ids:
                 cursor.execute("""
-                    INSERT INTO email_attachments (email_id, attachment_id)
-                    VALUES (%s, %s)
-                """, (email_id, attachment_id))
+                    SELECT e.id FROM emails e
+                    JOIN campaign_company cc ON e.campaign_company_id = cc.id
+                    JOIN campaigns c ON cc.campaign_id = c.id
+                    WHERE e.id = %s AND c.user_id = %s
+                """, (item.email_id, user_id))
 
-            conn.commit()
+                if not cursor.fetchone():
+                    errors.append({"email_id": item.email_id, "reason": "Email not found or access denied"})
+                    continue
 
-            return {
-                "message": "Email attachments updated successfully",
-                "email_id": email_id,
-                "attachments": attachment_ids
-            }
+                verify_attachments_owned_by_user(cursor, item.attachment_ids, user_id)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating email attachments: {str(e)}")
+                cursor.execute("DELETE FROM email_attachments WHERE email_id = %s", (item.email_id,))
+                for attachment_id in item.attachment_ids:
+                    cursor.execute("""
+                        INSERT INTO email_attachments (email_id, attachment_id)
+                        VALUES (%s, %s)
+                    """, (item.email_id, attachment_id))
+
+                conn.commit()
+                updated += 1
+
+        except HTTPException as e:
+            errors.append({"email_id": item.email_id, "reason": e.detail})
+        except Exception as e:
+            errors.append({"email_id": item.email_id, "reason": str(e)})
+
+    return {"updated": updated, "failed": len(errors), "errors": errors}
 
 
 # ==================================================================================

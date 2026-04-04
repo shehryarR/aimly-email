@@ -84,7 +84,7 @@ const ModalBox = styled.div<{ theme: any; $open: boolean }>`
   background:${p => p.theme.colors.base[200]};
   border:1px solid ${p => p.theme.colors.base[300]};
   border-radius:16px;box-shadow:0 32px 80px rgba(0,0,0,0.45);
-  display:flex;flex-direction:column;overflow:hidden;
+  display:flex;flex-direction:column;overflow:hidden;position:relative;
   opacity:${p => p.$open ? 1 : 0};
   transform:${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(20px)'};
   transition:opacity 0.25s ease,transform 0.25s ease;
@@ -745,7 +745,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       brandLogoUploading:false,
     }));
     setEntries(init);
-    companies.forEach((c,i) => loadEntry(i,c));
+    loadAllEntries(companies);
 
   }, [isOpen, companies.map(c=>c.id).join(',')]);
 
@@ -773,34 +773,113 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   }, [schedDropOpen]);
 
   // ── load / populate / generate entry ────────────────────────
-  const loadEntry = async (idx: number, company: Company) => {
-    await generateEntry(idx, company, null, false);
+  const loadAllEntries = async (cos: Company[]) => {
+    // Single bulk-generate call for all companies (force=false — load existing if present)
+    try {
+      const gr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/bulk-generate/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: cos.map(c => c.id), query_type: initialQueryType ?? 'plain', force: false }),
+      });
+      if (!gr.ok) {
+        setEntries(p => p.map(e => ({ ...e, phase: 'error' })));
+        return;
+      }
+    } catch {
+      setEntries(p => p.map(e => ({ ...e, phase: 'error' })));
+      return;
+    }
+
+    // Fetch global attachments once, all primaries, and all inherit flags in parallel
+    const [allAttachments, primariesRes, inheritRes] = await Promise.all([
+      apiFetch(`${apiBase}/attachments/?page=1&page_size=200`).then(r => r.ok ? r.json().then((d: any) => d.attachments ?? []) : []),
+      apiFetch(`${apiBase}/email/campaign/${campaignId}/primaries/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: cos.map(c => c.id) }),
+      }).then(r => r.ok ? r.json().then((d: any) => d.primaries ?? []) : []),
+      apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: cos.map(c => c.id) }),
+      }).then(r => r.ok ? r.json() : {}),
+    ]);
+
+    // Build maps
+    const primaryByCompanyId = new Map(primariesRes.map((p: any) => [p.company_id, p]));
+
+    // Populate each entry — no more per-company fetches
+    cos.forEach((company, idx) => {
+      const primary = primaryByCompanyId.get(company.id);
+      if (!primary) {
+        setEntries(p => p.map((e, i) => i === idx ? { ...e, phase: 'error' } : e));
+        return;
+      }
+      const inherit = inheritRes[company.id] ?? {};
+      const iA = inherit.inherit_campaign_attachments ?? primary.inherit_campaign_attachments ?? 1;
+      const iB = inherit.inherit_campaign_branding ?? primary.inherit_campaign_branding ?? 1;
+      const linked = new Set<number>(primary.linked_attachment_ids ?? []);
+
+      setEntries(p => p.map((e, i) => i === idx ? {
+        ...e,
+        emailId: primary.id,
+        subject: primary.email_subject || '',
+        body: primary.email_content || '',
+        htmlEmail: !!(primary.html_email),
+        brandSignature: iB === 1 ? (e.brandSignature || '') : (primary.signature || ''),
+        brandLogoData: iB === 1 ? (e.brandLogoData ?? null) : (primary.logo_data || null),
+        campaignBrandSignature: iB === 1 ? (primary.signature || '') : (e.campaignBrandSignature || primary.signature || ''),
+        campaignBrandLogoData: iB === 1 ? (primary.logo_data || null) : (e.campaignBrandLogoData ?? primary.logo_data ?? null),
+        inheritedAttachIds: primary.attachment_ids ?? [],
+        phase: 'ready',
+        allAttachments,
+        linkedEmailAttachIds: linked,
+        inheritCampaignAttachments: iA,
+        inheritCampaignBranding: iB,
+      } : e));
+    });
   };
 
-  const populateEntry = async (idx: number, company: Company, d: any) => {
-    let all:AttachmentOption[]=[], linked=new Set<number>(), iA=1, iB=1;
+  const populateEntry = async (idx: number, company: Company, d: any, prefetchedAttachments?: AttachmentOption[]) => {
+    let all: AttachmentOption[] = prefetchedAttachments ?? [], linked = new Set<number>(), iA = 1, iB = 1;
     try {
-      const [ar,lr,ir] = await Promise.all([
-        apiFetch(`${apiBase}/attachments/?page=1&page_size=200`),
-        apiFetch(`${apiBase}/email/${d.id}/attachments/`,        {}),
-        apiFetch(`${apiBase}/campaign/${campaignId}/company/${company.id}/`),
-      ]);
-      if (ar.ok) { const ad=await ar.json(); all=ad.attachments??[]; }
-      if (lr.ok) { const ld=await lr.json(); linked=new Set((ld.attachments??[]).map((a:any)=>a.id)); }
-      if (ir.ok) { const id=await ir.json(); iA=id.inherit_campaign_attachments??1; iB=id.inherit_campaign_branding??1; }
+      const toFetch: Promise<any>[] = [];
+      if (!prefetchedAttachments) toFetch.push(apiFetch(`${apiBase}/attachments/?page=1&page_size=200`));
+
+      // Use linked_attachment_ids and inherit flags from primaries response if available
+      if (d.linked_attachment_ids !== undefined) {
+        linked = new Set<number>(d.linked_attachment_ids);
+      } else {
+        const lr = await apiFetch(`${apiBase}/email/${d.id}/attachments/`, {});
+        if (lr.ok) { const ld = await lr.json(); linked = new Set((ld.attachments ?? []).map((a: any) => a.id)); }
+      }
+
+      if (d.inherit_campaign_attachments !== undefined) {
+        iA = d.inherit_campaign_attachments;
+        iB = d.inherit_campaign_branding ?? 1;
+      } else {
+        const ir = await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: [company.id] }),
+        });
+        if (ir.ok) { const id = await ir.json(); iA = id[company.id]?.inherit_campaign_attachments ?? 1; iB = id[company.id]?.inherit_campaign_branding ?? 1; }
+      }
+
+      if (!prefetchedAttachments) {
+        const ar = await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`);
+        if (ar.ok) { const ad = await ar.json(); all = ad.attachments ?? []; }
+      }
     } catch {}
-    setEntries(p => p.map((e,i) => i===idx ? {
-      ...e, emailId:d.id, subject:d.email_subject||'', body:d.email_content||'',
+    setEntries(p => p.map((e, i) => i === idx ? {
+      ...e, emailId: d.id, subject: d.email_subject || '', body: d.email_content || '',
       htmlEmail: !!(d.html_email),
-      // When inheriting, store API values as campaign branding; own branding stays empty
-      // When not inheriting, store API values as own branding
-      brandSignature: iB===1 ? (e.brandSignature||'') : (d.signature||''),
-      brandLogoData:  iB===1 ? (e.brandLogoData??null) : (d.logo_data||null),
-      campaignBrandSignature: iB===1 ? (d.signature||'') : (e.campaignBrandSignature||d.signature||''),
-      campaignBrandLogoData:  iB===1 ? (d.logo_data||null) : (e.campaignBrandLogoData??d.logo_data??null),
-      inheritedAttachIds:d.attachment_ids??[], phase:'ready',
-      allAttachments:all, linkedEmailAttachIds:linked,
-      inheritCampaignAttachments:iA, inheritCampaignBranding:iB,
+      brandSignature: iB === 1 ? (e.brandSignature || '') : (d.signature || ''),
+      brandLogoData: iB === 1 ? (e.brandLogoData ?? null) : (d.logo_data || null),
+      campaignBrandSignature: iB === 1 ? (d.signature || '') : (e.campaignBrandSignature || d.signature || ''),
+      campaignBrandLogoData: iB === 1 ? (d.logo_data || null) : (e.campaignBrandLogoData ?? d.logo_data ?? null),
+      inheritedAttachIds: d.attachment_ids ?? [], phase: 'ready',
+      allAttachments: all, linkedEmailAttachIds: linked,
+      inheritCampaignAttachments: iA, inheritCampaignBranding: iB,
     } : e));
   };
 
@@ -809,17 +888,30 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     try {
       const resolvedType = queryType ?? initialQueryType;
       const gr = await apiFetch(
-        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}&force=${force}`,
-        { method:'POST' }
+        `${apiBase}/email/campaign/${campaignId}/bulk-generate/`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: [company.id], query_type: resolvedType, force }) }
       );
       if (!gr.ok) {
-        const err=await gr.json();
-        onToast('error','Generation Failed', err.detail||`Failed for ${company.name}`);
+        const err = await gr.json();
+        onToast('error', 'Generation Failed', err.detail || `Failed for ${company.name}`);
         setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); return;
       }
-      const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
-      if (pr.ok) { await populateEntry(idx, company, await pr.json()); if (queryType!==null) onToast('success','Generated',`Email for ${company.name} regenerated`); }
-      else { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
+      const gd = await gr.json();
+      if (gd.generated === 0) {
+        const reason = gd.errors?.[0]?.reason || `Failed for ${company.name}`;
+        onToast('error', 'Generation Failed', reason);
+        setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); return;
+      }
+      const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/primaries/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [company.id] }),
+      });
+      if (pr.ok) {
+        const pd = await pr.json();
+        const primary = pd.primaries?.[0];
+        if (primary) { await populateEntry(idx, company, primary); if (queryType!==null) onToast('success','Generated',`Email for ${company.name} regenerated`); }
+        else setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e));
+      } else { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
     } catch { setEntries(p => p.map((e,i) => i===idx ? {...e,phase:'error'} : e)); }
   };
 
@@ -828,34 +920,43 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     if (bulkActing) return;
     setBulkActing('send');
     await saveAllEdits();
-    let sent=0,fail=0;
-    await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async e=>{
-      try {
-        const r=await apiFetch(`${apiBase}/email/${e.emailId}/send/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-        r.ok?sent++:fail++;
-      } catch {fail++;}
-    }));
+    const readyIds = entries.filter(e => e.phase === 'ready' && e.emailId).map(e => e.emailId as number);
+    try {
+      const r = await apiFetch(`${apiBase}/email/bulk-send/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_ids: readyIds }),
+      });
+      const d = await r.json();
+      if (!r.ok) onToast('error', 'Send Failed', d.detail || 'Failed to send emails');
+      else if (d.sent > 0) onToast('success', 'Emails Sent', `${d.sent} email${d.sent > 1 ? 's' : ''} sent${d.failed ? `, ${d.failed} failed` : ''}`);
+      else onToast('error', 'Send Failed', `All ${d.failed} failed`);
+    } catch {
+      onToast('error', 'Send Failed', 'Unexpected error');
+    }
     setBulkActing(null);
-    if (sent>0) onToast('success','Emails Sent',`${sent} email${sent>1?'s':''} sent${fail?`, ${fail} failed`:''}`);
-    else onToast('error','Send Failed',`All ${fail} failed`);
     onClose();
   };
 
   const handleScheduleAll = async () => {
-    if (!schedTime||bulkActing) return;
+    if (!schedTime || bulkActing) return;
     setBulkActing('schedule');
     await saveAllEdits();
-    const iso=new Date(schedTime).toISOString();
-    let ok=0,fail=0;
-    await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async e=>{
-      try {
-        const r=await apiFetch(`${apiBase}/email/${e.emailId}/send/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({time:iso})});
-        r.ok?ok++:fail++;
-      } catch {fail++;}
-    }));
+    const readyIds = entries.filter(e => e.phase === 'ready' && e.emailId).map(e => e.emailId as number);
+    try {
+      const r = await apiFetch(`${apiBase}/email/bulk-send/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_ids: readyIds, time: new Date(schedTime).toISOString() }),
+      });
+      const d = await r.json();
+      if (!r.ok) onToast('error', 'Schedule Failed', d.detail || 'Failed to schedule emails');
+      else if (d.sent > 0) onToast('success', 'Scheduled', `${d.sent} email${d.sent > 1 ? 's' : ''} scheduled${d.failed ? `, ${d.failed} failed` : ''}`);
+      else onToast('error', 'Schedule Failed', `All ${d.failed} failed`);
+    } catch {
+      onToast('error', 'Schedule Failed', 'Unexpected error');
+    }
     setBulkActing(null);
-    if (ok>0) onToast('success','Scheduled',`${ok} email${ok>1?'s':''} scheduled${fail?`, ${fail} failed`:''}`);
-    else onToast('error','Schedule Failed',`All ${fail} failed`);
     onClose();
   };
 
@@ -943,7 +1044,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       } else if (d.generated > 0) {
         onToast('success', 'Generated', `${d.generated} email${d.generated > 1 ? 's' : ''} generated${d.failed ? `, ${d.failed} failed` : ''}`);
         // Reload all entries to reflect newly generated content
-        entries.forEach((e, i) => loadEntry(i, e.company));
+        loadAllEntries(entries.map(e => e.company));
       } else {
         onToast('error', 'Generation Failed', `All ${d.failed} failed`);
       }
@@ -956,34 +1057,43 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // ── bulk attachment inherit toggle ───────────────────────────
   const handleBulkAttachInherit = async (on: boolean) => {
     if (bulkAttachSaving) return;
-    setBulkAttachInherit(on); 
-    setBulkAttachSaving(true); 
+    setBulkAttachInherit(on);
+    setBulkAttachSaving(true);
     setBulkInheritMsg(null);
-    let ok = 0, fail = 0;
-    await Promise.all(entries.map(async(e,i)=>{
-      try {
-        await apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`,{
-          method:'PUT', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({inherit_campaign_attachments:on?1:0, inherit_campaign_branding:e.inheritCampaignBranding}),
+    try {
+      const updates = entries.map(e => ({
+        company_id: e.company.id,
+        inherit_campaign_attachments: on ? 1 : 0,
+        inherit_campaign_branding: e.inheritCampaignBranding,
+      }));
+      const r = await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const d = await r.json();
+      entries.forEach((_, i) => upd(i, { inheritCampaignAttachments: on ? 1 : 0 }));
+      // Refresh all attachment_ids in one call
+      const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/primaries/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: entries.map(e => e.company.id) }),
+      });
+      if (pr.ok) {
+        const pd = await pr.json();
+        const byCompany = new Map(pd.primaries.map((p: any) => [p.company_id, p]));
+        entries.forEach((e, i) => {
+          const p = byCompany.get(e.company.id) as any;
+          if (p) upd(i, { inheritedAttachIds: p.attachment_ids ?? [] });
         });
-        upd(i,{inheritCampaignAttachments:on?1:0});
-        // Re-fetch primary to get fresh resolved attachment_ids
-        const pr = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${e.company.id}/primary/`);
-        if (pr.ok) {
-          const d = await pr.json();
-          upd(i, { inheritedAttachIds: d.attachment_ids ?? [] });
-        }
-        ok++;
-      } catch {fail++;}
-    }));
-    setBulkAttachSaving(false);
-    if (!bulkBrandSaving) {
-      if (fail === 0) {
-        setBulkInheritMsg({ ok: true, text: `Attachment inheritance ${on ? 'enabled' : 'disabled'} for all ${ok} companies` });
-      } else {
-        setBulkInheritMsg({ ok: false, text: `Failed to update attachment inheritance for ${fail} companies` });
       }
+      if (!bulkBrandSaving) {
+        setBulkInheritMsg(d.failed === 0
+          ? { ok: true, text: `Attachment inheritance ${on ? 'enabled' : 'disabled'} for all ${d.updated} companies` }
+          : { ok: false, text: `${d.failed} failed to update` });
+      }
+    } catch {
+      if (!bulkBrandSaving) setBulkInheritMsg({ ok: false, text: 'Failed to update attachment inheritance' });
     }
+    setBulkAttachSaving(false);
   };
 
   // bulk upload — replaces all existing per-email attachments
@@ -991,29 +1101,26 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     if (!bulkUploadFile) return;
     setBulkUploading(true); setBulkUploadMsg(null);
     try {
-      const fd=new FormData(); fd.append('file',bulkUploadFile);
-      const ur=await apiFetch(`${apiBase}/attachment/`,{method:'POST',body:fd});
-      if(!ur.ok){const e=await ur.json();throw new Error(e.detail||'Upload failed');}
-      const ud=await ur.json();
-      let ok=0,fail=0;
-      await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async(e,_)=>{
-        const i=entries.indexOf(e);
-        try {
-          // replace (not append) — clears previous attachments
-          await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`,{
-            method:'PUT', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify([ud.id]),
-          });
-          upd(i,{linkedEmailAttachIds:new Set([ud.id])}); ok++;
-        } catch {fail++;}
+      const fd = new FormData(); fd.append('file', bulkUploadFile);
+      const ur = await apiFetch(`${apiBase}/attachment/`, { method: 'POST', body: fd });
+      if (!ur.ok) { const e = await ur.json(); throw new Error(e.detail || 'Upload failed'); }
+      const ud = await ur.json();
+      const updates = entries.filter(e => e.phase === 'ready' && e.emailId).map(e => ({
+        email_id: e.emailId as number,
+        attachment_ids: [ud.id],
       }));
-      // refresh global attachment list in all entries
-      const aRes=await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`,{});
-      if(aRes.ok){const all=(await aRes.json()).attachments??[]; setEntries(p=>p.map(e=>({...e,allAttachments:all})));}
-      setBulkUploadFile(null); if(bulkUpRef.current) bulkUpRef.current.value='';
-      setBulkUploadMsg({ok:true,text:`"${ud.filename}" uploaded and applied to ${ok} email${ok!==1?'s':''}${fail?` (${fail} failed)`:''}`});
-    } catch(e){
-      setBulkUploadMsg({ok:false,text:e instanceof Error?e.message:'Upload failed'});
+      const r = await apiFetch(`${apiBase}/email/bulk-attachments/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const d = await r.json();
+      entries.filter(e => e.phase === 'ready').forEach((_, i) => upd(i, { linkedEmailAttachIds: new Set([ud.id]) }));
+      const aRes = await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`, {});
+      if (aRes.ok) { const all = (await aRes.json()).attachments ?? []; setEntries(p => p.map(e => ({ ...e, allAttachments: all }))); }
+      setBulkUploadFile(null); if (bulkUpRef.current) bulkUpRef.current.value = '';
+      setBulkUploadMsg({ ok: true, text: `"${ud.filename}" uploaded and applied to ${d.updated} email${d.updated !== 1 ? 's' : ''}${d.failed ? ` (${d.failed} failed)` : ''}` });
+    } catch (e) {
+      setBulkUploadMsg({ ok: false, text: e instanceof Error ? e.message : 'Upload failed' });
     }
     setBulkUploading(false);
   };
@@ -1028,56 +1135,57 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // ── bulk branding inherit toggle ─────────────────────────────
   const handleBulkBrandInherit = async (on: boolean) => {
     if (bulkBrandSaving) return;
-    setBulkBrandInherit(on); 
-    setBulkBrandSaving(true); 
-    setBulkInheritMsg(null); // Clear any previous messages
-    let ok = 0, fail = 0;
-    await Promise.all(entries.map(async(e,i)=>{
-      try {
-        await apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`,{
-          method:'PUT', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({inherit_campaign_attachments:e.inheritCampaignAttachments, inherit_campaign_branding:on?1:0}),
-        });
-        upd(i,{inheritCampaignBranding:on?1:0}); ok++;
-      } catch {fail++;}
-    }));
-    setBulkBrandSaving(false);
-    
-    // Only set message if this is the only operation or combine with attachments if needed
-    if (!bulkAttachSaving) {
-      if (fail === 0) {
-        setBulkInheritMsg({
-          ok: true, 
-          text: `Branding inheritance ${on ? 'enabled' : 'disabled'} for all ${ok} companies`
-        });
-      } else {
-        setBulkInheritMsg({
-          ok: false, 
-          text: `Failed to update branding inheritance for ${fail} companies`
-        });
+    setBulkBrandInherit(on);
+    setBulkBrandSaving(true);
+    setBulkInheritMsg(null);
+    try {
+      const updates = entries.map(e => ({
+        company_id: e.company.id,
+        inherit_campaign_attachments: e.inheritCampaignAttachments,
+        inherit_campaign_branding: on ? 1 : 0,
+      }));
+      const r = await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const d = await r.json();
+      entries.forEach((_, i) => upd(i, { inheritCampaignBranding: on ? 1 : 0 }));
+      if (!bulkAttachSaving) {
+        setBulkInheritMsg(d.failed === 0
+          ? { ok: true, text: `Branding inheritance ${on ? 'enabled' : 'disabled'} for all ${d.updated} companies` }
+          : { ok: false, text: `${d.failed} failed to update` });
       }
+    } catch {
+      if (!bulkAttachSaving) setBulkInheritMsg({ ok: false, text: 'Failed to update branding inheritance' });
     }
+    setBulkBrandSaving(false);
   };
 
   // bulk branding apply — overwrites logo + signature on all emails
   const handleBulkBrandApply = async () => {
     if (!bulkSig && !bulkLogo) return;
     setBulkBrandApplying(true); setBulkBrandApplyMsg(null);
-    let ok=0,fail=0;
-    await Promise.all(entries.filter(e=>e.phase==='ready'&&e.emailId).map(async(e,_)=>{
-      const i=entries.indexOf(e);
-      try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/update/`,{
-          method:'PUT', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({signature:bulkSig,...(bulkLogo?{logo_data:bulkLogo}:{logo_clear:true})}),
-        });
-        upd(i,{brandSignature:bulkSig,brandLogoData:bulkLogo}); ok++;
-      } catch {fail++;}
-    }));
+    try {
+      const updates = entries.filter(e => e.phase === 'ready' && e.emailId).map(e => ({
+        email_id: e.emailId as number,
+        signature: bulkSig,
+        ...(bulkLogo ? { logo_data: bulkLogo } : { logo_clear: true }),
+      }));
+      const r = await apiFetch(`${apiBase}/email/bulk-update/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const d = await r.json();
+      const ok = d.updated ?? 0;
+      const fail = d.failed ?? 0;
+      entries.filter(e => e.phase === 'ready').forEach((_, i) => upd(i, { brandSignature: bulkSig, brandLogoData: bulkLogo }));
+      setBulkBrandApplyMsg(fail === 0
+        ? { ok: true,  text: `Branding applied to ${ok} email${ok !== 1 ? 's' : ''}` }
+        : { ok: false, text: `${fail} failed to update` });
+    } catch {
+      setBulkBrandApplyMsg({ ok: false, text: 'Failed to apply branding' });
+    }
     setBulkBrandApplying(false);
-    setBulkBrandApplyMsg(fail===0
-      ? {ok:true,  text:`Branding applied to ${ok} email${ok!==1?'s':''}`}
-      : {ok:false, text:`${fail} failed to update`});
   };
 
   // ── per-company helpers ──────────────────────────────────────
@@ -1096,12 +1204,11 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       if(!ur.ok){const err=await ur.json();throw new Error(err.detail||'Upload failed');}
       const ud=await ur.json();
       const ids=[...new Set([...Array.from(e.linkedEmailAttachIds),ud.id])];
-      await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ids)});
+      await apiFetch(`${apiBase}/email/bulk-attachments/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates:[{email_id:e.emailId,attachment_ids:ids}]})});
       const ar=await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`,{});
       const all=ar.ok?(await ar.json()).attachments??[]:e.allAttachments;
       upd(idx,{uploading:false,uploadFile:null,linkedEmailAttachIds:new Set(ids),allAttachments:all,uploadMsg:{type:'success',text:`"${ud.filename}" uploaded and attached`}});
       if(uploadRefs.current[idx]) uploadRefs.current[idx]!.value='';
-      // Individual change after bulk — force re-confirmation
       if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
     } catch(err){upd(idx,{uploading:false,uploadMsg:{type:'error',text:err instanceof Error?err.message:'Upload failed'}});}
   };
@@ -1112,9 +1219,9 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     upd(idx, { linkedEmailAttachIds: next });
     if (e.emailId) {
       try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`, {
+        await apiFetch(`${apiBase}/email/bulk-attachments/`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([...next]),
+          body: JSON.stringify({ updates: [{ email_id: e.emailId, attachment_ids: [...next] }] }),
         });
       } catch { /* silent */ }
     }
@@ -1122,44 +1229,54 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   };
   const saveInherit=async(idx:number,aV:number,bV:number)=>{
     const e=entries[idx];
-    try{await apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({inherit_campaign_attachments:aV,inherit_campaign_branding:bV})});}catch{}
+    try{await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates:[{company_id:e.company.id,inherit_campaign_attachments:aV,inherit_campaign_branding:bV}]})});}catch{}
   };
   const saveAllEdits = async () => {
-    await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async e => {
-      try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email_subject: e.subject,
-            email_content: e.body,
-            ...(!e.inheritCampaignBranding && {
-              signature: e.brandSignature ?? '',
-              ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }),
-            }),
-          }),
-        });
-      } catch { /* best effort */ }
-    }));
+    const updates = entries
+      .filter(e => e.phase === 'ready' && e.emailId)
+      .map(e => ({
+        email_id: e.emailId as number,
+        email_subject: e.subject,
+        email_content: e.body,
+        ...(!e.inheritCampaignBranding && {
+          signature: e.brandSignature ?? '',
+          ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }),
+        }),
+      }));
+    if (!updates.length) return;
+    try {
+      await apiFetch(`${apiBase}/email/bulk-update/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+    } catch { /* best effort */ }
   };
 
   const handleBulkHtmlToggle = async (val: boolean) => {
     setBulkHtmlEmail(val);
     entries.forEach((e, i) => upd(i, { htmlEmail: val }));
-    await Promise.all(entries.filter(e => e.emailId).map(async e => {
-      try {
-        await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html_email: val }),
-        });
-      } catch { /* silent */ }
+    const updates = entries.filter(e => e.emailId).map(e => ({
+      email_id: e.emailId as number,
+      html_email: val,
     }));
+    if (!updates.length) return;
+    try {
+      await apiFetch(`${apiBase}/email/bulk-update/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+    } catch { /* silent */ }
   };
 
   const saveBranding = async (idx: number, userEdited = false) => {
     const e = entries[idx]; if (!e.emailId) return;
     try {
       await saveInherit(idx, e.inheritCampaignAttachments, e.inheritCampaignBranding);
-      await apiFetch(`${apiBase}/email/${e.emailId}/update/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ signature: e.brandSignature ?? '', ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }) }) });
+      await apiFetch(`${apiBase}/email/bulk-update/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: [{ email_id: e.emailId, signature: e.brandSignature ?? '', ...(e.brandLogoData ? { logo_data: e.brandLogoData } : { logo_clear: true }) }] }),
+      });
       if (userEdited && brandConfirmed) { setBrandConfirmed(false); setBrandIndividualChanged(true); }
     } catch { /* silent */ }
   };
@@ -1168,9 +1285,9 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     const e = entries[idx]; if (!e.emailId) return;
     upd(idx, { htmlEmail });
     try {
-      await apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
+      await apiFetch(`${apiBase}/email/bulk-update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html_email: htmlEmail }),
+        body: JSON.stringify({ updates: [{ email_id: e.emailId, html_email: htmlEmail }] }),
       });
     } catch { /* silent */ }
   };
@@ -1218,6 +1335,23 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       ) : (
       <>
       <ModalBox theme={theme} $open={isOpen} onClick={e=>e.stopPropagation()}>
+
+        {/* ── Generation overlay ── */}
+        {isGenning && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 10,
+            background: `${theme.colors.base[200]}e0`,
+            backdropFilter: 'blur(4px)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: '1rem', borderRadius: 16,
+          }}>
+            <LoadSpinner theme={theme} />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem' }}>Generating emails…</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.5 }}>This may take a moment</div>
+            </div>
+          </div>
+        )}
 
         {/* ── header ── */}
         <ModalHeader theme={theme}>
@@ -1319,7 +1453,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     <div style={{padding:'3rem',textAlign:'center',color:theme.colors.error?.main||'#ef4444'}}>
                       <div style={{fontSize:'1.5rem',marginBottom:'0.5rem'}}>⚠️</div>
                       <div style={{fontWeight:600,marginBottom:'0.75rem'}}>Failed to load email for {entry.company.name}</div>
-                      <button onClick={()=>loadEntry(activeIdx,entry.company)} style={{padding:'0.5rem 1.2rem',borderRadius:theme.radius.field,border:'none',background:theme.colors.primary.main,color:theme.colors.primary.content,cursor:'pointer',fontWeight:600}}>Retry</button>
+                      <button onClick={()=>generateEntry(activeIdx,entry.company,null,false)} style={{padding:'0.5rem 1.2rem',borderRadius:theme.radius.field,border:'none',background:theme.colors.primary.main,color:theme.colors.primary.content,cursor:'pointer',fontWeight:600}}>Retry</button>
                     </div>
                   )}
 
@@ -1544,21 +1678,20 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   setAttachConfirmed(true);
                   setAttachIndividualChanged(false);
                   // Clear all attachments and turn off inheritance for every company
-                  await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async (e, i) => {
-                    upd(i, { linkedEmailAttachIds: new Set(), inheritCampaignAttachments: 0 });
-                    try {
-                      await Promise.all([
-                        apiFetch(`${apiBase}/email/${e.emailId}/attachments/`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify([]),
-                        }),
-                        apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ inherit_campaign_attachments: 0, inherit_campaign_branding: e.inheritCampaignBranding }),
-                        }),
-                      ]);
-                    } catch { /* silent */ }
-                  }));
+                  const readyEntries = entries.filter(e => e.phase === 'ready' && e.emailId);
+                  readyEntries.forEach((_, i) => upd(i, { linkedEmailAttachIds: new Set(), inheritCampaignAttachments: 0 }));
+                  try {
+                    await Promise.all([
+                      apiFetch(`${apiBase}/email/bulk-attachments/`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates: readyEntries.map(e => ({ email_id: e.emailId as number, attachment_ids: [] })) }),
+                      }),
+                      apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates: readyEntries.map(e => ({ company_id: e.company.id, inherit_campaign_attachments: 0, inherit_campaign_branding: e.inheritCampaignBranding })) }),
+                      }),
+                    ]);
+                  } catch { /* silent */ }
                   setBulkAttachInherit(false);
                 }}>
                   {attachIndividualChanged ? 'Yes, overwrite individual changes' : 'Yes, manage bulk attachments'}
@@ -1638,17 +1771,17 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
               };
               const saveBulkAttachments = async () => {
                 setBulkAttachSaving(true);
-                let ok = 0, fail = 0;
-                await Promise.all(readyEntries.map(async e => {
-                  try {
-                    await apiFetch(`${apiBase}/email/${e.emailId}/attachments/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([...e.linkedEmailAttachIds]) });
-                    ok++;
-                  } catch { fail++; }
-                }));
+                try {
+                  const updates = readyEntries.filter(e => e.emailId).map(e => ({ email_id: e.emailId as number, attachment_ids: [...e.linkedEmailAttachIds] }));
+                  const r = await apiFetch(`${apiBase}/email/bulk-attachments/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
+                  const d = await r.json();
+                  setBulkInheritMsg(d.failed === 0
+                    ? { ok: true, text: `Attachments saved for ${d.updated} email${d.updated !== 1 ? 's' : ''}` }
+                    : { ok: false, text: `${d.failed} failed to save` });
+                } catch {
+                  setBulkInheritMsg({ ok: false, text: 'Failed to save attachments' });
+                }
                 setBulkAttachSaving(false);
-                setBulkInheritMsg(fail === 0
-                  ? { ok: true, text: `Attachments saved for ${ok} email${ok !== 1 ? 's' : ''}` }
-                  : { ok: false, text: `${fail} failed to save` });
               };
               return (
                 <>
@@ -1736,22 +1869,20 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                 <Btn theme={theme} $v="primary" onClick={async () => {
                   setBrandConfirmed(true);
                   setBrandIndividualChanged(false);
-                  // Clear all branding and turn off inheritance for every company
-                  await Promise.all(entries.filter(e => e.phase === 'ready' && e.emailId).map(async (e, i) => {
-                    upd(i, { brandSignature: '', brandLogoData: null, inheritCampaignBranding: 0 });
-                    try {
-                      await Promise.all([
-                        apiFetch(`${apiBase}/email/${e.emailId}/update/`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ signature: '', logo_clear: true }),
-                        }),
-                        apiFetch(`${apiBase}/campaign/${campaignId}/company/${e.company.id}/`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ inherit_campaign_attachments: e.inheritCampaignAttachments, inherit_campaign_branding: 0 }),
-                        }),
-                      ]);
-                    } catch { /* silent */ }
-                  }));
+                  const readyEntries = entries.filter(e => e.phase === 'ready' && e.emailId);
+                  readyEntries.forEach((_, i) => upd(i, { brandSignature: '', brandLogoData: null, inheritCampaignBranding: 0 }));
+                  try {
+                    await Promise.all([
+                      apiFetch(`${apiBase}/email/bulk-update/`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates: readyEntries.map(e => ({ email_id: e.emailId as number, signature: '', logo_clear: true })) }),
+                      }),
+                      apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates: readyEntries.map(e => ({ company_id: e.company.id, inherit_campaign_attachments: e.inheritCampaignAttachments, inherit_campaign_branding: 0 })) }),
+                      }),
+                    ]);
+                  } catch { /* silent */ }
                   setBulkBrandInherit(false);
                   setBulkSig('');
                   setBulkLogo(null);

@@ -3617,11 +3617,15 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const loadInheritFlag = async () => {
     if (!company) return;
     try {
-      const res = await apiFetch(`${apiBase}/campaign/${campaignId}/company/${company.id}/`);
+      const res = await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [company.id] }),
+      });
       if (res.ok) {
         const d = await res.json();
-        setInheritCampaignAttachments(d.inherit_campaign_attachments ?? 1);
-        setInheritCampaignBranding(d.inherit_campaign_branding ?? 1);
+        const flags = d[company.id] ?? {};
+        setInheritCampaignAttachments(flags.inherit_campaign_attachments ?? 1);
+        setInheritCampaignBranding(flags.inherit_campaign_branding ?? 1);
       }
     } catch { /* silent — defaults stay 1 */ }
   };
@@ -3630,9 +3634,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
     if (!company) return;
     setInheritSaving(true);
     try {
-      await apiFetch(`${apiBase}/campaign/${campaignId}/company/${company.id}/`, {
+      await apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inherit_campaign_attachments: attachVal, inherit_campaign_branding: brandVal }),
+        body: JSON.stringify({ updates: [{ company_id: company.id, inherit_campaign_attachments: attachVal, inherit_campaign_branding: brandVal }] }),
       });
     } catch { /* silent */ } finally { setInheritSaving(false); }
   };
@@ -3682,8 +3686,12 @@ const EmailModal: React.FC<EmailModalProps> = ({
     );
     try {
       const genRes = await apiFetch(
-        `${apiBase}/email/campaign/${campaignId}/company/${company.id}/generate-email/?query_type=${resolvedType}&force=${!isInitialLoad}`,
-        { method: 'POST' },
+        `${apiBase}/email/campaign/${campaignId}/bulk-generate/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: [company.id], query_type: resolvedType, force: !isInitialLoad }),
+        },
       );
       if (!genRes.ok) {
         const e = await genRes.json();
@@ -3692,11 +3700,28 @@ const EmailModal: React.FC<EmailModalProps> = ({
         setPhase('ready');
         return;
       }
-      const primRes = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
+      const genData = await genRes.json();
+      if (genData.generated === 0) {
+        const reason = genData.errors?.[0]?.reason || 'Failed to generate email';
+        onToast('error', 'Generation Failed', reason);
+        if (isInitialLoad) { onClose(); return; }
+        setPhase('ready');
+        return;
+      }
+      const primRes = await apiFetch(`${apiBase}/email/campaign/${campaignId}/primaries/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [company.id] }),
+      });
       if (primRes.ok) {
-        const d = await primRes.json();
-        populateEmail(d);
-        if (!isInitialLoad) onToast('success', 'Generated', `Email regenerated (${resolvedType}) successfully`);
+        const pd = await primRes.json();
+        const d = pd.primaries?.[0];
+        if (d) {
+          populateEmail(d);
+          if (!isInitialLoad) onToast('success', 'Generated', `Email regenerated (${resolvedType}) successfully`);
+        } else {
+          if (isInitialLoad) { onClose(); return; }
+          setPhase('error');
+        }
       } else {
         if (isInitialLoad) { onClose(); return; }
         setPhase('error');
@@ -3712,9 +3737,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const saveEdits = async (): Promise<boolean> => {
     if (!email) return false;
     try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/update/`, {
+      const res = await apiFetch(`${apiBase}/email/bulk-update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_subject: subject, email_content: body }),
+        body: JSON.stringify({ updates: [{ email_id: email.id, email_subject: subject, email_content: body }] }),
       });
       return res.ok;
     } catch { return false; }
@@ -3724,14 +3749,14 @@ const EmailModal: React.FC<EmailModalProps> = ({
     if (!email || acting) return;
     setActing('send'); await saveEdits();
     try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/send/`, {
+      const res = await apiFetch(`${apiBase}/email/bulk-send/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ email_ids: [email.id] }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Send failed');
-      onToast('success', 'Email Sent', `Email sent to ${company?.email}`);
-      onClose();
+      if (d.sent > 0) { onToast('success', 'Email Sent', `Email sent to ${company?.email}`); onClose(); }
+      else throw new Error(d.errors?.[0]?.reason || 'Failed to send');
     } catch (err) {
       onToast('error', 'Send Failed', err instanceof Error ? err.message : 'Failed to send');
     } finally { setActing(null); }
@@ -3741,14 +3766,14 @@ const EmailModal: React.FC<EmailModalProps> = ({
     if (!email || acting || !schedTime) return;
     setActing('schedule'); await saveEdits();
     try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/send/`, {
+      const res = await apiFetch(`${apiBase}/email/bulk-send/`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ time: schedTime }),
+        body: JSON.stringify({ email_ids: [email.id], time: new Date(schedTime).toISOString() }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Schedule failed');
-      onToast('success', 'Email Scheduled', `Email scheduled for ${company?.email}`);
-      onClose();
+      if (d.sent > 0) { onToast('success', 'Email Scheduled', `Email scheduled for ${company?.email}`); onClose(); }
+      else throw new Error(d.errors?.[0]?.reason || 'Failed to schedule');
     } catch (err) {
       onToast('error', 'Schedule Failed', err instanceof Error ? err.message : 'Failed to schedule');
     } finally { setActing(null); }
@@ -3852,12 +3877,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
     if (!email) return;
     try {
       await saveInheritFlag(inheritCampaignAttachments, inheritCampaignBranding);
-      await apiFetch(`${apiBase}/email/${email.id}/update/`, {
+      await apiFetch(`${apiBase}/email/bulk-update/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signature: signature ?? '',
-          ...(logoData ? { logo_data: logoData } : { logo_clear: true }),
-        }),
+        body: JSON.stringify({ updates: [{ email_id: email.id, signature: signature ?? '', ...(logoData ? { logo_data: logoData } : { logo_clear: true }) }] }),
       });
     } catch { /* silent */ }
   };
@@ -4005,9 +4027,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
                     setHtmlEmail(next);
                     htmlEmailRef.current = next;
                     if (email) {
-                      apiFetch(`${apiBase}/email/${email.id}/update/`, {
+                      apiFetch(`${apiBase}/email/bulk-update/`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ html_email: next }),
+                        body: JSON.stringify({ updates: [{ email_id: email.id, html_email: next }] }),
                       }).catch(() => {/* silent */});
                     }
                   }}
@@ -4315,11 +4337,17 @@ const EmailModal: React.FC<EmailModalProps> = ({
                     // Reload primary email to get correctly resolved branding in both directions
                     if (company) {
                       try {
-                          const res = await apiFetch(`${apiBase}/email/campaign/${campaignId}/company/${company.id}/primary/`);
+                          const res = await apiFetch(`${apiBase}/email/campaign/${campaignId}/primaries/`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ company_ids: [company.id] }),
+                          });
                           if (res.ok) {
-                            const d = await res.json();
-                            setBrandSignature((d as any).signature || '');
-                            setBrandLogoData((d as any).logo_data || null);
+                            const pd = await res.json();
+                            const d = pd.primaries?.[0];
+                            if (d) {
+                              setBrandSignature((d as any).signature || '');
+                              setBrandLogoData((d as any).logo_data || null);
+                            }
                           }
                         } catch { /* silent */ }
                     }
