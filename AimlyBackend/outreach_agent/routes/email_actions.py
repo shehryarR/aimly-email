@@ -402,6 +402,265 @@ def generate_email(
 
 
 # ==================================================================================
+# POST /email/campaign/{campaign_id}/bulk-generate - Generate emails for many companies
+# ==================================================================================
+
+class BulkGenerateRequest(BaseModel):
+    company_ids: List[int]
+    query_type: str = "plain"   # plain | html | template
+    force: bool = True
+
+class BulkGenerateResponse(BaseModel):
+    generated: int
+    failed: int
+    errors: List[dict]
+
+@email_actions_router.post("/campaign/{campaign_id}/bulk-generate/", response_model=BulkGenerateResponse)
+def bulk_generate_emails(
+    campaign_id: int,
+    request: BulkGenerateRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Generate emails for multiple companies in a campaign in a single API call.
+
+    Iterates company_ids server-side, runs the same generation logic as the
+    single endpoint, skips failures with logged errors, and returns a summary.
+    """
+    user_id = current_user["user_id"]
+
+    if not request.company_ids:
+        raise HTTPException(status_code=400, detail="company_ids must not be empty")
+
+    query_type = request.query_type
+    force      = request.force
+
+    if query_type not in ("plain", "html", "template"):
+        raise HTTPException(status_code=400, detail="query_type must be 'plain', 'html', or 'template'")
+
+    # ── Validate campaign ─────────────────────────────────────────────────────
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM campaigns WHERE id = %s AND user_id = %s", (campaign_id, user_id))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # ── Load shared config once (LLM key, model, campaign prefs, template) ───
+    llm_config         = None
+    user_instruction   = None   # built per-company for plain/html (needs company_name)
+    shared_prefs       = None
+    global_prefs       = None
+    inherit_global_settings = 1
+    template_email          = None
+    template_html_email_flag = 0
+
+    if query_type in ("plain", "html"):
+        llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
+        if not llm_api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="No LLM API key configured. Please add one in Settings → API Keys."
+            )
+
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
+            key_row = cursor.fetchone()
+            llm_config = {
+                "api_key": llm_api_key,
+                "model":   (key_row["llm_model"] if key_row else None) or "gemini-2.0-flash",
+            }
+
+            cursor.execute("""
+                SELECT business_name, business_info, goal, value_prop,
+                       tone, cta, extras, email_instruction, inherit_global_settings
+                FROM campaign_preferences WHERE campaign_id = %s
+            """, (campaign_id,))
+            shared_prefs = cursor.fetchone()
+
+            inherit_global_settings = (
+                shared_prefs["inherit_global_settings"]
+                if shared_prefs and shared_prefs["inherit_global_settings"] is not None
+                else 1
+            )
+
+            if inherit_global_settings:
+                cursor.execute("""
+                    SELECT business_name, business_info, goal, value_prop,
+                           tone, cta, extras, email_instruction
+                    FROM global_settings WHERE user_id = %s
+                """, (user_id,))
+                global_prefs = cursor.fetchone()
+
+    else:  # template
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT template_email, template_html_email
+                FROM campaign_preferences WHERE campaign_id = %s
+            """, (campaign_id,))
+            template_row = cursor.fetchone()
+            if not template_row or not template_row["template_email"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No email template found for this campaign. Please generate one first."
+                )
+            template_email           = template_row["template_email"]
+            template_html_email_flag = int(template_row["template_html_email"]) if template_row["template_html_email"] is not None else 0
+
+    PREF_DEFAULTS = {
+        "business_name":     "Our Company",
+        "business_info":     "A professional services company",
+        "goal":              "Generate leads and start a conversation",
+        "value_prop":        "We provide high-quality solutions tailored to your needs",
+        "cta":               "Schedule a quick call to learn more",
+        "tone":              "Professional",
+        "extras":            None,
+        "email_instruction": None,
+    }
+
+    def get_pref_with_default(field):
+        if inherit_global_settings:
+            val = global_prefs[field] if global_prefs else None
+        else:
+            val = shared_prefs[field] if shared_prefs else None
+        return val if val is not None else PREF_DEFAULTS.get(field)
+
+    # ── Per-company loop ──────────────────────────────────────────────────────
+    generated_count = 0
+    errors: List[dict] = []
+
+    for company_id in request.company_ids:
+        try:
+            with get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT * FROM companies WHERE id = %s AND user_id = %s",
+                    (company_id, user_id)
+                )
+                company = cursor.fetchone()
+                if not company:
+                    errors.append({"company_id": company_id, "reason": "Company not found"})
+                    continue
+
+                cursor.execute("""
+                    SELECT id FROM campaign_company
+                    WHERE campaign_id = %s AND company_id = %s
+                """, (campaign_id, company_id))
+                cc_row = cursor.fetchone()
+                if not cc_row:
+                    errors.append({"company_id": company_id, "reason": "Company not associated with this campaign"})
+                    continue
+
+                cc_id         = cc_row["id"]
+                company_name  = company["name"]
+                company_email = company["email"]
+
+            # ── Build subject/body ────────────────────────────────────────────
+            if query_type in ("plain", "html"):
+                # Check existing primary email (skip LLM if force=False and type matches)
+                if not force:
+                    with get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT id, email_content, html_email FROM emails
+                            WHERE campaign_company_id = %s AND status = 'primary'
+                        """, (cc_id,))
+                        existing = cursor.fetchone()
+                    if existing and existing["email_content"] and existing["email_content"].strip():
+                        if bool(existing["html_email"]) == (query_type == "html"):
+                            generated_count += 1
+                            continue  # already exists and type matches, skip
+
+                context_parts = []
+                for field in ("business_name", "business_info", "goal", "value_prop", "cta", "tone", "extras", "email_instruction"):
+                    val = get_pref_with_default(field)
+                    if val:
+                        label = {
+                            "business_name": "Business Name", "business_info": "Business Info",
+                            "goal": "Goal", "value_prop": "Value Proposition", "cta": "Call to Action",
+                            "tone": "Tone", "extras": "Additional Context", "email_instruction": "Email Instructions",
+                        }[field]
+                        context_parts.append(f"{label}: {val}")
+
+                user_instruction = (
+                    "\n".join(context_parts)
+                    or f"Write a professional outreach email to {company_name}."
+                )
+                company_details = company["company_info"] or None
+
+                loop = asyncio.new_event_loop()
+                email_result, _ = loop.run_until_complete(
+                    svc_generate_email(
+                        company_name=company_name,
+                        user_instruction=user_instruction,
+                        llm_config=llm_config,
+                        company_details=company_details,
+                        html_email=(query_type == "html"),
+                    )
+                )
+                loop.close()
+
+                subject = email_result.get("subject") or f"Reaching out to {company_name}"
+                body    = email_result.get("content") or ""
+                if not body:
+                    errors.append({"company_id": company_id, "reason": "LLM returned empty content"})
+                    continue
+
+                html_email_flag = 1 if query_type == "html" else 0
+
+            else:  # template
+                content = template_email.replace("{{company_name}}", company_name)
+                if content.startswith("SUBJECT:"):
+                    lines   = content.split("\n", 1)
+                    subject = lines[0].replace("SUBJECT:", "").strip()
+                    body    = lines[1].strip() if len(lines) > 1 else ""
+                else:
+                    subject = f"Reaching out to {company_name}"
+                    body    = content
+                html_email_flag = template_html_email_flag
+
+            # ── Upsert primary email row ──────────────────────────────────────
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id FROM emails
+                    WHERE campaign_company_id = %s AND status = 'primary'
+                """, (cc_id,))
+                primary = cursor.fetchone()
+
+                if primary:
+                    cursor.execute("""
+                        UPDATE emails
+                        SET email_subject = %s, email_content = %s,
+                            recipient_email = %s, html_email = %s
+                        WHERE id = %s
+                    """, (subject, body, company_email, html_email_flag, primary["id"]))
+                else:
+                    cursor.execute("""
+                        INSERT INTO emails (campaign_company_id, email_subject, email_content,
+                                           recipient_email, status, html_email)
+                        VALUES (%s, %s, %s, %s, 'primary', %s)
+                    """, (cc_id, subject, body, company_email, html_email_flag))
+                conn.commit()
+
+            generated_count += 1
+
+        except Exception as e:
+            print(f"[BulkGenerate] company_id={company_id} failed: {e}")
+            errors.append({"company_id": company_id, "reason": str(e)})
+            continue
+
+    return BulkGenerateResponse(
+        generated=generated_count,
+        failed=len(errors),
+        errors=errors,
+    )
+
+
+# ==================================================================================
 # POST /email/{email_id}/send - Send or schedule an email
 # ==================================================================================
 @email_actions_router.post("/{email_id}/send/", response_model=MessageResponse)

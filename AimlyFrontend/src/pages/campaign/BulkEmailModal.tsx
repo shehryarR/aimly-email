@@ -233,14 +233,6 @@ const AlertBox = styled.div<{ theme: any; $variant: 'warn'|'info' }>`
 `;
 
 // Progress
-const ProgressTrack = styled.div<{ theme: any }>`
-  height:4px;border-radius:2px;background:${p => p.theme.colors.base[300]};
-  overflow:hidden;margin-top:0.75rem;
-`;
-const ProgressFill = styled.div<{ theme: any; $pct: number }>`
-  height:100%;border-radius:2px;background:${p => p.theme.colors.primary.main};
-  width:${p => p.$pct}%;transition:width 0.3s ease;
-`;
 
 // ── SHARED UI ────────────────────────────────────────────────
 const Spinner = styled.div`
@@ -666,7 +658,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // footer state
   const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'draft'|'gen-p'|'gen-t'|'gen-h'|null>(null);
   const [schedTime,  setSchedTime]  = useState('');
-  const [genProg,    setGenProg]    = useState({ done:0, total:0 });
 
   // bulk html email toggle
   const [bulkHtmlEmail, setBulkHtmlEmail] = useState(false);
@@ -938,13 +929,28 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const handleBulkGen = async (queryType: 'plain'|'html'|'template') => {
     const key = queryType === 'plain' ? 'gen-p' : queryType === 'html' ? 'gen-h' : 'gen-t';
     if (bulkActing) return;
-    setBulkActing(key as any); setGenProg({done:0,total:entries.length});
-    for (let i=0;i<entries.length;i++) {
-      await generateEntry(i, entries[i].company, queryType, true);
-      setGenProg(p=>({...p,done:p.done+1}));
+    setBulkActing(key as any);
+    const companyIds = entries.map(e => e.company.id);
+    try {
+      const r = await apiFetch(`${apiBase}/email/campaign/${campaignId}/bulk-generate/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: companyIds, query_type: queryType, force: true }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        onToast('error', 'Generation Failed', d.detail || 'Failed to generate emails');
+      } else if (d.generated > 0) {
+        onToast('success', 'Generated', `${d.generated} email${d.generated > 1 ? 's' : ''} generated${d.failed ? `, ${d.failed} failed` : ''}`);
+        // Reload all entries to reflect newly generated content
+        entries.forEach((e, i) => loadEntry(i, e.company));
+      } else {
+        onToast('error', 'Generation Failed', `All ${d.failed} failed`);
+      }
+    } catch {
+      onToast('error', 'Generation Failed', 'Unexpected error');
     }
     setBulkActing(null);
-    onToast('success','Regenerated',`All ${entries.length} emails regenerated (${queryType})`);
   };
 
   // ── bulk attachment inherit toggle ───────────────────────────
@@ -1177,7 +1183,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const readyCount  = entries.filter(e=>e.phase==='ready'&&e.emailId).length;
   const entry       = entries[activeIdx];
   const isGenning   = bulkActing==='gen-p'||bulkActing==='gen-t'||bulkActing==='gen-h';
-  const genPct      = genProg.total>0 ? Math.round(genProg.done/genProg.total*100) : 0;
   const allSettled  = entries.length > 0 && entries.every(e => e.phase === 'ready' || e.phase === 'error');
   const doneCount   = entries.filter(e => e.phase === 'ready' || e.phase === 'error').length;
   const ALLOWED_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -1484,18 +1489,10 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     title={opt.title}
                     onClick={() => !opt.disabled && setPendingGenType(opt.key as 'plain'|'html'|'template')}
                     style={{ opacity: opt.disabled ? 0.45 : 1, cursor: opt.disabled ? 'not-allowed' : 'pointer' }}>
-                    {bulkActing === opt.acting ? <><MiniSpinner />{genProg.total > 0 ? `${genProg.done}/${genProg.total}…` : 'Generating…'}</> : <><IcoRegen />{opt.label}</>}
+                    {bulkActing === opt.acting ? <><MiniSpinner />Generating…</> : <><IcoRegen />{opt.label}</>}
                   </Btn>
                 ))}
               </div>
-              {isGenning && (
-                <div style={{ marginTop: '1rem' }}>
-                  <ProgressTrack theme={theme}><ProgressFill theme={theme} $pct={genPct} /></ProgressTrack>
-                  <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{genProg.done} of {genProg.total} generated</span><span>{genPct}%</span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* HTML Email flag */}
