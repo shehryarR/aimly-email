@@ -1,4 +1,3 @@
-from datetime import datetime
 """
 Statistics and Analytics Routes
 Provides aggregated metrics and statistics for campaigns and overall account
@@ -37,14 +36,6 @@ class AccountStats(BaseModel):
     total_categories: int = 0
     emails: EmailStats
     overall_read_rate: float = 0.0
-
-class CampaignDetailStats(BaseModel):
-    campaign_id: int
-    campaign_name: str
-    companies_count: int
-    emails: EmailStats
-    read_rate: float = 0.0
-    created_at: datetime
 
 
 def _process_email_stats(email_stats_raw) -> tuple:
@@ -91,32 +82,102 @@ def _process_email_stats(email_stats_raw) -> tuple:
 
 
 # ==================================================================================
-# GET /stats - Get accumulated stats across all campaigns
+# GET /stats - Get accumulated stats, or per-campaign stats for given IDs
 # ==================================================================================
-@stats_router.get("/", response_model=AccountStats)
-def get_account_stats(current_user: dict = Depends(get_current_user)):
+@stats_router.get("/", response_model=None)
+def get_account_stats(
+    campaign_ids: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Get accumulated stats across all campaigns.
-    Returns comprehensive statistics for the entire user account.
+    Get stats for the account.
+
+    - campaign_ids=1,2,3 → returns per-campaign stats for those campaigns in one query
+    - no campaign_ids    → returns accumulated stats across all campaigns
     """
     user_id = current_user["user_id"]
 
+    # ── Per-campaign bulk stats ────────────────────────────────────────────────
+    if campaign_ids and campaign_ids.strip():
+        ids = [int(x.strip()) for x in campaign_ids.split(",") if x.strip().isdigit()]
+        if not ids:
+            return {"campaigns": []}
+
+        with get_connection() as conn:
+            cursor = conn.cursor()
+
+            ph = ",".join(["%s"] * len(ids))
+
+            # Verify all campaign IDs belong to user and get names
+            cursor.execute(f"""
+                SELECT id, name, created_at
+                FROM campaigns
+                WHERE id IN ({ph}) AND user_id = %s
+            """, ids + [user_id])
+            campaigns = {r["id"]: r for r in cursor.fetchall()}
+
+            # Companies count per campaign
+            cursor.execute(f"""
+                SELECT campaign_id, COUNT(*) as companies_count
+                FROM campaign_company
+                WHERE campaign_id IN ({ph})
+                GROUP BY campaign_id
+            """, ids)
+            companies_map = {r["campaign_id"]: r["companies_count"] for r in cursor.fetchall()}
+
+            # Email stats per campaign in one query
+            cursor.execute(f"""
+                SELECT
+                    cc.campaign_id,
+                    e.status,
+                    COUNT(*) as count,
+                    SUM(CASE WHEN e.read_at IS NOT NULL THEN 1 ELSE 0 END) as read_count
+                FROM emails e
+                JOIN campaign_company cc ON e.campaign_company_id = cc.id
+                WHERE cc.campaign_id IN ({ph})
+                GROUP BY cc.campaign_id, e.status
+            """, ids)
+
+            # Group rows by campaign_id
+            rows_by_campaign: Dict[int, list] = {i: [] for i in ids}
+            for row in cursor.fetchall():
+                rows_by_campaign[row["campaign_id"]].append(row)
+
+        results = []
+        for cid in ids:
+            if cid not in campaigns:
+                continue
+            c = campaigns[cid]
+            emails, read_rate = _process_email_stats(rows_by_campaign[cid])
+            results.append({
+                "campaign_id":     cid,
+                "campaign_name":   c["name"],
+                "companies_count": companies_map.get(cid, 0),
+                "created_at":      c["created_at"],
+                "emails": {
+                    "sent":      emails.sent,
+                    "read":      emails.read,
+                    "failed":    emails.failed,
+                    "draft":     emails.draft,
+                    "scheduled": emails.scheduled,
+                    "primary":   emails.primary,
+                    "total":     emails.total,
+                },
+                "read_rate": round(read_rate, 2),
+            })
+
+        return {"campaigns": results}
+
+    # ── Accumulated stats (no campaign_ids) ────────────────────────────────────
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Get total campaigns
-        cursor.execute("""
-            SELECT COUNT(*) as total FROM campaigns WHERE user_id = %s
-        """, (user_id,))
+        cursor.execute("SELECT COUNT(*) as total FROM campaigns WHERE user_id = %s", (user_id,))
         total_campaigns = cursor.fetchone()["total"]
 
-        # Get total companies
-        cursor.execute("""
-            SELECT COUNT(*) as total FROM companies WHERE user_id = %s
-        """, (user_id,))
+        cursor.execute("SELECT COUNT(*) as total FROM companies WHERE user_id = %s", (user_id,))
         total_companies = cursor.fetchone()["total"]
 
-        # Get total campaign-company relationships
         cursor.execute("""
             SELECT COUNT(*) as total
             FROM campaign_company cc
@@ -125,20 +186,12 @@ def get_account_stats(current_user: dict = Depends(get_current_user)):
         """, (user_id,))
         total_campaign_companies = cursor.fetchone()["total"]
 
-        # Get total attachments
-        cursor.execute("""
-            SELECT COUNT(*) as total FROM attachments WHERE user_id = %s
-        """, (user_id,))
+        cursor.execute("SELECT COUNT(*) as total FROM attachments WHERE user_id = %s", (user_id,))
         total_attachments = cursor.fetchone()["total"]
 
-        # Get total categories
-        cursor.execute("""
-            SELECT COUNT(*) as total FROM categories WHERE user_id = %s
-        """, (user_id,))
+        cursor.execute("SELECT COUNT(*) as total FROM categories WHERE user_id = %s", (user_id,))
         total_categories = cursor.fetchone()["total"]
 
-        # Get overall email statistics grouped by status.
-        # read_count counts sent emails that have been opened (read_at IS NOT NULL).
         cursor.execute("""
             SELECT
                 e.status,
@@ -161,62 +214,4 @@ def get_account_stats(current_user: dict = Depends(get_current_user)):
         total_categories=total_categories,
         emails=emails,
         overall_read_rate=round(overall_read_rate, 2),
-    )
-
-
-# ==================================================================================
-# GET /stats/{campaign_id} - Get stats for a specific campaign
-# ==================================================================================
-@stats_router.get("/{campaign_id}/", response_model=CampaignDetailStats)
-def get_campaign_stats(campaign_id: int, current_user: dict = Depends(get_current_user)):
-    """
-    Get stats for a specific campaign.
-    Returns detailed statistics for a single campaign.
-    """
-    user_id = current_user["user_id"]
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-
-        # Verify campaign belongs to user and get campaign info
-        cursor.execute("""
-            SELECT id, name, created_at
-            FROM campaigns
-            WHERE id = %s AND user_id = %s
-        """, (campaign_id, user_id))
-
-        campaign = cursor.fetchone()
-        if not campaign:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-
-        # Get companies count for this campaign
-        cursor.execute("""
-            SELECT COUNT(*) as companies_count
-            FROM campaign_company cc
-            WHERE cc.campaign_id = %s
-        """, (campaign_id,))
-        companies_count = cursor.fetchone()["companies_count"]
-
-        # Get email statistics for this campaign grouped by status.
-        # read_count counts sent emails that have been opened (read_at IS NOT NULL).
-        cursor.execute("""
-            SELECT
-                e.status,
-                COUNT(*) as count,
-                SUM(CASE WHEN e.read_at IS NOT NULL THEN 1 ELSE 0 END) as read_count
-            FROM emails e
-            JOIN campaign_company cc ON e.campaign_company_id = cc.id
-            WHERE cc.campaign_id = %s
-            GROUP BY e.status
-        """, (campaign_id,))
-
-        emails, read_rate = _process_email_stats(cursor.fetchall())
-
-    return CampaignDetailStats(
-        campaign_id=campaign["id"],
-        campaign_name=campaign["name"],
-        companies_count=companies_count,
-        emails=emails,
-        read_rate=round(read_rate, 2),
-        created_at=campaign["created_at"]
     )

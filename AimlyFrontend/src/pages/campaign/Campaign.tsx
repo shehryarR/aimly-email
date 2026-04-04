@@ -5084,8 +5084,8 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
       } catch { /* silent */ }
       // Load campaign stats
       try {
-        const r = await apiFetch(`${API_BASE}/stats/${campaignId}/`, { });
-        if (r.ok) { const d = await r.json(); setCampaignStats(d); }
+        const r = await apiFetch(`${API_BASE}/stats/?campaign_ids=${campaignId}`, { });
+        if (r.ok) { const d = await r.json(); setCampaignStats(d.campaigns?.[0] ?? null); }
       } catch { /* silent */ }
       // Check if company addition is already in progress (e.g. after page reload)
       try {
@@ -5120,8 +5120,8 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
       } catch { /* silent */ }
       // Refresh stats on every companies reload
       try {
-        const r = await apiFetch(`${API_BASE}/stats/${campaignId}/`, { });
-        if (r.ok) { const d = await r.json(); setCampaignStats(d); }
+        const r = await apiFetch(`${API_BASE}/stats/?campaign_ids=${campaignId}`, { });
+        if (r.ok) { const d = await r.json(); setCampaignStats(d.campaigns?.[0] ?? null); }
       } catch { /* silent */ }
     })();
   }, [campaignId, refresh, currentPage, pageSize, searchTerm, sortKey, sortDir, selCatIds, catPageFilterMode]);

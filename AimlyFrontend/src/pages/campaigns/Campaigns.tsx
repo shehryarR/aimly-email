@@ -168,18 +168,16 @@ const Campaigns: React.FC<CampaignsProps> = ({ onCampaignClick }) => {
           data.campaigns ?? [];
         setTotalCampaigns(data.total ?? 0);
 
-        const statsResults = await Promise.allSettled(
-          pageItems.map((c) =>
-            apiFetch(`${API_BASE}/stats/${c.id}/`).then((r) => {
-              if (!r.ok) throw new Error(`Stats fetch failed for campaign ${c.id}`);
-              return r.json();
-            })
-          )
-        );
+        if (pageItems.length === 0) { setCampaigns([]); return; }
 
-        const merged = pageItems.map((c, idx) => {
-          const result = statsResults[idx];
-          const detail = result.status === 'fulfilled' ? result.value : null;
+        // Fetch all campaign stats in one request
+        const ids = pageItems.map(c => c.id).join(',');
+        const statsRes = await apiFetch(`${API_BASE}/stats/?campaign_ids=${ids}`);
+        const statsData = statsRes.ok ? await statsRes.json() : { campaigns: [] };
+        const statsMap = new Map((statsData.campaigns ?? []).map((s: any) => [s.campaign_id, s]));
+
+        const merged = pageItems.map((c) => {
+          const detail: any = statsMap.get(c.id);
           return {
             campaign_id:     c.id,
             campaign_name:   c.name,
