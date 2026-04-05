@@ -1448,51 +1448,70 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       setGlobalExtras(d.extras || '');
       setGlobalBcc(d.bcc || '');
 
-      // Fetch global attachments using the settings id
-      const attRes = await apiFetch(`${apiBase}/global-settings/${d.id}/attachments/`);
-      if (attRes.ok) {
-        const attData = await attRes.json();
-        // Map name → filename to match AttachmentOption shape
-        setGlobalAttachments((attData.attachments ?? []).map((a: any) => ({
-          id: a.id, filename: a.name, file_size: a.file_size ?? null,
-        })));
-      }
     } catch { /* silent */ }
   };
 
-  const loadAttachments = async (prefId?: number) => {
-    const resolvedPrefId = prefId ?? preferenceId;
+  const loadAttachments = async (_prefId?: number) => {
     setAttachLoading(true);
     try {
-      // All user attachments
+      // GET /attachments/ already returns linked_campaigns per attachment —
+      // derive which are linked to this campaign without an extra call.
       const attRes = await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`);
       if (attRes.ok) {
         const d = await attRes.json();
-        setAllAttachments(d.attachments ?? []);
-      }
-      // Campaign-linked attachments
-      if (resolvedPrefId) {
-        const linkRes = await apiFetch(`${apiBase}/campaign-preference/${resolvedPrefId}/attachments/`);
-        if (linkRes.ok) {
-          const d = await linkRes.json();
-          const ids = new Set<number>((d.attachments ?? []).map((a: any) => a.id as number));
-          setLinkedAttachmentIds(ids);
-          savedLinkedIds.current = new Set(ids);
-        }
+        const list = d.attachments ?? [];
+        setAllAttachments(list);
+        const numericCampaignId = Number(campaignId);
+        const ids = new Set<number>(
+          list
+            .filter((a: any) =>
+              (a.linked_campaigns ?? []).some((c: any) => c.id === numericCampaignId)
+            )
+            .map((a: any) => a.id as number)
+        );
+        setLinkedAttachmentIds(ids);
+        savedLinkedIds.current = new Set(ids);
       }
     } catch (e) { console.error('Failed to load attachments', e); }
     finally { setAttachLoading(false); }
   };
 
   const saveAttachments = async () => {
-    if (!preferenceId) { onToast('error', 'Attachments', 'Save campaign preferences first before managing attachments'); return; }
     setAttachSaving(true);
     try {
-      const res = await apiFetch(`${apiBase}/campaign-preference/${preferenceId}/attachments/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Array.from(linkedAttachmentIds)),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
+      // PUT /attachments/bulk-links/ sets the exact linked state for all
+      // affected attachment IDs in one call — no preference ID needed.
+      // We compute which IDs changed vs saved to build the minimal diff,
+      // but the simplest correct approach is: every attachment in allAttachments
+      // gets its campaign link set to whether it's in linkedAttachmentIds.
+      const allIds = allAttachments.map((a: any) => a.id as number);
+      const linked = Array.from(linkedAttachmentIds);
+      const unlinked = allIds.filter(id => !linkedAttachmentIds.has(id));
+      const numericCampaignId = Number(campaignId);
+
+      // Link batch
+      if (linked.length > 0) {
+        await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attachment_ids: linked,
+            link_global: false,
+            campaign_ids: [numericCampaignId],
+          }),
+        });
+      }
+      // Unlink batch — pass empty campaign_ids so they're removed from this campaign
+      if (unlinked.length > 0) {
+        await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attachment_ids: unlinked,
+            link_global: false,
+            campaign_ids: [],
+          }),
+        });
+      }
+
       savedLinkedIds.current = new Set(linkedAttachmentIds);
       clearDirty('attachments');
       onToast('success', 'Attachments', 'Attachments saved to campaign');
@@ -1539,11 +1558,16 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       // Build the new linked set
       const newLinkedIds = new Set([...Array.from(linkedAttachmentIds), newId]);
 
-      // Auto-save the link immediately if we have a preferenceId
+      // Auto-save the link immediately
       if (preferenceId) {
-        const linkRes = await apiFetch(`${apiBase}/campaign-preference/${preferenceId}/attachments/`, {
+        const newLinkedArr = Array.from(newLinkedIds);
+        const linkRes = await apiFetch(`${apiBase}/attachments/bulk-links/`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(Array.from(newLinkedIds)),
+          body: JSON.stringify({
+            attachment_ids: newLinkedArr,
+            link_global: false,
+            campaign_ids: [Number(campaignId)],
+          }),
         });
         if (!linkRes.ok) { const e = await linkRes.json(); throw new Error(e.detail || 'Upload succeeded but linking failed'); }
         savedLinkedIds.current = newLinkedIds;

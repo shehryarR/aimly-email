@@ -9,10 +9,17 @@ No optional fields that need NULL handling in this router - it manages:
 - global_settings_attachments (global_settings_id, attachment_id)
 
 All fields in these junction tables are required foreign keys.
+
+BULK LINKS ENDPOINT:
+- PUT /attachments/bulk-links/ replaces per-attachment per-campaign GET+PUT loops
+- Accepts { attachment_ids, link_global, campaign_ids }
+- Resolves all junction table updates in one transaction
+- Use for both single and multi-attachment link management
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
+from pydantic import BaseModel
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 
@@ -41,10 +48,151 @@ def verify_attachments_owned_by_user(cursor, attachment_ids: List[int], user_id:
 
 
 # ==================================================================================
+# PUT /attachments/bulk-links/ - Set link state for multiple attachments at once
+#
+# Replaces the frontend loop of:
+#   for each attachment:
+#     GET /global-settings/{gsId}/attachments/ + PUT
+#     for each campaign: GET /campaign-preference/{prefId}/attachments/ + PUT
+#
+# Now: one call handles everything in one transaction.
+#
+# Body:
+#   attachment_ids: list of attachment IDs to update links for
+#   link_global:    true = attach all to global settings, false = detach all from global
+#   campaign_ids:   list of campaign IDs to LINK to (all others will be UNLINKED)
+#                   Pass [] to unlink from all campaigns.
+# ==================================================================================
+class BulkLinksRequest(BaseModel):
+    attachment_ids: List[int]
+    link_global: bool
+    campaign_ids: List[int]
+
+@attachment_manager_router.put("/attachments/bulk-links/")
+async def bulk_update_attachment_links(
+    request: BulkLinksRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update global and campaign links for multiple attachments in one transaction.
+
+    For each attachment_id:
+    - If link_global=true: ensures it is in global_settings_attachments
+    - If link_global=false: ensures it is removed from global_settings_attachments
+    - Sets campaign_preference_attachments so the attachment is linked to exactly
+      the campaigns in campaign_ids and unlinked from all others the user owns.
+
+    This is an absolute replacement (not additive):
+    campaign_ids=[1,2] means "linked to campaigns 1 and 2 only".
+    campaign_ids=[]    means "linked to no campaigns".
+    """
+    user_id = current_user["user_id"]
+
+    if not request.attachment_ids:
+        raise HTTPException(status_code=400, detail="attachment_ids must not be empty")
+
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+
+            # ── Verify all attachments belong to this user ────────────────────────
+            verify_attachments_owned_by_user(cursor, request.attachment_ids, user_id)
+
+            # ── Resolve global_settings_id for this user ──────────────────────────
+            global_settings_id: int | None = None
+            cursor.execute(
+                "SELECT id FROM global_settings WHERE user_id = %s",
+                (user_id,)
+            )
+            gs_row = cursor.fetchone()
+            if gs_row:
+                global_settings_id = gs_row["id"]
+
+            # ── Resolve preference_id for each requested campaign ─────────────────
+            # Only include campaigns that belong to this user
+            preference_map: dict[int, int] = {}  # campaign_id → preference_id
+            if request.campaign_ids:
+                camp_placeholders = ','.join(['%s'] * len(request.campaign_ids))
+                cursor.execute(f"""
+                    SELECT cp.id AS preference_id, cp.campaign_id
+                    FROM campaign_preferences cp
+                    JOIN campaigns c ON cp.campaign_id = c.id
+                    WHERE cp.campaign_id IN ({camp_placeholders}) AND c.user_id = %s
+                """, (*request.campaign_ids, user_id))
+                for row in cursor.fetchall():
+                    preference_map[row["campaign_id"]] = row["preference_id"]
+
+            # ── Fetch ALL preference_ids this user owns (for full unlink sweep) ───
+            cursor.execute("""
+                SELECT cp.id AS preference_id
+                FROM campaign_preferences cp
+                JOIN campaigns c ON cp.campaign_id = c.id
+                WHERE c.user_id = %s
+            """, (user_id,))
+            all_user_preference_ids = [row["preference_id"] for row in cursor.fetchall()]
+
+            # ── Apply changes for each attachment ─────────────────────────────────
+            att_placeholders = ','.join(['%s'] * len(request.attachment_ids))
+
+            # Global settings links
+            if global_settings_id is not None:
+                if request.link_global:
+                    # Insert for all attachment_ids (ignore if already exists)
+                    for att_id in request.attachment_ids:
+                        cursor.execute("""
+                            INSERT IGNORE INTO global_settings_attachments
+                                (global_settings_id, attachment_id)
+                            VALUES (%s, %s)
+                        """, (global_settings_id, att_id))
+                else:
+                    # Remove all these attachments from global settings
+                    cursor.execute(f"""
+                        DELETE FROM global_settings_attachments
+                        WHERE global_settings_id = %s
+                          AND attachment_id IN ({att_placeholders})
+                    """, (global_settings_id, *request.attachment_ids))
+
+            # Campaign preference links
+            if all_user_preference_ids:
+                pref_placeholders = ','.join(['%s'] * len(all_user_preference_ids))
+
+                # Remove these attachments from ALL of the user's campaign preferences first
+                cursor.execute(f"""
+                    DELETE FROM campaign_preference_attachments
+                    WHERE campaign_preference_id IN ({pref_placeholders})
+                      AND attachment_id IN ({att_placeholders})
+                """, (*all_user_preference_ids, *request.attachment_ids))
+
+                # Re-insert only the ones that should be linked
+                for camp_id in request.campaign_ids:
+                    pref_id = preference_map.get(camp_id)
+                    if pref_id is None:
+                        continue  # campaign not found or not owned by user — skip
+                    for att_id in request.attachment_ids:
+                        cursor.execute("""
+                            INSERT IGNORE INTO campaign_preference_attachments
+                                (campaign_preference_id, attachment_id)
+                            VALUES (%s, %s)
+                        """, (pref_id, att_id))
+
+            conn.commit()
+
+            return {
+                "message": "Attachment links updated successfully",
+                "attachment_ids": request.attachment_ids,
+                "linked_global": request.link_global,
+                "linked_campaign_ids": request.campaign_ids,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating attachment links: {str(e)}")
+
+
+# ==================================================================================
 # PUT /email/bulk-attachments/ - Update attachments for multiple emails in one call
 # ==================================================================================
-from pydantic import BaseModel
-
 class EmailAttachmentUpdate(BaseModel):
     email_id: int
     attachment_ids: List[int]
@@ -117,15 +265,8 @@ async def update_campaign_preference_attachments(
 ):
     """
     Update attachments for a specific campaign preference.
-    
-    Behavior:
-    - Flushes all existing attachments
-    - Adds the new ones in the list
-    - Only attachments owned by the current user can be attached
-    
-    attachment_ids: List of attachment IDs to attach to this campaign preference
-    - Empty list [] → Removes all attachments
-    - Non-empty list [1, 2, 3] → Replaces all attachments with these IDs
+    Flushes all existing attachments and replaces with the provided list.
+    Only attachments owned by the current user can be attached.
     """
     user_id = current_user["user_id"]
 
@@ -133,7 +274,6 @@ async def update_campaign_preference_attachments(
         with get_connection() as conn:
             cursor = conn.cursor()
 
-            # Verify the campaign preference exists and belongs to the current user
             cursor.execute("""
                 SELECT cp.id FROM campaign_preferences cp
                 JOIN campaigns c ON cp.campaign_id = c.id
@@ -143,10 +283,8 @@ async def update_campaign_preference_attachments(
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Campaign preference not found or access denied")
 
-            # Verify all attachments exist and are owned by this user
             verify_attachments_owned_by_user(cursor, attachment_ids, user_id)
 
-            # Flush and replace
             cursor.execute(
                 "DELETE FROM campaign_preference_attachments WHERE campaign_preference_id = %s",
                 (preference_id,)
@@ -183,15 +321,8 @@ async def update_global_settings_attachments(
 ):
     """
     Update attachments for global settings.
-    
-    Behavior:
-    - Flushes all existing attachments
-    - Adds the new ones in the list
-    - Only attachments owned by the current user can be attached
-    
-    attachment_ids: List of attachment IDs to attach to global settings
-    - Empty list [] → Removes all attachments
-    - Non-empty list [1, 2, 3] → Replaces all attachments with these IDs
+    Flushes all existing attachments and replaces with the provided list.
+    Only attachments owned by the current user can be attached.
     """
     user_id = current_user["user_id"]
 
@@ -199,7 +330,6 @@ async def update_global_settings_attachments(
         with get_connection() as conn:
             cursor = conn.cursor()
 
-            # Verify the global settings exist and belong to the current user
             cursor.execute("""
                 SELECT id FROM global_settings
                 WHERE id = %s AND user_id = %s
@@ -208,10 +338,8 @@ async def update_global_settings_attachments(
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Global settings not found or access denied")
 
-            # Verify all attachments exist and are owned by this user
             verify_attachments_owned_by_user(cursor, attachment_ids, user_id)
 
-            # Flush and replace
             cursor.execute(
                 "DELETE FROM global_settings_attachments WHERE global_settings_id = %s",
                 (settings_id,)
@@ -235,132 +363,3 @@ async def update_global_settings_attachments(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating global settings attachments: {str(e)}")
-
-
-# ==================================================================================
-# GET /email/{email_id}/attachments
-# ==================================================================================
-@attachment_manager_router.get("/email/{email_id}/attachments/")
-async def get_email_attachments(
-    email_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all attachments for a specific email"""
-    user_id = current_user["user_id"]
-
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT e.id FROM emails e
-                JOIN campaign_company cc ON e.campaign_company_id = cc.id
-                JOIN campaigns c ON cc.campaign_id = c.id
-                WHERE e.id = %s AND c.user_id = %s
-            """, (email_id, user_id))
-
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Email not found or access denied")
-
-            cursor.execute("""
-                SELECT a.id, a.name, a.created_at
-                FROM attachments a
-                JOIN email_attachments ea ON a.id = ea.attachment_id
-                WHERE ea.email_id = %s
-                ORDER BY ea.created_at DESC
-            """, (email_id,))
-
-            return {
-                "email_id": email_id,
-                "attachments": [dict(row) for row in cursor.fetchall()]
-            }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching attachments: {str(e)}")
-
-
-# ==================================================================================
-# GET /campaign-preference/{preference_id}/attachments
-# ==================================================================================
-@attachment_manager_router.get("/campaign-preference/{preference_id}/attachments/")
-async def get_campaign_preference_attachments(
-    preference_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all attachments for a specific campaign preference"""
-    user_id = current_user["user_id"]
-
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT cp.id FROM campaign_preferences cp
-                JOIN campaigns c ON cp.campaign_id = c.id
-                WHERE cp.id = %s AND c.user_id = %s
-            """, (preference_id, user_id))
-
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Campaign preference not found or access denied")
-
-            cursor.execute("""
-                SELECT a.id, a.name, a.created_at
-                FROM attachments a
-                JOIN campaign_preference_attachments cpa ON a.id = cpa.attachment_id
-                WHERE cpa.campaign_preference_id = %s
-                ORDER BY cpa.created_at DESC
-            """, (preference_id,))
-
-            return {
-                "campaign_preference_id": preference_id,
-                "attachments": [dict(row) for row in cursor.fetchall()]
-            }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching attachments: {str(e)}")
-
-
-# ==================================================================================
-# GET /global-settings/{settings_id}/attachments
-# ==================================================================================
-@attachment_manager_router.get("/global-settings/{settings_id}/attachments/")
-async def get_global_settings_attachments(
-    settings_id: int,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all attachments for global settings"""
-    user_id = current_user["user_id"]
-
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT id FROM global_settings
-                WHERE id = %s AND user_id = %s
-            """, (settings_id, user_id))
-
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Global settings not found or access denied")
-
-            cursor.execute("""
-                SELECT a.id, a.name, a.created_at
-                FROM attachments a
-                JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
-                WHERE gsa.global_settings_id = %s
-                ORDER BY gsa.created_at DESC
-            """, (settings_id,))
-
-            return {
-                "global_settings_id": settings_id,
-                "attachments": [dict(row) for row in cursor.fetchall()]
-            }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching attachments: {str(e)}")

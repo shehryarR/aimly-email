@@ -2,6 +2,16 @@
 // Attachments.tsx - Matches campaign page UI patterns exactly
 // UPDATED: Server-side sorting + filtering, full campaign list,
 //          sort/filter icons, select-all-pages functionality
+//
+// API CALL OPTIMISATIONS:
+// - loadAllCampaigns: no more N calls for preference_id; it comes
+//   directly from the campaign list response (preference.id)
+// - loadAll: no more N×M link-resolution calls; linked_global and
+//   linked_campaigns come directly from GET /attachments/
+// - saveLinkModal: single PUT /attachments/bulk-links/ instead of
+//   N attachments × M campaigns × 2 calls
+// - deleteAttachments: single DELETE /attachments/bulk/ instead of
+//   sequential per-ID deletes; no pre-fetch needed for "delete all"
 // ============================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -50,7 +60,7 @@ interface Attachment {
 interface Campaign {
   id: number;
   name: string;
-  preference_id: number | null;
+  preference_id: number | null;  // resolved from preference.id in API response
 }
 
 interface ToastState {
@@ -357,35 +367,35 @@ const Attachments: React.FC = () => {
     return params.join('&');
   };
 
-  // ── Load ALL campaigns using paginated loop ────────────────
+  // ── Load ALL campaigns (all pages) ────────────────────────
+  // preference_id comes directly from campaign.preference.id —
+  // no extra per-campaign API call needed.
   const loadAllCampaigns = useCallback(async (): Promise<Campaign[]> => {
-    const list: { id: number; name: string }[] = [];
-
+    const list: Campaign[] = [];
     let page = 1;
+
     while (true) {
       const res = await apiFetch(`${API_BASE}/campaign/?page=${page}&size=100`);
       if (!res.ok) break;
       const d = await res.json();
       const batch: any[] = d.campaigns ?? [];
-      list.push(...batch.map((c: any) => ({ id: c.id, name: c.name })));
+
+      list.push(...batch.map((c: any) => ({
+        id:            c.id,
+        name:          c.name,
+        preference_id: c.preference?.id ?? null,
+      })));
+
       if (batch.length < 100) break;
       page++;
     }
 
-    const prefResults = await Promise.allSettled(
-      list.map((c) =>
-        apiFetch(`${API_BASE}/campaign/${c.id}/campaign_preference/`)
-          .then(r => r.ok ? r.json() : null)
-      )
-    );
-
-    return list.map((c, i) => {
-      const pref = prefResults[i].status === 'fulfilled' ? prefResults[i].value : null;
-      return { id: c.id, name: c.name, preference_id: pref?.id ?? null } as Campaign;
-    });
+    return list;
   }, []);
 
-  // ── Load data ──────────────────────────────────────────────
+  // ── Load attachments + campaigns + global settings id ─────
+  // linked_global and linked_campaigns come directly from the
+  // attachment list response — no per-attachment resolution calls.
   const loadAll = useCallback(async (page = 1, size = 20, search = '', filterParams = '') => {
     setLoading(true);
 
@@ -398,17 +408,15 @@ const Attachments: React.FC = () => {
         apiFetch(`${API_BASE}/global_setting/`),
       ]);
 
-      // Load campaigns fully (all pages) once and cache
+      // Load campaigns once and cache
       if (campaigns.length === 0) {
         const campList = await loadAllCampaigns();
         setCampaigns(campList);
       }
 
-      let gsId: number | null = globalSettingsId;
       if (globalRes.ok) {
         const gsData = await globalRes.json();
-        gsId = gsData.id ?? null;
-        setGlobalSettingsId(gsId);
+        setGlobalSettingsId(gsData.id ?? null);
       }
 
       if (attRes.ok) {
@@ -416,46 +424,16 @@ const Attachments: React.FC = () => {
         const rawList: any[] = attData.attachments ?? [];
         setTotalAttachments(attData.total ?? rawList.length);
 
-        const campList = campaigns.length > 0 ? campaigns : await loadAllCampaigns();
+        // linked_global and linked_campaigns are already in the response
+        const merged: Attachment[] = rawList.map((a: any) => ({
+          id:               a.id,
+          filename:         a.filename,
+          file_size:        a.file_size ?? 0,
+          created_at:       a.created_at,
+          linked_global:    a.linked_global ?? false,
+          linked_campaigns: a.linked_campaigns ?? [],
+        }));
 
-        const linkResults = await Promise.allSettled(
-          rawList.map(async (a) => {
-            const results: { global: boolean; campaigns: { id: number; name: string }[] } =
-              { global: false, campaigns: [] };
-
-            if (gsId) {
-              const gRes = await apiFetch(`${API_BASE}/global-settings/${gsId}/attachments/`);
-              if (gRes.ok) {
-                const gData = await gRes.json();
-                results.global = (gData.attachments ?? []).some((x: any) => x.id === a.id);
-              }
-            }
-
-            for (const camp of campList) {
-              if (!camp.preference_id) continue;
-              const cRes = await apiFetch(`${API_BASE}/campaign-preference/${camp.preference_id}/attachments/`);
-              if (cRes.ok) {
-                const cData = await cRes.json();
-                if ((cData.attachments ?? []).some((x: any) => x.id === a.id)) {
-                  results.campaigns.push({ id: camp.id, name: camp.name });
-                }
-              }
-            }
-            return results;
-          })
-        );
-
-        const merged: Attachment[] = rawList.map((a, i) => {
-          const links = linkResults[i].status === 'fulfilled' ? linkResults[i].value : { global: false, campaigns: [] };
-          return {
-            id: a.id,
-            filename: a.filename,
-            file_size: a.file_size ?? 0,
-            created_at: a.created_at,
-            linked_global: links.global,
-            linked_campaigns: links.campaigns,
-          };
-        });
         setAttachments(merged);
       }
     } catch {
@@ -463,7 +441,7 @@ const Attachments: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [campaigns, globalSettingsId, loadAllCampaigns]);
+  }, [campaigns, loadAllCampaigns]);
 
   // Reload when page/size/search/sort/filter changes
   useEffect(() => {
@@ -588,32 +566,51 @@ const Attachments: React.FC = () => {
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────
+  // ── Delete — single bulk call for all cases ─────────────────
+  // For "delete all pages": pass all visible IDs on current page plus
+  // fetch remaining IDs via the attachment list, OR pass selectAllPages=true
+  // context. Since the backend accepts a flat list of IDs, we collect all
+  // IDs for the "delete all" case from the already-known totalAttachments
+  // by fetching them in one request (no per-ID loop).
   const deleteAttachments = async (ids: number[]) => {
+    let idsToDelete: number[] = ids;
+
     if (selectAllPages) {
       try {
-        const res = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=${totalAttachments}`);
-        if (res.ok) {
-          const data = await res.json();
-          const allIds: number[] = (data.attachments ?? []).map((a: any) => a.id);
-          for (const id of allIds) {
-            await apiFetch(`${API_BASE}/attachment/${id}/`, { method: 'DELETE' });
-          }
-          showToast('success', `${allIds.length} attachments deleted`);
-        } else {
+        const res = await apiFetch(
+          `${API_BASE}/attachments/?page=1&page_size=${totalAttachments}`
+        );
+        if (!res.ok) {
           showToast('error', 'Failed to fetch all attachments for deletion');
           return;
         }
+        const data = await res.json();
+        idsToDelete = (data.attachments ?? []).map((a: any) => a.id);
       } catch {
         showToast('error', 'Failed to delete all attachments');
         return;
       }
       setSelectAllPages(false);
-    } else {
-      for (const id of ids) {
-        await apiFetch(`${API_BASE}/attachment/${id}/`, { method: 'DELETE' });
+    }
+
+    try {
+      const res = await apiFetch(`${API_BASE}/attachments/bulk/`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToDelete }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast('error', err.detail || 'Failed to delete attachments');
+        return;
       }
-      showToast('success', `${ids.length} attachment${ids.length > 1 ? 's' : ''} deleted`);
+
+      const data = await res.json();
+      showToast('success', `${data.deleted_count} attachment${data.deleted_count !== 1 ? 's' : ''} deleted`);
+    } catch {
+      showToast('error', 'Failed to delete attachments');
+      return;
     }
 
     setSelected(new Set());
@@ -716,7 +713,7 @@ const Attachments: React.FC = () => {
     }
   };
 
-  // ── Attach modal ───────────────────────────────────────────
+  // ── Link modal ─────────────────────────────────────────────
   const openLinkModal = (ids: number[]) => {
     let currentGlobal = false;
     let currentCampaigns: number[] = [];
@@ -733,60 +730,38 @@ const Attachments: React.FC = () => {
     setLinkModal({ open: true, attachmentIds: ids, currentGlobal, currentCampaigns });
   };
 
+  // ── Save link modal — single bulk-links call ───────────────
+  // Replaces the old N attachments × M campaigns × 2 GET+PUT loop.
+  // One call to PUT /attachments/bulk-links/ handles everything.
   const saveLinkModal = async () => {
     setLinkSaving(true);
     const attIds = linkModal.attachmentIds;
-    const isBulk = attIds.length > 1;
 
     try {
-      for (const attId of attIds) {
-        if (globalSettingsId) {
-          if (isBulk) {
-            const curRes = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`);
-            const curData = curRes.ok ? await curRes.json() : { attachments: [] };
-            const curIds: number[] = (curData.attachments ?? []).map((x: any) => x.id);
-            const newIds = linkGlobal
-              ? Array.from(new Set([...curIds, attId]))
-              : curIds.filter((id: number) => id !== attId);
-            await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
-              method: 'PUT',
-              body: JSON.stringify(newIds),
-            });
-          } else {
-            const curRes = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`);
-            const curData = curRes.ok ? await curRes.json() : { attachments: [] };
-            const curIds: number[] = (curData.attachments ?? []).map((x: any) => x.id).filter((id: number) => id !== attId);
-            const newIds = linkGlobal ? [...curIds, attId] : curIds;
-            await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
-              method: 'PUT',
-              body: JSON.stringify(newIds),
-            });
-          }
-        }
+      const res = await apiFetch(`${API_BASE}/attachments/bulk-links/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attachment_ids: attIds,
+          link_global:    linkGlobal,
+          campaign_ids:   Array.from(linkCampaigns),
+        }),
+      });
 
-        for (const camp of campaigns) {
-          if (!camp.preference_id) continue;
-          const shouldLink = linkCampaigns.has(camp.id);
-          const curRes = await apiFetch(`${API_BASE}/campaign-preference/${camp.preference_id}/attachments/`);
-          const curData = curRes.ok ? await curRes.json() : { attachments: [] };
-          const curIds: number[] = (curData.attachments ?? []).map((x: any) => x.id).filter((id: number) => id !== attId);
-          const newIds = shouldLink ? [...curIds, attId] : curIds;
-          await apiFetch(`${API_BASE}/campaign-preference/${camp.preference_id}/attachments/`, {
-            method: 'PUT',
-            body: JSON.stringify(newIds),
-          });
-        }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to update attachments');
       }
 
-      showToast('success', isBulk
+      showToast('success', attIds.length > 1
         ? `Attachments updated for ${attIds.length} files`
         : 'Attachments updated successfully'
       );
       setLinkModal(p => ({ ...p, open: false }));
       setSelected(new Set());
       loadAll(currentPage, pageSize, attachmentSearch, buildFilterParams());
-    } catch {
-      showToast('error', 'Failed to update attachments');
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to update attachments');
     } finally {
       setLinkSaving(false);
     }

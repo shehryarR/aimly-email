@@ -1,8 +1,15 @@
 from datetime import datetime
 """
 Campaign Management Routes - CORRECTED FOR ACTUAL SCHEMA
-Handles CRUD operations for campaigns with server-side sorting
-Works with the campaign_company junction table
+Handles CRUD operations for campaigns with server-side sorting.
+Works with the campaign_company junction table.
+
+PREFERENCE EMBEDDING:
+- GET /campaign/ now returns the full campaign_preferences object nested under
+  each campaign as `preference`. Logo BLOB is excluded from the list response
+  (fetch it via GET /campaign/{id}/campaign_preference/ when needed).
+- This eliminates all N calls to GET /campaign/{id}/campaign_preference/ that
+  were previously made after loading the campaign list.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -13,7 +20,9 @@ from routes.auth import get_current_user
 
 campaign_router = APIRouter(prefix="/campaign", tags=["Campaign Management"])
 
-# Pydantic Models
+
+# ── Pydantic Models ────────────────────────────────────────────────────────────
+
 class CampaignCreateRequest(BaseModel):
     name: str
 
@@ -24,9 +33,35 @@ class CampaignCreateRequest(BaseModel):
             raise ValueError("Campaign name is required")
         return v
 
+
 class CampaignUpdateRequest(BaseModel):
     id: int
     name: Optional[str] = None
+
+
+class CampaignPreferenceInline(BaseModel):
+    """
+    Campaign preference fields embedded in the campaign list response.
+    Logo BLOB is excluded — fetch via GET /campaign/{id}/campaign_preference/ when needed.
+    """
+    id: Optional[int] = None
+    campaign_id: Optional[int] = None
+    bcc: Optional[str] = None
+    business_name: Optional[str] = None
+    business_info: Optional[str] = None
+    goal: Optional[str] = None
+    value_prop: Optional[str] = None
+    tone: Optional[str] = None
+    cta: Optional[str] = None
+    extras: Optional[str] = None
+    email_instruction: Optional[str] = None
+    signature: Optional[str] = None
+    template_email: Optional[str] = None
+    template_html_email: Optional[int] = None
+    inherit_global_settings: Optional[int] = None
+    inherit_global_attachments: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class CampaignResponse(BaseModel):
@@ -34,12 +69,15 @@ class CampaignResponse(BaseModel):
     user_id: int
     name: str
     created_at: datetime
+    preference: Optional[CampaignPreferenceInline] = None
+
 
 class CampaignsListResponse(BaseModel):
     campaigns: List[CampaignResponse]
     total: int
     page: int
     size: int
+
 
 class MessageResponse(BaseModel):
     message: str
@@ -122,7 +160,6 @@ def update_campaigns(
                     update_fields.append("name = %s")
                     update_values.append(campaign.name.strip())
 
-
                 if update_fields:
                     update_values.append(campaign.id)
                     query = f"UPDATE campaigns SET {', '.join(update_fields)} WHERE id = %s"
@@ -145,28 +182,30 @@ def update_campaigns(
 
 
 # ==================================================================================
-# GET /campaign - Get campaigns with pagination and sorting
-# FIXED FOR ACTUAL SCHEMA: Handles campaign_company junction table
+# GET /campaign - Get campaigns with pagination, sorting, and embedded preferences
+#
+# Each campaign now includes a `preference` object with all campaign_preferences
+# fields except the logo BLOB. Fetch the logo separately via the preference endpoint.
 # ==================================================================================
 @campaign_router.get("/", response_model=CampaignsListResponse)
 def get_campaigns(
     ids: Optional[str] = Query(
-        None, 
+        None,
         description="Comma-separated campaign IDs"
     ),
     page: int = Query(
-        1,  
+        1,
         ge=1,
         description="Page number (1-indexed)"
     ),
     size: int = Query(
-        10, 
-        ge=1, 
+        10,
+        ge=1,
         le=500,
         description="Items per page"
     ),
     search: Optional[str] = Query(
-        None, 
+        None,
         description="Search by campaign name (case-insensitive)"
     ),
     sort_by: Optional[Literal['name', 'companies', 'sent', 'read', 'scheduled']] = Query(
@@ -180,7 +219,7 @@ def get_campaigns(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get campaigns with pagination and sorting.
+    Get campaigns with pagination, sorting, and embedded preferences.
 
     Query Parameters:
     - ids=1,2,3              → fetch specific campaigns (ignores search/page/size)
@@ -189,10 +228,32 @@ def get_campaigns(
     - sort_by=name           → sort by: name, companies, sent, read, scheduled
     - sort_order=asc         → sort direction: asc or desc
 
-    Sorting applies across ALL campaigns (before pagination).
-    Stats-based sorting (companies, sent, read, scheduled) aggregates from emails.
+    Each campaign includes a `preference` object with all campaign_preferences
+    fields (excluding logo BLOB). preference is null if no preferences row exists.
     """
     user_id = current_user["user_id"]
+
+    # Preference columns to SELECT (all except logo BLOB and logo_mime_type)
+    PREF_COLS = """
+        cp.id               AS pref_id,
+        cp.campaign_id      AS pref_campaign_id,
+        cp.bcc              AS pref_bcc,
+        cp.business_name    AS pref_business_name,
+        cp.business_info    AS pref_business_info,
+        cp.goal             AS pref_goal,
+        cp.value_prop       AS pref_value_prop,
+        cp.tone             AS pref_tone,
+        cp.cta              AS pref_cta,
+        cp.extras           AS pref_extras,
+        cp.email_instruction        AS pref_email_instruction,
+        cp.signature                AS pref_signature,
+        cp.template_email           AS pref_template_email,
+        cp.template_html_email      AS pref_template_html_email,
+        cp.inherit_global_settings  AS pref_inherit_global_settings,
+        cp.inherit_global_attachments AS pref_inherit_global_attachments,
+        cp.created_at       AS pref_created_at,
+        cp.updated_at       AS pref_updated_at
+    """
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -206,99 +267,121 @@ def get_campaigns(
 
             placeholders = ','.join(['%s'] * len(campaign_ids))
             cursor.execute(f"""
-                SELECT * FROM campaigns
-                WHERE user_id = %s AND id IN ({placeholders})
-                ORDER BY created_at DESC
+                SELECT c.*, {PREF_COLS}
+                FROM campaigns c
+                LEFT JOIN campaign_preferences cp ON cp.campaign_id = c.id
+                WHERE c.user_id = %s AND c.id IN ({placeholders})
+                ORDER BY c.created_at DESC
             """, [user_id] + campaign_ids)
 
-            campaigns = cursor.fetchall()
-            total = len(campaigns)
+            rows = cursor.fetchall()
+            total = len(rows)
 
         # ── Paginated fetch with optional search and sorting ───────────────────
         else:
             offset = (page - 1) * size
 
-            # ── Build WHERE clause ─────────────────────────────────────────────
             where_clause = "c.user_id = %s"
-            where_values = [user_id]
+            where_values: list = [user_id]
 
             if search and search.strip():
                 where_clause += " AND c.name LIKE %s"
                 where_values.append(f"%{search.strip()}%")
 
-            # ── Build ORDER BY clause ──────────────────────────────────────────
             sort_direction = "DESC" if sort_order == "desc" else "ASC"
-            
-            # Determine which query to use based on sort_by
+
             if sort_by in ['companies', 'sent', 'read', 'scheduled']:
-                # ── STATS-BASED SORTING: Need to aggregate from emails ────────
-                
-                # Map sort_by to aggregation column
                 stats_column_map = {
                     'companies': 'COUNT(DISTINCT cc.company_id)',
                     'sent':      'SUM(CASE WHEN e.status = "sent" THEN 1 ELSE 0 END)',
                     'read':      'SUM(CASE WHEN e.read_at IS NOT NULL THEN 1 ELSE 0 END)',
                     'scheduled': 'SUM(CASE WHEN e.status = "scheduled" THEN 1 ELSE 0 END)',
                 }
-                
                 stats_column = stats_column_map[sort_by]
                 order_by_clause = f"{stats_column} {sort_direction}, c.id ASC"
-                
-                # Count query with aggregation
-                count_query = f"""
-                    SELECT COUNT(DISTINCT c.id) as total 
+
+                cursor.execute(f"""
+                    SELECT COUNT(DISTINCT c.id) as total
                     FROM campaigns c
                     WHERE {where_clause}
-                """
-                cursor.execute(count_query, where_values)
+                """, where_values)
                 total = cursor.fetchone()["total"]
 
-                # Fetch query with LEFT JOINs to emails through campaign_company
                 fetch_query = f"""
-                    SELECT c.*
+                    SELECT c.*, {PREF_COLS}
                     FROM campaigns c
+                    LEFT JOIN campaign_preferences cp ON cp.campaign_id = c.id
                     LEFT JOIN campaign_company cc ON c.id = cc.campaign_id
                     LEFT JOIN emails e ON cc.id = e.campaign_company_id
                     WHERE {where_clause}
-                    GROUP BY c.id
+                    GROUP BY c.id, cp.id
                     ORDER BY {order_by_clause}
                     LIMIT %s OFFSET %s
                 """
                 where_values.extend([size, offset])
-                
+
             else:
-                # ── SIMPLE COLUMN SORTING ──────────────────────────────────────
                 if sort_by == 'name':
-                    # Use LOWER() for case-insensitive alphabetical sort
                     order_by_clause = f"LOWER(c.name) {sort_direction}"
                 else:
-                    # Default: most recent first
                     order_by_clause = "c.created_at DESC"
 
-                # Count query (simple)
-                count_query = f"""
-                    SELECT COUNT(*) as total 
+                cursor.execute(f"""
+                    SELECT COUNT(*) as total
                     FROM campaigns c
                     WHERE {where_clause}
-                """
-                cursor.execute(count_query, where_values)
+                """, where_values)
                 total = cursor.fetchone()["total"]
 
-                # Fetch query (simple)
                 fetch_query = f"""
-                    SELECT c.* 
+                    SELECT c.*, {PREF_COLS}
                     FROM campaigns c
+                    LEFT JOIN campaign_preferences cp ON cp.campaign_id = c.id
                     WHERE {where_clause}
                     ORDER BY {order_by_clause}
                     LIMIT %s OFFSET %s
                 """
                 where_values.extend([size, offset])
 
-            # ── Execute fetch query ────────────────────────────────────────────
             cursor.execute(fetch_query, where_values)
-            campaigns = cursor.fetchall()
+            rows = cursor.fetchall()
 
-        campaign_list = [CampaignResponse(**dict(campaign)) for campaign in campaigns]
+        # ── Build response ─────────────────────────────────────────────────────
+        campaign_list = []
+        for row in rows:
+            row_dict = dict(row)
+
+            # Extract preference fields (prefixed with pref_)
+            preference = None
+            if row_dict.get("pref_id") is not None:
+                preference = CampaignPreferenceInline(
+                    id=row_dict.get("pref_id"),
+                    campaign_id=row_dict.get("pref_campaign_id"),
+                    bcc=row_dict.get("pref_bcc"),
+                    business_name=row_dict.get("pref_business_name"),
+                    business_info=row_dict.get("pref_business_info"),
+                    goal=row_dict.get("pref_goal"),
+                    value_prop=row_dict.get("pref_value_prop"),
+                    tone=row_dict.get("pref_tone"),
+                    cta=row_dict.get("pref_cta"),
+                    extras=row_dict.get("pref_extras"),
+                    email_instruction=row_dict.get("pref_email_instruction"),
+                    signature=row_dict.get("pref_signature"),
+                    template_email=row_dict.get("pref_template_email"),
+                    template_html_email=row_dict.get("pref_template_html_email"),
+                    inherit_global_settings=row_dict.get("pref_inherit_global_settings"),
+                    inherit_global_attachments=row_dict.get("pref_inherit_global_attachments"),
+                    created_at=row_dict.get("pref_created_at"),
+                    updated_at=row_dict.get("pref_updated_at"),
+                )
+
+            campaign_list.append(CampaignResponse(
+                id=row_dict["id"],
+                user_id=row_dict["user_id"],
+                name=row_dict["name"],
+                created_at=row_dict["created_at"],
+                preference=preference,
+            ))
 
     return CampaignsListResponse(
         campaigns=campaign_list,

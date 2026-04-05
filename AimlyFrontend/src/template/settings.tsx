@@ -758,23 +758,21 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   };
 
   // ── Load attachments + current links ──────────────────────────
-  const loadAttachments = async (gsId: number | null) => {
+  const loadAttachments = async (_gsId: number | null) => {
     setAttachLoading(true);
     try {
+      // GET /attachments/ returns linked_global per attachment —
+      // derive which are globally linked without an extra call.
       const attRes = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=200`);
       if (attRes.ok) {
         const d = await attRes.json();
-        setAllAttachments(d.attachments ?? []);
-      }
-      const id = gsId ?? globalSettingsId;
-      if (id) {
-        const linkRes = await apiFetch(`${API_BASE}/global-settings/${id}/attachments/`);
-        if (linkRes.ok) {
-          const d = await linkRes.json();
-          const loadedIds = new Set<number>((d.attachments ?? []).map((a: any) => a.id as number));
-          setLinkedAttachmentIds(loadedIds);
-          savedLinkedIds.current = loadedIds;
-        }
+        const list = d.attachments ?? [];
+        setAllAttachments(list);
+        const loadedIds = new Set<number>(
+          list.filter((a: any) => a.linked_global === true).map((a: any) => a.id as number)
+        );
+        setLinkedAttachmentIds(loadedIds);
+        savedLinkedIds.current = loadedIds;
       }
     } catch (e) {
       console.error('Failed to load attachments', e);
@@ -785,22 +783,32 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
 
   // ── Save attachment links ──────────────────────────────────────
   const saveAttachments = async () => {
-    if (!globalSettingsId) {
-      setAttachMsg({ type: 'error', text: 'Save Global Settings first to enable attachment linking.' });
-      return;
-    }
     setAttachSaving(true);
     setAttachMsg(null);
     try {
-      const res = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Array.from(linkedAttachmentIds)),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.detail || 'Failed to save');
+      // PUT /attachments/bulk-links/ handles global link state for all
+      // affected attachments in one call — no globalSettingsId needed.
+      const allIds = allAttachments.map((a: any) => a.id as number);
+      const linked = Array.from(linkedAttachmentIds);
+      const unlinked = allIds.filter(id => !linkedAttachmentIds.has(id));
+
+      // Link batch
+      if (linked.length > 0) {
+        const res = await apiFetch(`${API_BASE}/attachments/bulk-links/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachment_ids: linked, link_global: true, campaign_ids: [] }),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
       }
+      // Unlink batch
+      if (unlinked.length > 0) {
+        const res = await apiFetch(`${API_BASE}/attachments/bulk-links/`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachment_ids: unlinked, link_global: false, campaign_ids: [] }),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
+      }
+
       setAttachMsg({ type: 'success', text: 'Attachments saved to global settings' });
       savedLinkedIds.current = new Set(linkedAttachmentIds);
       clearDirty('attachments');
@@ -858,12 +866,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       // 2. Build the new linked set
       const newLinkedIds = new Set([...Array.from(linkedAttachmentIds), newId]);
 
-      // 3. Auto-save the link immediately if we have a globalSettingsId
+      // 3. Auto-save the link immediately
       if (globalSettingsId) {
-        const linkRes = await apiFetch(`${API_BASE}/global-settings/${globalSettingsId}/attachments/`, {
+        const linkRes = await apiFetch(`${API_BASE}/attachments/bulk-links/`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(Array.from(newLinkedIds)),
+          body: JSON.stringify({ attachment_ids: [newId], link_global: true, campaign_ids: [] }),
         });
         if (!linkRes.ok) {
           const e = await linkRes.json();
@@ -876,13 +884,16 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
 
       // 4. Update local state
       setLinkedAttachmentIds(newLinkedIds);
-
-      // 5. Refresh the full attachments list (without overwriting linkedAttachmentIds)
-      const attRes = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=200`);
-      if (attRes.ok) {
-        const d = await attRes.json();
-        setAllAttachments(d.attachments ?? []);
-      }
+      setAllAttachments(prev => {
+        if (prev.some((a: any) => a.id === newId)) return prev;
+        return [...prev, {
+          id: newId,
+          filename: uploadData.filename,
+          file_size: uploadData.file_size ?? 0,
+          linked_global: true,
+          linked_campaigns: [],
+        }];
+      });
 
       setUploadFile(null);
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
