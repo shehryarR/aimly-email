@@ -1,16 +1,11 @@
 """
-company_discovery/agent.py — AI-powered company discovery via Tavily + LLM.
-
+AimlyCompanyFinder/sub_agents/company_discovery/agent.py
+AI-powered company discovery via Tavily + LLM.
 Pure logic layer — zero database operations.
-API keys and callbacks are passed in by the caller.
-
-UPDATED: Replaced in-memory existing_emails/existing_company_names sets with
-         two callbacks — check_company_exists and add_company — so that each
-         company is persisted immediately as it is found, enabling crash recovery.
 """
 import asyncio
 import json
-from typing import List, Dict, Callable, Awaitable
+from typing import List, Dict, Callable
 from tavily import TavilyClient
 from core.llm import LLMFactory
 
@@ -31,39 +26,6 @@ async def find_companies(
     include_address: bool = False,
     include_company_info: bool = False,
 ) -> None:
-    """
-    Discover companies matching a query via Tavily search + LLM extraction.
-
-    No database calls are made here. The caller is responsible for:
-      • Loading tavily_api_key            →  get from user_keys
-      • Loading llm_config (api_key/model) →  get from user_keys
-      • Providing check_company_exists     →  DB lookup callback
-      • Providing add_company              →  DB insert callback
-      • Providing should_stop              →  cancellation check callback
-
-    Pipeline:
-      1. Loop until target reached:
-         a. Check should_stop — exit immediately if cancelled
-         b. Ask LLM to generate 10 diverse search queries
-         c. Execute all queries in parallel via Tavily
-         d. Ask LLM to extract companies+emails from results
-         e. For each valid company:
-            - check should_stop before inserting
-            - call check_company_exists to deduplicate via DB
-            - call add_company to persist immediately
-      2. Optionally enrich with phone / address / company_info
-
-    Args:
-        query:                  Natural-language search goal.
-        tavily_api_key:         Tavily API key (pre-loaded by caller).
-        llm_config:             Dict with keys: api_key (str), model (str).
-        limit:                  Maximum number of NEW companies to find.
-        check_company_exists:   Callback(email) -> bool. True = already exists, skip.
-        add_company:            Callback(company_dict) -> None. Persist company immediately.
-        should_stop:            Callback() -> bool. Return True to stop the agent immediately.
-        include_phone / include_address / include_company_info:
-                                Whether to enrich each company with extra fields.
-    """
     if not tavily_api_key:
         raise ValueError("Tavily API key is required for company discovery.")
     api_key = (llm_config.get("api_key") or "").strip()
@@ -73,7 +35,6 @@ async def find_companies(
     if not model:
         raise ValueError("Missing LLM model. Configure it in LLM Settings.")
 
-    # Default no-op callbacks if not provided
     if check_company_exists is None:
         check_company_exists = lambda email: False
     if add_company is None:
@@ -85,12 +46,12 @@ async def find_companies(
 
     print(f"🚀 Starting discovery: '{query}'  (limit={limit})")
 
-    found_count:      int       = 0
-    found_emails:     set       = set()   # in-memory guard within this run only
-    used_queries:     List[str] = []
-    consecutive_empty            = 0
-    max_consecutive_empty        = 3
-    iteration                    = 0
+    found_count:          int       = 0
+    found_emails:         set       = set()
+    used_queries:         List[str] = []
+    consecutive_empty                = 0
+    max_consecutive_empty            = 3
+    iteration                        = 0
 
     print(f"📊 Target: {limit}")
 
@@ -98,7 +59,6 @@ async def find_companies(
         iteration += 1
         print(f"\n🔄 Iteration {iteration} — found so far: {found_count}/{limit}")
 
-        # ── Check cancellation at the top of every iteration ──────────────────
         if should_stop():
             print("🛑 Job cancelled — stopping agent")
             break
@@ -124,27 +84,22 @@ async def find_companies(
             if not email or not name:
                 continue
 
-            # Skip if already found in this run (in-memory guard)
             if email in found_emails:
                 continue
 
-            # ── Check cancellation before each insert ──────────────────────────
             if should_stop():
                 print("🛑 Job cancelled — stopping agent mid-batch")
                 return
 
-            # Skip if already exists in DB (persistent deduplication via callback)
             if check_company_exists(email):
                 print(f"⏭️  Skipped (exists in DB): {name} — {email}")
                 continue
 
-            # Enrich if requested
             if include_phone or include_address or include_company_info:
                 company = await _enrich_single_company(
                     company, llm, model, include_phone, include_address, include_company_info
                 )
 
-            # Persist immediately via callback
             add_company(company)
 
             found_emails.add(email)
@@ -177,7 +132,6 @@ async def find_companies(
 async def _generate_search_queries(
     query: str, used_queries: List[str], llm, model: str, count: int = 10
 ) -> List[str]:
-    """Ask the LLM to generate `count` diverse, previously-unused search queries."""
     for attempt in range(3):
         try:
             used_text = "\n".join(f"- {q}" for q in used_queries[-50:])
@@ -230,7 +184,6 @@ def _queries_similar(q1: str, q2: str) -> bool:
 
 
 async def _execute_tavily_searches(queries: List[str], tavily_api_key: str) -> str:
-    """Run all queries in parallel; return combined text content."""
     tavily    = TavilyClient(api_key=tavily_api_key)
     semaphore = asyncio.Semaphore(5)
 
@@ -324,7 +277,6 @@ async def _enrich_single_company(
     company: Dict, llm, model: str,
     include_phone: bool, include_address: bool, include_company_info: bool,
 ) -> Dict:
-    """Enrich a single company with phone, address, and/or company_info."""
     fields = ", ".join(filter(None, [
         "phone number"        if include_phone        else "",
         "office address"      if include_address      else "",
@@ -359,7 +311,6 @@ OUTPUT: Return ONLY a valid JSON object:
 
 
 def _parse_json_array(text: str) -> list:
-    """Extract and parse the first JSON array found in an LLM response."""
     cleaned = text.strip()
     for fence in ["```json", "```"]:
         if fence in cleaned:

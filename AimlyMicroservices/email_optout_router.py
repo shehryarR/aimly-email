@@ -1,6 +1,7 @@
 import hmac
 import hashlib
-from fastapi import APIRouter, HTTPException, Depends, Header, Query
+import os
+from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import HTMLResponse
 from typing import Annotated
 from datetime import datetime
@@ -8,60 +9,31 @@ from database import get_db_connection
 
 router = APIRouter(prefix="/optout", tags=["Opt-Out / Unsubscribe"])
 
+MICROSERVICE_API_KEY = os.getenv("MICROSERVICE_API_KEY", "your-super-secure-microservice-key")
+
 
 # ── Auth & signing helpers ────────────────────────────────────────────────────
 
-def _get_backend_api_key(backend_id: str) -> str:
-    """Fetch the raw API key for a backend — used as the HMAC signing secret."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT api_key FROM backends WHERE backend_id = %s AND active = 1",
-                (backend_id,),
-            )
-            result = cursor.fetchone()
-            if not result:
-                return None
-            return result["api_key"]
+def verify_api_key(x_api_key: Annotated[str, Header()]):
+    if x_api_key != MICROSERVICE_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-def _compute_sig(api_key: str, backend_id: str, sender_email: str, receiver_email: str) -> str:
-    """HMAC-SHA256 over backend_id + sender_email + receiver_email, keyed by the backend API key."""
-    msg = f"{backend_id}{sender_email}{receiver_email}".encode()
-    return hmac.new(api_key.encode(), msg, hashlib.sha256).hexdigest()
-
-
-def verify_backend_api_key(x_api_key: Annotated[str, Header()]):
-    """Verify API key for the /check endpoint and return backend_id."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT backend_id FROM backends WHERE api_key = %s AND active = 1",
-                (x_api_key,),
-            )
-            result = cursor.fetchone()
-            if not result:
-                raise HTTPException(status_code=401, detail="Invalid API key")
-            return result["backend_id"]
+def _compute_sig(sender_email: str, receiver_email: str) -> str:
+    """HMAC-SHA256 over sender_email + receiver_email, keyed by MICROSERVICE_API_KEY."""
+    msg = f"{sender_email}{receiver_email}".encode()
+    return hmac.new(MICROSERVICE_API_KEY.encode(), msg, hashlib.sha256).hexdigest()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.get("/unsubscribe/{backend_id}/{sender_email}/{receiver_email}", response_class=HTMLResponse)
+@router.get("/unsubscribe/{sender_email}/{receiver_email}", response_class=HTMLResponse)
 async def unsubscribe(
-    backend_id: str,
     sender_email: str,
     receiver_email: str,
     sig: str = Query(..., description="HMAC-SHA256 signature"),
 ):
-    api_key = _get_backend_api_key(backend_id)
-    if not api_key:
-        return HTMLResponse(
-            content=_error_page("Invalid Link", "This unsubscribe link is not valid or has expired."),
-            status_code=404,
-        )
-
-    expected_sig = _compute_sig(api_key, backend_id, sender_email, receiver_email)
+    expected_sig = _compute_sig(sender_email, receiver_email)
     if not hmac.compare_digest(expected_sig, sig):
         return HTMLResponse(
             content=_error_page("Invalid Link", "This unsubscribe link is not valid or has expired."),
@@ -71,22 +43,16 @@ async def unsubscribe(
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                """
-                SELECT id FROM email_optouts
-                WHERE backend_id = %s AND sender_email = %s AND receiver_email = %s
-                """,
-                (backend_id, sender_email, receiver_email),
+                "SELECT id FROM email_optouts WHERE sender_email = %s AND receiver_email = %s",
+                (sender_email, receiver_email),
             )
 
             if cursor.fetchone():
                 message = "You have already unsubscribed. No further action needed."
             else:
                 cursor.execute(
-                    """
-                    INSERT INTO email_optouts (backend_id, sender_email, receiver_email, opted_out_at)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (backend_id, sender_email, receiver_email, datetime.utcnow()),
+                    "INSERT INTO email_optouts (sender_email, receiver_email, opted_out_at) VALUES (%s, %s, %s)",
+                    (sender_email, receiver_email, datetime.utcnow()),
                 )
                 conn.commit()
                 message = "You have been successfully unsubscribed."
@@ -98,35 +64,32 @@ async def unsubscribe(
 async def check_optout(
     sender_email: str,
     receiver_email: str,
-    backend_id: str = Depends(verify_backend_api_key),
+    x_api_key: Annotated[str, Header()] = None,
 ):
+    verify_api_key(x_api_key)
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                """
-                SELECT opted_out_at FROM email_optouts
-                WHERE backend_id = %s AND sender_email = %s AND receiver_email = %s
-                """,
-                (backend_id, sender_email, receiver_email),
+                "SELECT opted_out_at FROM email_optouts WHERE sender_email = %s AND receiver_email = %s",
+                (sender_email, receiver_email),
             )
             result = cursor.fetchone()
 
     if result:
         return {
-            "status": "opted_out",
-            "backend_id": backend_id,
-            "sender_email": sender_email,
+            "status":         "opted_out",
+            "sender_email":   sender_email,
             "receiver_email": receiver_email,
-            "opted_out_at": result["opted_out_at"],
-            "should_send": False,
+            "opted_out_at":   result["opted_out_at"],
+            "should_send":    False,
         }
 
     return {
-        "status": "subscribed",
-        "backend_id": backend_id,
-        "sender_email": sender_email,
+        "status":         "subscribed",
+        "sender_email":   sender_email,
         "receiver_email": receiver_email,
-        "should_send": True,
+        "should_send":    True,
     }
 
 

@@ -2,8 +2,6 @@
 sync_microservice.py — Polls the read-receipt microservice and syncs read status to the DB.
 
 Runs as a background asyncio task launched from main.py lifespan.
-Uses direct SQL queries to update email read status.
-Updated for new schema with direct database access.
 """
 
 import asyncio
@@ -15,15 +13,11 @@ import aiohttp
 from core.database.connection import get_connection
 
 
-# =============================================================================
-# CLIENT
-# =============================================================================
-
 class MicroserviceClient:
 
-    def __init__(self, base_url: str, backend_id: str, api_key: str):
-        self.base_url  = base_url
-        self.headers   = {
+    def __init__(self, base_url: str, api_key: str):
+        self.base_url = base_url
+        self.headers  = {
             "X-Api-Key":    api_key,
             "Content-Type": "application/json",
         }
@@ -31,11 +25,11 @@ class MicroserviceClient:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            ssl_ctx                  = ssl.create_default_context()
-            ssl_ctx.check_hostname   = False
-            ssl_ctx.verify_mode      = ssl.CERT_NONE
-            connector                = aiohttp.TCPConnector(ssl=ssl_ctx)
-            self._session            = aiohttp.ClientSession(
+            ssl_ctx                = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode    = ssl.CERT_NONE
+            connector              = aiohttp.TCPConnector(ssl=ssl_ctx)
+            self._session          = aiohttp.ClientSession(
                 headers=self.headers, connector=connector
             )
         return self._session
@@ -45,7 +39,7 @@ class MicroserviceClient:
         session = await self._get_session()
         async with session.get(url) as resp:
             if resp.status == 200:
-                data = await resp.json()
+                data  = await resp.json()
                 reads = data.get("reads", [])
                 print(f"[Microservice] Fetched {len(reads)} read(s) at {datetime.utcnow().isoformat()}")
                 return reads
@@ -59,21 +53,15 @@ class MicroserviceClient:
         await session.post(url, json={"read_ids": log_ids})
 
     async def sync(self) -> None:
-        """
-        Fetch new reads from the microservice, update the local DB,
-        then acknowledge them as processed.
-
-        Uses direct SQL to update email read status.
-        """
         reads = await self._fetch_read_emails()
         if not reads:
             return
 
         processed_ids = []
         for read in reads:
-            log_id    = read.get("id")
-            email_id  = read.get("email_id")
-            read_at   = read.get("read_at")
+            log_id   = read.get("id")
+            email_id = read.get("email_id")
+            read_at  = read.get("read_at")
 
             if email_id and read_at:
                 try:
@@ -86,7 +74,6 @@ class MicroserviceClient:
         await self._mark_processed(processed_ids)
 
     def _mark_email_read(self, email_id: int) -> None:
-        """Mark email as read using direct SQL query."""
         try:
             with get_connection() as conn:
                 cursor = conn.cursor()
@@ -114,33 +101,19 @@ class MicroserviceClient:
             raise
 
     async def close(self) -> None:
-        """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()
 
 
-# =============================================================================
-# BACKGROUND TASK
-# =============================================================================
-
 async def run_sync_microservice() -> None:
-    """
-    Long-running coroutine launched by main.py lifespan.
-    Polls the microservice every 30 seconds.
-    """
-    base_url   = os.getenv("MICROSERVICE_BASE_URL")
-    api_key    = os.getenv("MICROSERVICE_API_KEY")
-    backend_id = os.getenv("MICROSERVICE_BACKEND_ID")
+    base_url = os.getenv("MICROSERVICE_BASE_URL")
+    api_key  = os.getenv("MICROSERVICE_API_KEY")
 
     if not base_url or not api_key:
         print("[Microservice] MICROSERVICE_BASE_URL or MICROSERVICE_API_KEY not set — sync disabled")
         return
 
-    client = MicroserviceClient(
-        base_url=base_url,
-        api_key=api_key,
-        backend_id=backend_id,
-    )
+    client = MicroserviceClient(base_url=base_url, api_key=api_key)
 
     try:
         while True:
@@ -148,7 +121,7 @@ async def run_sync_microservice() -> None:
                 await client.sync()
             except Exception as exc:
                 print(f"[Microservice] Sync loop error: {exc}")
-            print("[Microservice] Next sync in 30 s…")
+            print("[Microservice] Next sync in 30s…")
             await asyncio.sleep(30)
     except asyncio.CancelledError:
         print("[Microservice] Sync task cancelled")

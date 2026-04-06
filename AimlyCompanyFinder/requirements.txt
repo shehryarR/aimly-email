@@ -1,0 +1,5 @@
+pymysql
+cryptography
+python-dotenv
+tavily-python
+google-genai

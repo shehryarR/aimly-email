@@ -20,11 +20,10 @@ def load_env():
 load_env()
 
 # Database and core
-from core.database.connection import create_tables, reset_company_addition_flags
+from core.database.connection import reset_company_addition_flags
 
-# Schedulers and workers
+# Schedulers
 from scheduler import email_scheduler
-from company_adder_worker import company_adder_worker
 from sync_microservice import run_sync_microservice
 
 # Routes
@@ -64,23 +63,18 @@ async def lifespan(app: FastAPI):
     print("🚀 AI Email Outreach Pro API v2.0.0 starting up...")
     print(f"📎 Attachment storage path: {ATTACHMENT_STORAGE_PATH}")
 
-    # Initialize database
-    create_tables()
-
     # Reset any stuck company addition flags from previous crashes
+    # (schema is pre-created by AimlyDatabase during make setup)
     reset_company_addition_flags()
 
     # Start background services
-    email_scheduler.start()           # Handles scheduled emails
-    company_adder_worker.start()      # Handles AI company discovery jobs
+    email_scheduler.start()
 
     # Start sync microservice
     sync_task = asyncio.create_task(run_sync_microservice())
 
-    print("✅ Database initialised")
     print("✅ Company addition flags reset")
     print("✅ Email scheduler started")
-    print("✅ Company adder worker started")
     print(f"✅ Sync background task running (CORS origin: {FRONTEND_URL})")
 
     yield
@@ -88,25 +82,17 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     print("🛑 Shutting down...")
 
-    # Cancel sync task
     sync_task.cancel()
     try:
         await sync_task
     except asyncio.CancelledError:
         print("  Sync task safely cancelled.")
 
-    # Stop schedulers and workers
     try:
         email_scheduler.stop()
         print("  Email scheduler stopped.")
     except Exception as exc:
         print(f"  Warning during email scheduler shutdown: {exc}")
-
-    try:
-        company_adder_worker.stop()
-        print("  Company adder worker stopped.")
-    except Exception as exc:
-        print(f"  Warning during company adder worker shutdown: {exc}")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────

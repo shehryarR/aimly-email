@@ -1,6 +1,7 @@
 import hmac
 import hashlib
-from fastapi import APIRouter, HTTPException, Depends, Header, Query
+import os
+from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import List, Annotated
@@ -8,6 +9,8 @@ from datetime import datetime
 from database import get_db_connection
 
 router = APIRouter(prefix="/read-receipt", tags=["Read Receipt"])
+
+MICROSERVICE_API_KEY = os.getenv("MICROSERVICE_API_KEY", "your-super-secure-microservice-key")
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -21,37 +24,15 @@ class MarkProcessedRequest(BaseModel):
 
 # ── Auth & signing helpers ────────────────────────────────────────────────────
 
-def _get_backend_api_key(backend_id: str) -> str:
-    """Fetch the raw API key for a backend — used as the HMAC signing secret."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT api_key FROM backends WHERE backend_id = %s AND active = 1",
-                (backend_id,),
-            )
-            result = cursor.fetchone()
-            if not result:
-                return None
-            return result["api_key"]
+def verify_api_key(x_api_key: Annotated[str, Header()]):
+    if x_api_key != MICROSERVICE_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-def _compute_sig(api_key: str, backend_id: str, email_id: int) -> str:
-    """HMAC-SHA256 over backend_id + email_id, keyed by the backend API key."""
-    msg = f"{backend_id}{email_id}".encode()
-    return hmac.new(api_key.encode(), msg, hashlib.sha256).hexdigest()
-
-
-def verify_backend_api_key(x_api_key: Annotated[str, Header()]):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT backend_id FROM backends WHERE api_key = %s AND active = 1",
-                (x_api_key,),
-            )
-            result = cursor.fetchone()
-            if not result:
-                raise HTTPException(status_code=401, detail="Invalid API key")
-            return result["backend_id"]
+def _compute_sig(email_id: int) -> str:
+    """HMAC-SHA256 over email_id, keyed by MICROSERVICE_API_KEY."""
+    msg = f"{email_id}".encode()
+    return hmac.new(MICROSERVICE_API_KEY.encode(), msg, hashlib.sha256).hexdigest()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -59,53 +40,42 @@ def verify_backend_api_key(x_api_key: Annotated[str, Header()]):
 @router.post("/register")
 async def add_email(
     request: AddEmailRequest,
-    backend_id: str = Depends(verify_backend_api_key),
+    x_api_key: Annotated[str, Header()] = None,
 ):
+    verify_api_key(x_api_key)
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id FROM email_reads WHERE backend_id = %s AND email_id = %s",
-                (backend_id, request.email_id),
+                "SELECT id FROM email_reads WHERE email_id = %s",
+                (request.email_id,),
             )
             if cursor.fetchone():
                 return {
-                    "status": "already_exists",
-                    "backend_id": backend_id,
+                    "status":   "already_exists",
                     "email_id": request.email_id,
-                    "message": "Email already registered",
+                    "message":  "Email already registered",
                 }
 
             cursor.execute(
-                """
-                INSERT INTO email_reads (backend_id, email_id, read_at, processed, created_at)
-                VALUES (%s, %s, NULL, 0, %s)
-                """,
-                (backend_id, request.email_id, datetime.utcnow()),
+                "INSERT INTO email_reads (email_id, read_at, processed, created_at) VALUES (%s, NULL, 0, %s)",
+                (request.email_id, datetime.utcnow()),
             )
         conn.commit()
 
     return {
-        "status": "success",
-        "backend_id": backend_id,
+        "status":   "success",
         "email_id": request.email_id,
-        "message": "Email registered successfully",
+        "message":  "Email registered successfully",
     }
 
 
-@router.get("/mark-read/{backend_id}/{email_id}", response_class=HTMLResponse)
+@router.get("/mark-read/{email_id}", response_class=HTMLResponse)
 async def track_email_read(
-    backend_id: str,
     email_id: int,
     sig: str = Query(..., description="HMAC-SHA256 signature"),
 ):
-    api_key = _get_backend_api_key(backend_id)
-    if not api_key:
-        return HTMLResponse(
-            content=_error_page("Invalid Link", "This confirmation link is not valid or has expired.", "red"),
-            status_code=404,
-        )
-
-    expected_sig = _compute_sig(api_key, backend_id, email_id)
+    expected_sig = _compute_sig(email_id)
     if not hmac.compare_digest(expected_sig, sig):
         return HTMLResponse(
             content=_error_page("Invalid Link", "This confirmation link is not valid or has expired.", "red"),
@@ -115,8 +85,8 @@ async def track_email_read(
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id, read_at FROM email_reads WHERE backend_id = %s AND email_id = %s",
-                (backend_id, email_id),
+                "SELECT id, read_at FROM email_reads WHERE email_id = %s",
+                (email_id,),
             )
             record = cursor.fetchone()
 
@@ -130,10 +100,10 @@ async def track_email_read(
                     status_code=404,
                 )
 
-            if not record["read_at"]:  # read_at is NULL → first open
+            if not record["read_at"]:
                 cursor.execute(
-                    "UPDATE email_reads SET read_at = %s WHERE backend_id = %s AND email_id = %s",
-                    (datetime.utcnow(), backend_id, email_id),
+                    "UPDATE email_reads SET read_at = %s WHERE email_id = %s",
+                    (datetime.utcnow(), email_id),
                 )
                 conn.commit()
                 status_message = "Email confirmed successfully!"
@@ -144,61 +114,52 @@ async def track_email_read(
 
 
 @router.get("/pending")
-async def fetch_new_reads(backend_id: str = Depends(verify_backend_api_key)):
-    """Fetch all read events that haven't been synced to your backend yet."""
+async def fetch_new_reads(x_api_key: Annotated[str, Header()] = None):
+    verify_api_key(x_api_key)
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT id, email_id, read_at, created_at
                 FROM email_reads
-                WHERE backend_id = %s AND processed = 0 AND read_at IS NOT NULL
+                WHERE processed = 0 AND read_at IS NOT NULL
                 ORDER BY created_at ASC
                 """,
-                (backend_id,),
             )
             reads = cursor.fetchall()
 
     return {
         "status": "success",
-        "backend_id": backend_id,
-        "count": len(reads),
-        "reads": reads,
+        "count":  len(reads),
+        "reads":  reads,
     }
 
 
 @router.post("/acknowledge")
 async def mark_reads_processed(
     request: MarkProcessedRequest,
-    backend_id: str = Depends(verify_backend_api_key),
+    x_api_key: Annotated[str, Header()] = None,
 ):
-    """Mark a batch of read events as processed so they won't appear in the next fetch."""
+    verify_api_key(x_api_key)
+
     if not request.read_ids:
-        return {"status": "success", "backend_id": backend_id, "message": "No IDs to process"}
+        return {"status": "success", "message": "No IDs to process"}
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             placeholders = ",".join(["%s"] * len(request.read_ids))
-
             cursor.execute(
-                f"SELECT COUNT(*) as cnt FROM email_reads WHERE id IN ({placeholders}) AND backend_id = %s",
-                request.read_ids + [backend_id],
-            )
-            if cursor.fetchone()["cnt"] != len(request.read_ids):
-                raise HTTPException(status_code=403, detail="Some read IDs don't belong to your backend")
-
-            cursor.execute(
-                f"UPDATE email_reads SET processed = 1 WHERE id IN ({placeholders}) AND backend_id = %s",
-                request.read_ids + [backend_id],
+                f"UPDATE email_reads SET processed = 1 WHERE id IN ({placeholders})",
+                request.read_ids,
             )
             processed_count = cursor.rowcount
         conn.commit()
 
     return {
-        "status": "success",
-        "backend_id": backend_id,
+        "status":          "success",
         "processed_count": processed_count,
-        "message": f"Successfully marked {processed_count} reads as processed",
+        "message":         f"Successfully marked {processed_count} reads as processed",
     }
 
 
