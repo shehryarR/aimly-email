@@ -1,3 +1,2 @@
 pymysql
 cryptography
-python-dotenv

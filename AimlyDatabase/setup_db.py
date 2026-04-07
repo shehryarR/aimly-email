@@ -3,20 +3,18 @@ AimlyDatabase/setup_db.py
 Connects to MySQL as root and:
   1. Creates databases (aimly_backend, aimly_microservice)
   2. Creates users with scoped grants
-  3. Runs schema/backend.sql  against aimly_backend
-  4. Runs schema/microservice.sql against aimly_microservice
-
-Run once during `make setup` after MySQL is healthy.
+  3. Copies SQL files into the mysql container and executes them there
+     (no mysql client required on host)
 """
 
 import sys
 import os
 import time
+import subprocess
 from pathlib import Path
 
-# Read .env from root
-ROOT_DIR = Path(__file__).parent.parent
-ENV_PATH = ROOT_DIR / ".env"
+ROOT_DIR   = Path(__file__).parent.parent
+ENV_PATH   = ROOT_DIR / ".env"
 SCHEMA_DIR = Path(__file__).parent / "schema"
 
 try:
@@ -39,7 +37,7 @@ def read_env_var(key):
     return None
 
 
-def wait_for_mysql(host, port, root_password, max_retries=10):
+def wait_for_mysql(host, port, root_password, max_retries=12):
     for attempt in range(1, max_retries + 1):
         try:
             conn = pymysql.connect(
@@ -57,13 +55,70 @@ def wait_for_mysql(host, port, root_password, max_retries=10):
     return False
 
 
-def run_sql_file(cursor, path: Path, label: str):
+def get_mysql_container_name() -> str:
+    """Find the running MySQL container name."""
+    result = subprocess.run(
+        ["docker", "ps", "--filter", "ancestor=mysql:8.0", "--format", "{{.Names}}"],
+        capture_output=True, text=True,
+    )
+    name = result.stdout.strip().splitlines()
+    if name:
+        return name[0]
+    # fallback: try by container name pattern
+    result = subprocess.run(
+        ["docker", "ps", "--filter", "name=mysql", "--format", "{{.Names}}"],
+        capture_output=True, text=True,
+    )
+    name = result.stdout.strip().splitlines()
+    if name:
+        return name[0]
+    return None
+
+
+def run_sql_file_in_container(
+    sql_path: Path,
+    container: str,
+    user: str,
+    password: str,
+    database: str,
+    label: str,
+):
+    """Copy SQL file into container and execute it via docker exec."""
     print(f"  ── Running {label} ──")
-    sql = path.read_text()
-    # Split on semicolons, skip empty statements
-    statements = [s.strip() for s in sql.split(";") if s.strip() and not s.strip().startswith("--")]
-    for stmt in statements:
-        cursor.execute(stmt)
+
+    # Copy SQL file into container
+    dest = f"/tmp/{sql_path.name}"
+    cp_result = subprocess.run(
+        ["docker", "cp", str(sql_path), f"{container}:{dest}"],
+        capture_output=True, text=True,
+    )
+    if cp_result.returncode != 0:
+        print(f"  ❌  Failed to copy {label} to container: {cp_result.stderr}")
+        sys.exit(1)
+
+    # Execute SQL file inside container
+    exec_result = subprocess.run(
+        [
+            "docker", "exec", "-i", container,
+            "mysql",
+            f"-u{user}",
+            f"-p{password}",
+            database,
+            "-e", f"source {dest}",
+        ],
+        capture_output=True, text=True,
+    )
+
+    # Filter password warnings from stderr
+    errors = "\n".join(
+        line for line in exec_result.stderr.splitlines()
+        if "password" not in line.lower() and line.strip()
+    )
+
+    if exec_result.returncode != 0 and errors:
+        print(f"  ❌  {label} failed:\n{errors}")
+        sys.exit(1)
+
     print(f"  ✅  {label} applied")
 
 
@@ -74,24 +129,23 @@ print("  ⚙️   DATABASE SETUP")
 print("  " + "─" * 53)
 print()
 
-# setup_db.py always runs on the host — connect via localhost
-db_host_for_setup    = "127.0.0.1"
-db_port              = read_env_var("DB_PORT") or "3306"
-mysql_root_password  = read_env_var("MYSQL_ROOT_PASSWORD") or ""
-backend_db_name      = read_env_var("BACKEND_DB_NAME") or "aimly_backend"
-microservice_db_name = read_env_var("MICROSERVICE_DB_NAME") or "aimly_microservice"
-backend_db_user      = read_env_var("BACKEND_DB_USER") or ""
-backend_db_password  = read_env_var("BACKEND_DB_PASSWORD") or ""
-microservice_db_user = read_env_var("MICROSERVICE_DB_USER") or ""
+db_host_for_setup        = "127.0.0.1"
+db_port                  = read_env_var("DB_PORT") or "3306"
+mysql_root_password      = read_env_var("MYSQL_ROOT_PASSWORD") or ""
+backend_db_name          = read_env_var("BACKEND_DB_NAME") or "aimly_backend"
+microservice_db_name     = read_env_var("MICROSERVICE_DB_NAME") or "aimly_microservice"
+backend_db_user          = read_env_var("BACKEND_DB_USER") or ""
+backend_db_password      = read_env_var("BACKEND_DB_PASSWORD") or ""
+microservice_db_user     = read_env_var("MICROSERVICE_DB_USER") or ""
 microservice_db_password = read_env_var("MICROSERVICE_DB_PASSWORD") or ""
 
 # Validate
 missing = []
 for name, val in [
-    ("MYSQL_ROOT_PASSWORD",    mysql_root_password),
-    ("BACKEND_DB_USER",        backend_db_user),
-    ("BACKEND_DB_PASSWORD",    backend_db_password),
-    ("MICROSERVICE_DB_USER",   microservice_db_user),
+    ("MYSQL_ROOT_PASSWORD",      mysql_root_password),
+    ("BACKEND_DB_USER",          backend_db_user),
+    ("BACKEND_DB_PASSWORD",      backend_db_password),
+    ("MICROSERVICE_DB_USER",     microservice_db_user),
     ("MICROSERVICE_DB_PASSWORD", microservice_db_password),
 ]:
     if not val:
@@ -108,6 +162,13 @@ if not wait_for_mysql(db_host_for_setup, db_port, mysql_root_password):
     sys.exit(1)
 
 print("  ✅  MySQL is reachable")
+
+# Find container
+container = get_mysql_container_name()
+if not container:
+    print("  ❌  Could not find running MySQL container.")
+    sys.exit(1)
+print(f"  ✅  MySQL container: {container}")
 print()
 
 try:
@@ -142,46 +203,30 @@ try:
         cursor.execute(f"GRANT ALL PRIVILEGES ON `{microservice_db_name}`.* TO '{microservice_db_user}'@'%'")
         print(f"  ✅  User '{microservice_db_user}' → '{microservice_db_name}'")
 
-        # ── Company finder also needs backend DB access ───────────────────────
-        # It uses the same BACKEND_DB_USER — no extra user needed
-        print()
         cursor.execute("FLUSH PRIVILEGES")
 
     conn.commit()
+    conn.close()
 
-    # ── Run backend schema ────────────────────────────────────────────────────
+    # ── Apply schemas via docker exec ─────────────────────────────────────────
     print()
     print("  ── Applying schemas ──")
-    backend_conn = pymysql.connect(
-        host=db_host_for_setup,
-        port=int(db_port),
-        user=backend_db_user,
-        password=backend_db_password,
-        database=backend_db_name,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-    )
-    with backend_conn.cursor() as cursor:
-        run_sql_file(cursor, SCHEMA_DIR / "backend.sql", "backend.sql")
-    backend_conn.commit()
-    backend_conn.close()
 
-    # ── Run microservice schema ───────────────────────────────────────────────
-    ms_conn = pymysql.connect(
-        host=db_host_for_setup,
-        port=int(db_port),
-        user=microservice_db_user,
-        password=microservice_db_password,
-        database=microservice_db_name,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
+    run_sql_file_in_container(
+        SCHEMA_DIR / "backend.sql",
+        container,
+        backend_db_user, backend_db_password,
+        backend_db_name,
+        "backend.sql",
     )
-    with ms_conn.cursor() as cursor:
-        run_sql_file(cursor, SCHEMA_DIR / "microservice.sql", "microservice.sql")
-    ms_conn.commit()
-    ms_conn.close()
 
-    conn.close()
+    run_sql_file_in_container(
+        SCHEMA_DIR / "microservice.sql",
+        container,
+        microservice_db_user, microservice_db_password,
+        microservice_db_name,
+        "microservice.sql",
+    )
 
     print()
     print("  ✅  Database setup complete")
