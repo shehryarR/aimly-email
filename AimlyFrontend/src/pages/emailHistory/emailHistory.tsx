@@ -60,6 +60,7 @@ interface EmailRecord {
   recipient_email: string;
   status: EmailStatus;
   sent_at?: string;
+  read_at?: string;
   created_at?: string;
   company_id: number;
   company_name: string;
@@ -181,10 +182,10 @@ const ModalStatusBadge = styled.span<{ theme: any; $status: EmailStatus }>`
   white-space: nowrap; letter-spacing: 0.01em; text-transform: uppercase;
   ${p => {
     const m: Record<string, string> = {
-      sent:      `background:${p.theme.colors.success?.main || '#22c55e'}20;color:${p.theme.colors.success?.main || '#22c55e'};`,
-      draft:     `background:${p.theme.colors.warning?.main || '#f59e0b'}20;color:${p.theme.colors.warning?.main || '#f59e0b'};`,
-      scheduled: `background:${p.theme.colors.info?.main    || p.theme.colors.primary.main}20;color:${p.theme.colors.info?.main || p.theme.colors.primary.main};`,
-      failed:    `background:${p.theme.colors.error?.main   || '#ef4444'}20;color:${p.theme.colors.error?.main || '#ef4444'};`,
+      sent:      `background:${p.theme.emailStatus.sent.background};color:${p.theme.emailStatus.sent.color};`,
+      draft:     `background:${p.theme.emailStatus.draft.background};color:${p.theme.emailStatus.draft.color};`,
+      scheduled: `background:${p.theme.emailStatus.scheduled.background};color:${p.theme.emailStatus.scheduled.color};`,
+      failed:    `background:${p.theme.emailStatus.failed.background};color:${p.theme.emailStatus.failed.color};`,
     };
     return m[p.$status];
   }}
@@ -466,6 +467,22 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   </FormGroup>
                 )
             }
+
+            {isSent && activeEmail.read_at && (
+              <FormGroup>
+                <FormLabel theme={theme} style={{ color: theme.colors.success?.main || '#22c55e', opacity: 1 }}>
+                  Read At
+                </FormLabel>
+                <ReadBlock theme={theme} style={{
+                  fontSize: '0.825rem',
+                  borderColor: (theme.colors.success?.main || '#22c55e') + '40',
+                  background:  (theme.colors.success?.main || '#22c55e') + '0d',
+                  color:        theme.colors.success?.main || '#22c55e',
+                }}>
+                  {formatDT(activeEmail.read_at)}
+                </ReadBlock>
+              </FormGroup>
+            )}
 
             {/* ── FIX: render failure reason for failed emails ── */}
             {isFailed && (
@@ -845,6 +862,12 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
           <EmailMeta>
             <EmailMetaItem>{email.recipient_email}</EmailMetaItem>
             {dateLabel}
+            {email.status === 'sent' && email.read_at && (
+              <EmailMetaItem style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: theme.colors.success?.main || '#22c55e', opacity: 0.85 }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                {formatDT(email.read_at)}
+              </EmailMetaItem>
+            )}
           </EmailMeta>
           <EmailPreview>{email.email_content.slice(0, 130)}</EmailPreview>
         </EmailInfo>

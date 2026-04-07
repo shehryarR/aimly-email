@@ -774,7 +774,7 @@ def get_all_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at, e.html_email,
+                e.status, e.sent_at, e.read_at, e.created_at, e.html_email,
                 e.signature, e.logo, e.logo_mime_type,
                 co.id     AS company_id,
                 co.name   AS company_name,

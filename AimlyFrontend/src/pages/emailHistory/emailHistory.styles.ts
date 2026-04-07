@@ -270,10 +270,10 @@ export const StatusBadge = styled.span<{ theme: any; $status: 'sent' | 'draft' |
   text-transform: uppercase;
   ${p => {
     const m = {
-      sent:      `background:${(p.theme.colors.success?.main || '#22c55e')}20;color:${p.theme.colors.success?.main || '#22c55e'};`,
-      draft:     `background:${(p.theme.colors.warning?.main || '#f59e0b')}20;color:${p.theme.colors.warning?.main || '#f59e0b'};`,
-      scheduled: `background:${(p.theme.colors.info?.main    || p.theme.colors.primary.main)}20;color:${p.theme.colors.info?.main || p.theme.colors.primary.main};`,
-      failed:    `background:${(p.theme.colors.error?.main   || '#ef4444')}20;color:${p.theme.colors.error?.main || '#ef4444'};`,
+      sent:      `background:${p.theme.emailStatus.sent.background};color:${p.theme.emailStatus.sent.color};`,
+      draft:     `background:${p.theme.emailStatus.draft.background};color:${p.theme.emailStatus.draft.color};`,
+      scheduled: `background:${p.theme.emailStatus.scheduled.background};color:${p.theme.emailStatus.scheduled.color};`,
+      failed:    `background:${p.theme.emailStatus.failed.background};color:${p.theme.emailStatus.failed.color};`,
     };
     return m[p.$status];
   }}
