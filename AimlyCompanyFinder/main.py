@@ -48,23 +48,34 @@ BATCH_SIZE    = 10   # companies per batch
 # DECRYPT HELPER
 # =============================================================================
 
+def _get_aes_key() -> bytes:
+    """Derive AES-256 key from COOKIE_SECRET — must match backend's _get_aes_key."""
+    secret = os.getenv("COOKIE_SECRET", "")
+    if not secret:
+        raise ValueError("COOKIE_SECRET not set in environment")
+    try:
+        key = bytes.fromhex(secret)
+    except ValueError:
+        raise ValueError("COOKIE_SECRET must be a valid hex string.")
+    if len(key) != 32:
+        raise ValueError(f"COOKIE_SECRET must decode to 32 bytes (got {len(key)}).")
+    return key
+
+
 def _decrypt_key(encrypted: str) -> str:
     """
-    Decrypt an API key that was encrypted by AimlyBackend's user_keys route.
-    Uses the same COOKIE_SECRET from the shared .env.
-    Must stay in sync with AimlyBackend/routes/user_keys.py _decrypt_key logic.
+    Decrypt an API key encrypted by AimlyBackend's _encrypt_key (AES-256-GCM).
+    Must stay in sync with AimlyBackend/routes/user_keys.py.
+    Format: URL-safe base64( nonce[12B] + ciphertext+tag )
     """
-    from cryptography.fernet import Fernet
     import base64
-    import hashlib
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    cookie_secret = os.getenv("COOKIE_SECRET", "")
-    if not cookie_secret:
-        raise ValueError("COOKIE_SECRET not set in environment")
-
-    key = base64.urlsafe_b64encode(hashlib.sha256(cookie_secret.encode()).digest())
-    f   = Fernet(key)
-    return f.decrypt(encrypted.encode()).decode()
+    key   = _get_aes_key()
+    raw   = base64.urlsafe_b64decode(encrypted.encode())
+    nonce = raw[:12]
+    ct    = raw[12:]
+    return AESGCM(key).decrypt(nonce, ct, None).decode()
 
 
 # =============================================================================
