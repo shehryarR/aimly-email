@@ -9,6 +9,7 @@ UPDATED: Accepts logo_blob (raw bytes) in addition to logo_path.
 UPDATED: Fixed read-receipt endpoints and HMAC signing.
 UPDATED: Added signed unsubscribe footer link.
 UPDATED: Fixed logo alignment for iOS Mail (table-based layout).
+UPDATED: Removed backend_id from HMAC signing and URLs (single-backend setup).
 """
 
 import hmac
@@ -96,15 +97,15 @@ def _resolve_smtp(smtp_config: Optional[dict]) -> dict:
     }
 
 
-def _compute_read_sig(api_key: str, backend_id: str, email_id: int) -> str:
+def _compute_read_sig(api_key: str, email_id: int) -> str:
     """HMAC-SHA256 signature for the read-receipt tracking URL."""
-    msg = f"{backend_id}{email_id}".encode()
+    msg = f"{email_id}".encode()
     return hmac.new(api_key.encode(), msg, hashlib.sha256).hexdigest()
 
 
-def _compute_optout_sig(api_key: str, backend_id: str, sender: str, receiver: str) -> str:
+def _compute_optout_sig(api_key: str, sender: str, receiver: str) -> str:
     """HMAC-SHA256 signature for the unsubscribe URL."""
-    msg = f"{backend_id}{sender}{receiver}".encode()
+    msg = f"{sender}{receiver}".encode()
     return hmac.new(api_key.encode(), msg, hashlib.sha256).hexdigest()
 
 
@@ -114,13 +115,12 @@ def _tracking_html_and_plain(email_id: int) -> tuple[str, str]:
     Returns ('', '') when microservice env vars are not configured.
     """
     public_url = os.getenv("MICROSERVICE_PUBLIC_URL") or os.getenv("MICROSERVICE_BASE_URL")
-    backend_id = os.getenv("MICROSERVICE_BACKEND_ID")
     api_key    = os.getenv("MICROSERVICE_API_KEY")
-    if not public_url or not backend_id or not api_key:
+    if not public_url or not api_key:
         return "", ""
 
-    sig = _compute_read_sig(api_key, backend_id, email_id)
-    url = f"{public_url}/read-receipt/mark-read/{backend_id}/{email_id}?sig={sig}"
+    sig = _compute_read_sig(api_key, email_id)
+    url = f"{public_url}/read-receipt/mark-read/{email_id}?sig={sig}"
 
     html = f"""
 <div style="margin-top:30px;text-align:center;">
@@ -141,15 +141,14 @@ def _unsubscribe_html_and_plain(sender_email: str, receiver_email: str) -> tuple
     Returns ('', '') when microservice env vars are not configured.
     """
     public_url = os.getenv("MICROSERVICE_PUBLIC_URL") or os.getenv("MICROSERVICE_BASE_URL")
-    backend_id = os.getenv("MICROSERVICE_BACKEND_ID")
     api_key    = os.getenv("MICROSERVICE_API_KEY")
-    if not public_url or not backend_id or not api_key or not sender_email or not receiver_email:
+    if not public_url or not api_key or not sender_email or not receiver_email:
         return "", ""
 
-    sig          = _compute_optout_sig(api_key, backend_id, sender_email, receiver_email)
+    sig          = _compute_optout_sig(api_key, sender_email, receiver_email)
     sender_enc   = quote(sender_email, safe="")
     receiver_enc = quote(receiver_email, safe="")
-    url          = f"{public_url}/optout/unsubscribe/{backend_id}/{sender_enc}/{receiver_enc}?sig={sig}"
+    url          = f"{public_url}/optout/unsubscribe/{sender_enc}/{receiver_enc}?sig={sig}"
 
     html = f"""
 <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;">
