@@ -1,23 +1,55 @@
+# AimlyCompanyFinder/sub_agents/company_discovery/agent.py
+
 """
-AimlyCompanyFinder/sub_agents/company_discovery/agent.py
-AI-powered company discovery via Tavily + LLM.
+AI-powered company discovery via OpenClaw container.
 Pure logic layer — zero database operations.
+All LLM and search logic is delegated to the OpenClaw container via HTTP.
 """
-import asyncio
+
 import json
+import requests
 from typing import List, Dict, Callable
-from tavily import TavilyClient
-from core.llm import LLMFactory
+
+
+# =============================================================================
+# OPENCLAW CLIENT
+# =============================================================================
+
+class OpenClawClient:
+    """Simple HTTP client for the OpenClaw container."""
+
+    def __init__(self, base_url: str, server_api_key: str, gemini_key: str, tavily_key: str):
+        self.base_url       = base_url.rstrip("/")
+        self.server_api_key = server_api_key
+        self.gemini_key     = gemini_key
+        self.tavily_key     = tavily_key
+
+    def query(self, message: str, timeout: int = 120) -> str:
+        """Send a message to OpenClaw and return the text response."""
+        resp = requests.post(
+            f"{self.base_url}/query",
+            headers={"X-API-Key": self.server_api_key},
+            json={
+                "message":    message,
+                "gemini_key": self.gemini_key,
+                "tavily_key": self.tavily_key,
+            },
+            timeout=timeout,
+        )
+        if resp.status_code == 401:
+            raise ValueError("OpenClaw rejected the request — check server/gemini/tavily keys")
+        if resp.status_code != 200:
+            raise RuntimeError(f"OpenClaw error {resp.status_code}: {resp.text[:300]}")
+        return resp.json()["text"]
 
 
 # =============================================================================
 # PUBLIC ENTRY POINT
 # =============================================================================
 
-async def find_companies(
+def find_companies(
     query: str,
-    tavily_api_key: str,
-    llm_config: dict,
+    openclaw_client: OpenClawClient,
     limit: int = 50,
     check_company_exists: Callable[[str], bool] = None,
     add_company: Callable[[Dict], None] = None,
@@ -26,14 +58,6 @@ async def find_companies(
     include_address: bool = False,
     include_company_info: bool = False,
 ) -> None:
-    if not tavily_api_key:
-        raise ValueError("Tavily API key is required for company discovery.")
-    api_key = (llm_config.get("api_key") or "").strip()
-    model   = (llm_config.get("model")   or "").strip()
-    if not api_key:
-        raise ValueError("Missing LLM API key. Configure it in LLM Settings.")
-    if not model:
-        raise ValueError("Missing LLM model. Configure it in LLM Settings.")
 
     if check_company_exists is None:
         check_company_exists = lambda email: False
@@ -42,16 +66,14 @@ async def find_companies(
     if should_stop is None:
         should_stop = lambda: False
 
-    llm = LLMFactory.create_llm(api_key, "gemini")
-
     print(f"🚀 Starting discovery: '{query}'  (limit={limit})")
 
-    found_count:          int       = 0
-    found_emails:         set       = set()
-    used_queries:         List[str] = []
-    consecutive_empty                = 0
-    max_consecutive_empty            = 3
-    iteration                        = 0
+    found_count:       int       = 0
+    found_emails:      set       = set()
+    used_queries:      List[str] = []
+    consecutive_empty            = 0
+    max_consecutive_empty        = 3
+    iteration                    = 0
 
     print(f"📊 Target: {limit}")
 
@@ -63,52 +85,55 @@ async def find_companies(
             print("🛑 Job cancelled — stopping agent")
             break
 
-        new_queries = await _generate_search_queries(query, used_queries, llm, model, count=10)
+        # ── Step 1: Generate search queries via OpenClaw (Gemini only, no search) ──
+        new_queries = _generate_search_queries(query, used_queries, openclaw_client, count=10)
         if not new_queries:
             print("❌ No queries generated — stopping")
             break
         used_queries.extend(new_queries)
 
-        search_results = await _execute_tavily_searches(new_queries, tavily_api_key)
-        if not search_results:
-            print("❌ No search results — stopping")
-            break
-
-        candidates = await _extract_companies_with_emails(search_results, query, llm, model, limit)
-
+        # ── Step 2: Find companies for each query via OpenClaw (Gemini + Tavily) ──
         added_this_iter = 0
-        for company in candidates:
-            email = company.get("email", "").lower().strip()
-            name  = company.get("name",  "").strip()
 
-            if not email or not name:
-                continue
-
-            if email in found_emails:
-                continue
-
+        for search_query in new_queries:
             if should_stop():
                 print("🛑 Job cancelled — stopping agent mid-batch")
                 return
 
-            if check_company_exists(email):
-                print(f"⏭️  Skipped (exists in DB): {name} — {email}")
-                continue
-
-            if include_phone or include_address or include_company_info:
-                company = await _enrich_single_company(
-                    company, llm, model, include_phone, include_address, include_company_info
-                )
-
-            add_company(company)
-
-            found_emails.add(email)
-            found_count += 1
-            added_this_iter += 1
-            print(f"✅ Added: {name} — {email}")
-
             if found_count >= limit:
                 break
+
+            candidates = _find_companies_for_query(
+                search_query, query, openclaw_client, limit,
+                include_phone, include_address, include_company_info,
+            )
+
+            for company in candidates:
+                email = company.get("email", "").lower().strip()
+                name  = company.get("name",  "").strip()
+
+                if not email or not name:
+                    continue
+                if email in found_emails:
+                    continue
+                if not _is_valid_email(email):
+                    print(f"❌ Rejected invalid email: {name} — {email}")
+                    continue
+                if should_stop():
+                    print("🛑 Job cancelled — stopping agent mid-batch")
+                    return
+                if check_company_exists(email):
+                    print(f"⏭️  Skipped (exists in DB): {name} — {email}")
+                    continue
+
+                add_company(company)
+                found_emails.add(email)
+                found_count += 1
+                added_this_iter += 1
+                print(f"✅ Added: {name} — {email}")
+
+                if found_count >= limit:
+                    break
 
         print(f"   +{added_this_iter} new companies this iteration")
 
@@ -129,9 +154,15 @@ async def find_companies(
 # PRIVATE HELPERS
 # =============================================================================
 
-async def _generate_search_queries(
-    query: str, used_queries: List[str], llm, model: str, count: int = 10
+def _generate_search_queries(
+    query: str,
+    used_queries: List[str],
+    client: OpenClawClient,
+    count: int = 10,
 ) -> List[str]:
+    """
+    Ask OpenClaw (Gemini only, no web search) to generate diverse search queries.
+    """
     for attempt in range(3):
         try:
             used_text = "\n".join(f"- {q}" for q in used_queries[-50:])
@@ -142,7 +173,7 @@ async def _generate_search_queries(
                 f"\n\nAttempt 3: FINAL attempt. You CANNOT return empty. Generate {count} creative queries NOW.",
             ][attempt]
 
-            prompt = f"""You {intensity} generate exactly {count} diverse search queries for: "{query}"
+            message = f"""You {intensity} generate exactly {count} diverse search queries for finding companies matching: "{query}"
 
 REQUIREMENTS:
 1. Return exactly {count} queries as a JSON array of strings
@@ -150,6 +181,7 @@ REQUIREMENTS:
 3. Vary keywords: companies, businesses, firms, providers, vendors, contractors
 4. Target different platforms: LinkedIn, Chamber of Commerce, BBB, industry associations
 5. NEVER repeat or closely match previously used queries
+6. Do NOT use web search — use your knowledge to generate queries only
 
 PREVIOUSLY USED (DO NOT REPEAT):
 {used_text}
@@ -158,7 +190,7 @@ OUTPUT: Return ONLY a valid JSON array, no explanation:
 ["query 1", "query 2", ..., "query {count}"]
 {extra}"""
 
-            response = await llm.generate(prompt=prompt, model=model, response_format="text", web_search=False)
+            response = client.query(message)
             queries  = _parse_json_array(response)
             new_qs   = [
                 q.strip() for q in queries
@@ -175,39 +207,93 @@ OUTPUT: Return ONLY a valid JSON array, no explanation:
     raise Exception("Failed to generate search queries after 3 attempts")
 
 
-def _queries_similar(q1: str, q2: str) -> bool:
-    words1 = {w for w in q1.split() if len(w) > 3}
-    words2 = {w for w in q2.split() if len(w) > 3}
-    if not words1 or not words2:
-        return False
-    return len(words1 & words2) / max(len(words1), len(words2)) > 0.7
+def _build_output_schema(
+    include_phone: bool,
+    include_address: bool,
+    include_company_info: bool,
+) -> str:
+    """Build the JSON schema string for the expected output based on requested fields."""
+    fields = [
+        '"name": "Company Name"',
+        '"email": "real@company.com"',
+    ]
+    if include_phone:
+        fields.append('"phone": "phone number or empty string"')
+    if include_address:
+        fields.append('"address": "office address or empty string"')
+    if include_company_info:
+        fields.append('"company_info": "brief company description or empty string"')
+
+    return "{" + ", ".join(fields) + "}"
 
 
-async def _execute_tavily_searches(queries: List[str], tavily_api_key: str) -> str:
-    tavily    = TavilyClient(api_key=tavily_api_key)
-    semaphore = asyncio.Semaphore(5)
+def _find_companies_for_query(
+    search_query: str,
+    original_query: str,
+    client: OpenClawClient,
+    target_limit: int,
+    include_phone: bool = False,
+    include_address: bool = False,
+    include_company_info: bool = False,
+) -> List[Dict]:
+    """
+    Ask OpenClaw (Gemini + Tavily web search) to find companies for a single
+    search query and return all requested fields in one call.
+    """
+    schema = _build_output_schema(include_phone, include_address, include_company_info)
 
-    async def _search(q: str):
-        async with semaphore:
-            try:
-                result = await asyncio.to_thread(
-                    tavily.search, q,
-                    search_depth="advanced", include_raw_content=True, max_results=10,
-                )
-                return result.get("results", [])
-            except Exception as exc:
-                print(f"  Search failed for '{q}': {exc}")
-                return []
+    extra_field_instructions = ""
+    if include_phone or include_address or include_company_info:
+        extra_fields = ", ".join(filter(None, [
+            "phone number"        if include_phone        else "",
+            "office address"      if include_address      else "",
+            "brief description"   if include_company_info else "",
+        ]))
+        extra_field_instructions = f"""
+- For each company also find their real: {extra_fields}
+- Use empty string "" for any field you cannot find — do NOT fabricate"""
 
-    all_results = await asyncio.gather(*[_search(q) for q in queries])
-    combined    = ""
-    total       = 0
-    for batch in all_results:
-        for r in batch:
-            combined += f"Source: {r.get('url', '')}\nContent: {r.get('content', '')}\n\n"
-            total    += 1
-    print(f"📄 {total} sources from {len(queries)} queries")
-    return combined
+    message = f"""Use web search to find real companies matching this search query: "{search_query}"
+
+Context: We are looking for companies matching: "{original_query}"
+Target: up to {target_limit} companies
+
+RULES:
+- Use web search to find companies
+- Only include companies with complete, real email addresses
+- Reject masked emails (asterisks, x's, dashes): m***@co.com is INVALID
+- Reject fake domains: example.com, test.com, sample.com are INVALID
+- Skip generic directory listings or platforms themselves{extra_field_instructions}
+
+OUTPUT: Return ONLY a valid JSON array, no explanation, no markdown:
+[{schema}]
+
+If no valid companies found, return an empty array: []"""
+
+    try:
+        response  = client.query(message, timeout=180)
+        companies = _parse_json_array(response)
+        valid     = []
+        for c in companies:
+            if not isinstance(c, dict):
+                continue
+            name  = str(c.get("name",  "")).strip()
+            email = str(c.get("email", "")).strip().lower()
+            if not name or not _is_valid_email(email):
+                print(f"❌ Rejected: {name} — {email}")
+                continue
+
+            company = {"name": name, "email": email}
+            if include_phone        and c.get("phone"):        company["phone_number"] = c["phone"]
+            if include_address      and c.get("address"):      company["address"]      = c["address"]
+            if include_company_info and c.get("company_info"): company["company_info"] = c["company_info"]
+            valid.append(company)
+
+        print(f"🏢 Found {len(valid)} valid companies for query: '{search_query[:60]}'")
+        return valid
+    except Exception as exc:
+        print(f"❌ Company search failed for '{search_query[:60]}': {exc}")
+        return []
 
 
 def _is_valid_email(email: str) -> bool:
@@ -232,82 +318,12 @@ def _is_valid_email(email: str) -> bool:
     return True
 
 
-async def _extract_companies_with_emails(
-    search_results: str, original_query: str, llm, model: str, target_limit: int
-) -> List[Dict]:
-    if not search_results.strip():
-        return []
-
-    prompt = f"""Extract companies with REAL, unmasked email addresses from this content.
-Query context: "{original_query}"  |  Target: {target_limit} companies
-
-RULES:
-- Only include companies with complete, real email addresses
-- Reject masked emails (asterisks, x's, dashes): m***@co.com ❌
-- Reject fake domains: example.com, test.com ❌
-- Skip generic entries (directories, platforms)
-
-OUTPUT: Return ONLY a valid JSON array:
-[{{"name": "Company", "email": "real@company.com"}}]
-
-CONTENT:
-{search_results[:50000]}"""
-
-    try:
-        response   = await llm.generate(prompt=prompt, model=model, response_format="text", web_search=True)
-        companies  = _parse_json_array(response)
-        valid      = []
-        for c in companies:
-            if not isinstance(c, dict):
-                continue
-            name  = str(c.get("name",  "")).strip()
-            email = str(c.get("email", "")).strip().lower()
-            if name and _is_valid_email(email):
-                valid.append({"name": name, "email": email})
-            else:
-                print(f"❌ Rejected: {name} — {email}")
-        print(f"🏢 Extracted {len(valid)} valid companies")
-        return valid
-    except Exception as exc:
-        print(f"Error extracting companies: {exc}")
-        return []
-
-
-async def _enrich_single_company(
-    company: Dict, llm, model: str,
-    include_phone: bool, include_address: bool, include_company_info: bool,
-) -> Dict:
-    fields = ", ".join(filter(None, [
-        "phone number"        if include_phone        else "",
-        "office address"      if include_address      else "",
-        "company description" if include_company_info else "",
-    ]))
-    prompt = f"""Find REAL information for this company: {fields}
-
-- {company['name']} ({company['email']})
-
-Rules:
-- Only provide real, verified data
-- Use empty string "" if not found — do NOT fabricate
-
-OUTPUT: Return ONLY a valid JSON object:
-{{"phone": "...", "address": "...", "company_info": "..."}}"""
-
-    try:
-        response = await llm.generate(prompt=prompt, model=model, response_format="text", web_search=True)
-        cleaned  = response.strip()
-        start    = cleaned.find("{")
-        end      = cleaned.rfind("}")
-        info     = json.loads(cleaned[start:end+1]) if start != -1 else {}
-
-        ec = company.copy()
-        if include_phone        and info.get("phone"):        ec["phone_number"]  = info["phone"]
-        if include_address      and info.get("address"):      ec["address"]       = info["address"]
-        if include_company_info and info.get("company_info"): ec["company_info"]  = info["company_info"]
-        return ec
-    except Exception as exc:
-        print(f"Error enriching {company['name']}: {exc}")
-        return company
+def _queries_similar(q1: str, q2: str) -> bool:
+    words1 = {w for w in q1.split() if len(w) > 3}
+    words2 = {w for w in q2.split() if len(w) > 3}
+    if not words1 or not words2:
+        return False
+    return len(words1 & words2) / max(len(words1), len(words2)) > 0.7
 
 
 def _parse_json_array(text: str) -> list:

@@ -1,3 +1,5 @@
+# docker/docker-compose.yml
+
 services:
 
   # ── MySQL ─────────────────────────────────────────────────
@@ -60,6 +62,23 @@ services:
       email-microservice:
         condition: service_healthy
 
+  # ── OpenClaw (Company Finder AI) ──────────────────────────
+  company-finder-openclaw:
+    build:
+      context: ../AimlyOpenClaw
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - SERVER_API_KEY=${OPENCLAW_SERVER_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   # ── Company Finder ────────────────────────────────────────
   company-finder:
     build:
@@ -67,9 +86,14 @@ services:
       dockerfile: docker/Dockerfile
     env_file:
       - ../.env
+    environment:
+      - OPENCLAW_URL=http://company-finder-openclaw:8000
+      - OPENCLAW_SERVER_KEY=${OPENCLAW_SERVER_KEY}
     restart: unless-stopped
     depends_on:
       mysql:
+        condition: service_healthy
+      company-finder-openclaw:
         condition: service_healthy
 
   # ── Frontend ──────────────────────────────────────────────

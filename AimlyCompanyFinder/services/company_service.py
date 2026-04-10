@@ -1,15 +1,17 @@
+# AimlyCompanyFinder/services/company_service.py
+
 """
-AimlyCompanyFinder/services/company_service.py
 Company discovery service — pure logic, zero DB operations.
+Delegates all AI work to the OpenClaw container via OpenClawClient.
 """
+
 from typing import Callable, Dict
-from sub_agents.company_discovery.agent import find_companies
+from sub_agents.company_discovery.agent import find_companies, OpenClawClient
 
 
-async def find_companies_by_query(
+def find_companies_by_query(
     query: str,
-    tavily_api_key: str,
-    llm_config: dict,
+    openclaw_client: OpenClawClient,
     limit: int = 50,
     check_company_exists: Callable[[str], bool] = None,
     add_company: Callable[[Dict], None] = None,
@@ -19,13 +21,12 @@ async def find_companies_by_query(
     include_company_info: bool = False,
 ) -> None:
     """
-    Discover companies via AI search.
+    Discover companies via OpenClaw container.
     All DB callbacks are provided by the caller (main.py worker).
     """
-    await find_companies(
+    find_companies(
         query=query,
-        tavily_api_key=tavily_api_key,
-        llm_config=llm_config,
+        openclaw_client=openclaw_client,
         limit=limit,
         check_company_exists=check_company_exists,
         add_company=add_company,

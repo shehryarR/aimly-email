@@ -1,5 +1,5 @@
+# AimlyCompanyFinder/requirements.txt
 pymysql
 cryptography
 python-dotenv
-tavily-python
-google-genai
+requests

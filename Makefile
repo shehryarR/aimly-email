@@ -1,18 +1,18 @@
 # ============================================================
 #  AIMLY - Root Makefile
 #  Manages: AimlyBackend | AimlyFrontend | AimlyMicroservices
-#           AimlyCompanyFinder | MySQL
+#           AimlyCompanyFinder | AimlyOpenClaw | MySQL
 # ============================================================
 
 COMPOSE = docker compose -f docker/docker-compose.yml --env-file .env
 
 .PHONY: help \
         setup \
-        build build-backend build-frontend build-microservices build-company-finder \
-        up up-backend up-frontend up-microservices up-db up-company-finder \
-        down down-backend down-frontend down-microservices down-db down-company-finder \
-        restart restart-backend restart-frontend restart-microservices restart-db restart-company-finder \
-        logs logs-backend logs-frontend logs-microservices logs-db logs-company-finder
+        build build-backend build-frontend build-microservices build-company-finder build-openclaw \
+        up up-backend up-frontend up-microservices up-db up-company-finder up-openclaw \
+        down down-backend down-frontend down-microservices down-db down-company-finder down-openclaw \
+        restart restart-backend restart-frontend restart-microservices restart-db restart-company-finder restart-openclaw \
+        logs logs-backend logs-frontend logs-microservices logs-db logs-company-finder logs-openclaw
 
 
 # ── Default: show help ───────────────────────────────────────
@@ -31,7 +31,7 @@ help:
 	@echo "  Fresh machine flow:"
 	@echo "    make setup && make build && make up"
 	@echo ""
-	@echo "  Per-service (* = backend | frontend | microservices | db | company-finder):"
+	@echo "  Per-service (* = backend | frontend | microservices | db | company-finder | openclaw):"
 	@echo "    make build-*   up-*   down-*   restart-*   logs-*"
 	@echo ""
 
@@ -57,11 +57,14 @@ setup:
 	@echo "── Step 4: Frontend configuration ──"
 	.venv/bin/python3 env_generators/frontend.py
 	@echo ""
+	@echo "── Step 5: OpenClaw configuration ──"
+	.venv/bin/python3 env_generators/openclaw.py
+	@echo ""
 	@echo "  ✅  Setup complete — run 'make build' then 'make up'"
 
 
 # ── BUILD ────────────────────────────────────────────────────
-build: build-backend build-frontend build-microservices build-company-finder
+build: build-backend build-frontend build-microservices build-openclaw build-company-finder
 	@echo ""
 	@echo "  ✅  All Docker images built!"
 
@@ -76,6 +79,10 @@ build-frontend:
 build-microservices:
 	@echo "── Build: AimlyMicroservices ──"
 	$(COMPOSE) build email-microservice
+
+build-openclaw:
+	@echo "── Build: AimlyOpenClaw ──"
+	$(COMPOSE) build company-finder-openclaw
 
 build-company-finder:
 	@echo "── Build: AimlyCompanyFinder ──"
@@ -115,6 +122,10 @@ up-frontend:
 	@echo "── Up: AimlyFrontend ──"
 	$(COMPOSE) up -d outreach_ui
 
+up-openclaw:
+	@echo "── Up: AimlyOpenClaw ──"
+	$(COMPOSE) up -d company-finder-openclaw
+
 up-company-finder:
 	@echo "── Up: AimlyCompanyFinder ──"
 	$(COMPOSE) up -d company-finder
@@ -147,6 +158,11 @@ down-microservices:
 	$(COMPOSE) stop email-microservice
 	$(COMPOSE) rm -f email-microservice
 
+down-openclaw:
+	@echo "── Down: AimlyOpenClaw ──"
+	$(COMPOSE) stop company-finder-openclaw
+	$(COMPOSE) rm -f company-finder-openclaw
+
 down-company-finder:
 	@echo "── Down: AimlyCompanyFinder ──"
 	$(COMPOSE) stop company-finder
@@ -162,6 +178,7 @@ restart-backend:        down-backend        build-backend        up-backend
 restart-frontend:       down-frontend       build-frontend       up-frontend
 restart-microservices:  down-microservices  build-microservices  up-microservices
 restart-db:             down-db                                  up-db
+restart-openclaw:       down-openclaw       build-openclaw       up-openclaw
 restart-company-finder: down-company-finder build-company-finder up-company-finder
 
 
@@ -181,6 +198,9 @@ logs-microservices:
 
 logs-db:
 	$(COMPOSE) logs -f mysql
+
+logs-openclaw:
+	$(COMPOSE) logs -f company-finder-openclaw
 
 logs-company-finder:
 	$(COMPOSE) logs -f company-finder
