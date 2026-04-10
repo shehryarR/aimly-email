@@ -2798,17 +2798,29 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
 
   const submitCsv = async () => {
     if (!csvFile) { setResult({ type: 'error', text: 'Select a CSV file first' }); return; }
+    const fileSnapshot = csvFile;
     // Close modal and show spinner immediately, then fire request in background
-    resetAll(); onSuccess(0); onClose();
-    const fd = new FormData(); fd.append('file', csvFile); fd.append('campaign_id', String(campaignId));
-    apiFetch(`${apiBase}/company/`, { method: 'POST', body: fd })
-      .catch(() => { /* silent — polling will stop naturally */ });
+    resetAll(); onSuccess(1); onClose();
+    const fd = new FormData(); fd.append('file', fileSnapshot); fd.append('campaign_id', String(campaignId));
+    try {
+      const r = await apiFetch(`${apiBase}/company/`, { method: 'POST', body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        onToast('success', 'Imported', `${d.created ?? 0} compan${(d.created ?? 0) === 1 ? 'y' : 'ies'} imported`);
+      } else {
+        onToast('error', 'Import Failed', d.detail || 'CSV import failed');
+      }
+    } catch {
+      onToast('error', 'Import Failed', 'An error occurred during CSV import');
+    } finally {
+      onSuccess(0); // signals completion → triggers setRefresh in parent
+    }
   };
 
   const submitAi = async () => {
     if (!aiQuery.trim()) { setResult({ type: 'error', text: 'Enter a search query' }); return; }
     // Close modal and show spinner immediately, then fire request in background
-    resetAll(); onSuccess(0); onClose();
+    resetAll(); onSuccess(1); onClose();
     const fd = new FormData(); fd.append('ai_search', JSON.stringify({ query: aiQuery.trim(), limit: aiLimit, include_phone: aiIncludePhone, include_address: aiIncludeAddress, include_company_info: aiIncludeInfo })); fd.append('campaign_id', String(campaignId));
     apiFetch(`${apiBase}/company/`, { method: 'POST', body: fd })
       .catch(() => { /* silent — polling will stop naturally */ });
@@ -5742,7 +5754,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         theme={theme}
         apiBase={API_BASE}
         onClose={() => setShowAddModal(false)}
-        onSuccess={(active: number) => { setCompanyAdditionActive(active); if (active !== 0) startPollingAdditionStatus(); }}
+        onSuccess={(active: number) => { setCompanyAdditionActive(active); if (active !== 0) startPollingAdditionStatus(); else setRefresh(p => p + 1); }}
         onToast={showToast}
       />
 
