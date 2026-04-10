@@ -864,8 +864,8 @@ const CsModalWrap = styled.div<{ $open: boolean }>`
   z-index: 9999; padding: 1.5rem;
   pointer-events: ${p => p.$open ? 'all' : 'none'};
 `;
-const CsModal = styled.div<{ theme: any; $open: boolean }>`
-  width: 100%; max-width: 860px;
+const CsModal = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
+  width: 100%; max-width: ${p => p.$wide ? '1200px' : '860px'};
   height: min(700px, calc(100vh - 3rem));
   background: ${p => p.theme.colors.base[200]};
   border: 1px solid ${p => p.theme.colors.base[300]};
@@ -874,7 +874,7 @@ const CsModal = styled.div<{ theme: any; $open: boolean }>`
   display: flex; flex-direction: column; overflow: hidden;
   opacity: ${p => p.$open ? 1 : 0};
   transform: ${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(16px)'};
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease, max-width 0.25s ease;
 `;
 const CsHead = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: space-between;
@@ -1326,6 +1326,43 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [templateSaving,     setTemplateSaving]     = useState(false);
   const [templateEnabled,    setTemplateEnabled]    = useState(false);
 
+  // ── Template preview resize ──────────────────────────────────
+  const [tplSplitRatio, setTplSplitRatio] = useState(0.5);
+  const tplDragRef = useRef<{ dragging: boolean; startX: number; startRatio: number; containerW: number }>({ dragging: false, startX: 0, startRatio: 0.5, containerW: 0 });
+  const tplContainerRef = useRef<HTMLDivElement>(null);
+
+  // Reset to 50/50 whenever HTML template is toggled
+  useEffect(() => {
+    if (!templateHtmlEmail) setTplSplitRatio(0.5);
+  }, [templateHtmlEmail]);
+
+  const onTplDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const containerW = tplContainerRef.current?.offsetWidth ?? 700;
+    tplDragRef.current = { dragging: true, startX: e.clientX, startRatio: tplSplitRatio, containerW };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const cleanup = () => {
+      tplDragRef.current.dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.getSelection()?.removeAllRanges();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    const onMove = (ev: MouseEvent) => {
+      if (!tplDragRef.current.dragging) return;
+      if (ev.buttons === 0) { cleanup(); return; }
+      const { startX, startRatio, containerW: cW } = tplDragRef.current;
+      const delta = ev.clientX - startX; // drag right = bigger editor = smaller preview
+      const newRatio = Math.min(0.85, Math.max(0.15, startRatio - delta / cW));
+      setTplSplitRatio(newRatio);
+    };
+    const onUp = () => cleanup();
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   // ── Global settings state (for showing inherited content) ───
   const [globalLogoData,       setGlobalLogoData]       = useState<string | null>(null);
   const [globalSignature,      setGlobalSignature]      = useState('');
@@ -1755,7 +1792,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     <>
       <CsBackdrop $open={isOpen} onClick={handleCsClose} />
       <CsModalWrap $open={isOpen} onClick={handleCsClose}>
-        <CsModal theme={theme} $open={isOpen} onClick={e => e.stopPropagation()}>
+        <CsModal theme={theme} $open={isOpen} $wide={activeTab === 'template' && templateHtmlEmail && templateEnabled} onClick={e => e.stopPropagation()}>
 
           {/* Header */}
           <CsHead theme={theme}>
@@ -2101,56 +2138,115 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                       />
                     </div>
 
-                    {/* Subject */}
-                    <SFG>
-                      <SLabel theme={theme}>Subject</SLabel>
-                      <SInput
-                        theme={theme}
-                        placeholder="A quick idea for {{company_name}}"
-                        value={templateSubject}
-                        onChange={e => { setTemplateSubject(e.target.value); markDirty('template'); }}
-                      />
-                    </SFG>
+                    {/* Side-by-side layout when HTML is on, stacked otherwise */}
+                    <div ref={tplContainerRef} style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', width: '100%' }}>
 
-                    {/* Body */}
-                    <SFG style={{ marginBottom: 0 }}>
-                      <SLabel theme={theme}>Body</SLabel>
-                      <STextarea
-                        theme={theme}
-                        rows={10}
-                        placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
-                        value={templateBody}
-                        onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
-                        style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
-                      />
-                    </SFG>
+                      {/* Editor column */}
+                      <div style={{ flex: `0 0 calc(${templateHtmlEmail ? (1 - tplSplitRatio) * 100 : 100}% - ${templateHtmlEmail ? '3px' : '0px'})`, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden' }}>
+                        {/* Subject */}
+                        <SFG style={{ marginBottom: 0 }}>
+                          <SLabel theme={theme}>Subject</SLabel>
+                          <SInput
+                            theme={theme}
+                            placeholder="A quick idea for {{company_name}}"
+                            value={templateSubject}
+                            onChange={e => { setTemplateSubject(e.target.value); markDirty('template'); }}
+                          />
+                        </SFG>
 
-                    {/* HTML Template toggle */}
-                    <div
-                      onClick={() => { setTemplateHtmlEmail(v => !v); markDirty('template'); }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none', marginTop: '0.75rem' }}
-                    >
-                      <div style={{
-                        width: 36, height: 20, borderRadius: 999, flexShrink: 0,
-                        background: templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300],
-                        position: 'relative', transition: 'background 0.2s',
-                        border: `1px solid ${templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
-                      }}>
-                        <div style={{
-                          position: 'absolute', top: 2, left: templateHtmlEmail ? 17 : 2,
-                          width: 14, height: 14, borderRadius: '50%',
-                          background: '#fff', transition: 'left 0.2s',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                        }} />
+                        {/* Body */}
+                        <SFG style={{ marginBottom: 0 }}>
+                          <SLabel theme={theme}>Body</SLabel>
+                          <STextarea
+                            theme={theme}
+                            rows={10}
+                            placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
+                            value={templateBody}
+                            onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
+                            style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
+                          />
+                        </SFG>
+
+                        {/* HTML Template toggle */}
+                        <div
+                          onClick={() => { setTemplateHtmlEmail(v => !v); markDirty('template'); }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          <div style={{
+                            width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                            background: templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300],
+                            position: 'relative', transition: 'background 0.2s',
+                            border: `1px solid ${templateHtmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
+                          }}>
+                            <div style={{
+                              position: 'absolute', top: 2, left: templateHtmlEmail ? 17 : 2,
+                              width: 14, height: 14, borderRadius: '50%',
+                              background: '#fff', transition: 'left 0.2s',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            }} />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>HTML Template</span>
+                        </div>
+
+                        <SSaveRow style={{ marginTop: '0.25rem' }}>
+                          <SBtn theme={theme} onClick={saveTemplate} disabled={templateSaving || templateGenerating}>
+                            {templateSaving ? 'Saving…' : 'Save Template'}
+                          </SBtn>
+                        </SSaveRow>
                       </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>HTML Template</span>
-                    </div>
 
-                    <SSaveRow>
-                      <SBtn theme={theme} onClick={saveTemplate} disabled={templateSaving || templateGenerating}>
-                        {templateSaving ? 'Saving…' : 'Save Template'}
-                      </SBtn>
-                    </SSaveRow>
+                      {/* Drag divider + live preview — only when HTML Template is on */}
+                      {templateHtmlEmail && (
+                        <>
+                          {/* Drag handle */}
+                          <div
+                            onMouseDown={onTplDividerMouseDown}
+                            style={{
+                              width: 6, flexShrink: 0, cursor: 'col-resize', alignSelf: 'stretch',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              margin: '0 0.5rem',
+                            }}
+                          >
+                            <div style={{
+                              width: 2, height: '40px', borderRadius: 2,
+                              background: theme.colors.base[300],
+                            }} />
+                          </div>
+                          {/* Preview column */}
+                          <div style={{ flex: `0 0 calc(${tplSplitRatio * 100}% - 3px)`, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <SLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                              </svg>
+                              Live Preview
+                            </SLabel>
+                            <div style={{
+                              border: `1px solid ${theme.colors.base[300]}`,
+                              borderRadius: theme.radius.field,
+                              overflow: 'hidden', background: '#fff', minHeight: 340,
+                            }}>
+                              {templateBody.trim() ? (
+                                <iframe
+                                  key={templateBody}
+                                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${templateBody}</body></html>`}
+                                  style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 340 }}
+                                  sandbox="allow-same-origin"
+                                  title="Template HTML Preview"
+                                />
+                              ) : (
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  minHeight: 340, fontSize: '0.8rem', opacity: 0.35, fontStyle: 'italic',
+                                }}>
+                                  Preview will appear here…
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </>
                 )}
               </CsTabPanel>
@@ -3282,8 +3378,8 @@ const EmailModalWrap = styled.div<{ $open: boolean }>`
   z-index: 9999; padding: 1.5rem;
   pointer-events: ${p => p.$open ? 'all' : 'none'};
 `;
-const EmailModalBox = styled.div<{ theme: any; $open: boolean }>`
-  width: 100%; max-width: 720px;
+const EmailModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
+  width: 100%; max-width: ${p => p.$wide ? '1100px' : '720px'};
   max-height: calc(100vh - 3rem);
   background: ${p => p.theme.colors.base[200]};
   border: 1px solid ${p => p.theme.colors.base[300]};
@@ -3292,7 +3388,7 @@ const EmailModalBox = styled.div<{ theme: any; $open: boolean }>`
   display: flex; flex-direction: column; overflow: hidden;
   opacity: ${p => p.$open ? 1 : 0};
   transform: ${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(16px)'};
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease, max-width 0.25s ease;
 `;
 const EmailModalHead = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: space-between;
@@ -3307,6 +3403,7 @@ const EmailModalTitle = styled.h2`
 const EmailModalBody = styled.div`
   flex: 1; overflow-y: auto; padding: 1.5rem;
   display: flex; flex-direction: column; gap: 1rem;
+  &[style*="overflow: hidden"] { overflow: hidden !important; }
 `;
 const EmailModalFoot = styled.div<{ theme: any }>`
   padding: 1.25rem 1.5rem;
@@ -3563,6 +3660,42 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [acting, setActing]         = useState<string | null>(null);
   const [htmlEmail, setHtmlEmail]   = useState(false);
   const htmlEmailRef = useRef(false);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const dragStateRef = useRef<{ dragging: boolean; startX: number; startRatio: number; containerW: number }>({ dragging: false, startX: 0, startRatio: 0.5, containerW: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Reset to 50/50 whenever HTML email is toggled
+  useEffect(() => {
+    if (!htmlEmail) setSplitRatio(0.5);
+  }, [htmlEmail]);
+
+  const onDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const containerW = containerRef.current?.offsetWidth ?? 800;
+    dragStateRef.current = { dragging: true, startX: e.clientX, startRatio: splitRatio, containerW };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const cleanup = () => {
+      dragStateRef.current.dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.getSelection()?.removeAllRanges();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragStateRef.current.dragging) return;
+      if (ev.buttons === 0) { cleanup(); return; }
+      const { startX, startRatio, containerW: cW } = dragStateRef.current;
+      const delta = ev.clientX - startX;
+      const newRatio = Math.min(0.85, Math.max(0.15, startRatio - delta / cW));
+      setSplitRatio(newRatio);
+    };
+    const onUp = () => cleanup();
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const [showSched, setShowSched]   = useState(false);
   const [schedTime, setSchedTime]   = useState('');
   const schedInputRef = useRef<HTMLInputElement>(null);
@@ -3928,7 +4061,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
     <>
       <EmailModalBackdrop $open={isOpen} onClick={handleClose} />
       <EmailModalWrap $open={isOpen} onClick={handleClose}>
-        <EmailModalBox theme={theme} $open={isOpen} onClick={e => e.stopPropagation()}>
+        <EmailModalBox theme={theme} $open={isOpen} $wide={htmlEmail && activeTab === 'email'} onClick={e => e.stopPropagation()}>
 
           {/* Header */}
           <EmailModalHead theme={theme}>
@@ -3990,7 +4123,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
           )}
 
           {/* Body */}
-          <EmailModalBody style={{ gap: (activeTab === 'attachments' || activeTab === 'branding') ? 0 : '1rem' }}>
+          <EmailModalBody style={{ gap: 0, overflow: activeTab === 'email' && htmlEmail ? 'hidden' : 'auto' }}>
 
             {phase === 'loading' && (
               <ELoadingBox>
@@ -4013,55 +4146,116 @@ const EmailModal: React.FC<EmailModalProps> = ({
             )}
 
             {phase === 'ready' && activeTab === 'email' && (
-              <>
-                {/* Subject */}
-                <div>
-                  <EFieldLabel theme={theme}>Subject</EFieldLabel>
-                  <ESubjectInput theme={theme} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Email subject…" />
-                </div>
+              <div ref={containerRef} style={{ display: 'flex', minHeight: 0, position: 'relative', width: '100%' }}>
 
-                {/* Body */}
-                <div>
-                  <EFieldLabel theme={theme}>Body</EFieldLabel>
-                  <EBodyTextarea theme={theme} value={body} onChange={e => setBody(e.target.value)} placeholder="Email body…" />
-                </div>
-
-                {/* HTML Email toggle */}
-                <div
-                  onClick={() => {
-                    const next = !htmlEmail;
-                    setHtmlEmail(next);
-                    htmlEmailRef.current = next;
-                    if (email) {
-                      apiFetch(`${apiBase}/email/bulk-update/`, {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ updates: [{ email_id: email.id, html_email: next }] }),
-                      }).catch(() => {/* silent */});
-                    }
-                  }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '0.6rem',
-                    cursor: 'pointer', userSelect: 'none', width: 'fit-content',
-                  }}
-                >
-                  <div style={{
-                    width: 36, height: 20, borderRadius: 999, flexShrink: 0,
-                    background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300],
-                    position: 'relative', transition: 'background 0.2s',
-                    border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
-                  }}>
-                    <div style={{
-                      position: 'absolute', top: 2, left: htmlEmail ? 17 : 2,
-                      width: 14, height: 14, borderRadius: '50%',
-                      background: '#fff', transition: 'left 0.2s',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }} />
+                {/* ── Left column: editor ── */}
+                <div style={{ flex: `0 0 calc(${htmlEmail ? (1 - splitRatio) * 100 : 100}% - ${htmlEmail ? '3px' : '0px'})`, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0, overflow: 'hidden', padding: '1.5rem' }}>
+                  {/* Subject */}
+                  <div>
+                    <EFieldLabel theme={theme}>Subject</EFieldLabel>
+                    <ESubjectInput theme={theme} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Email subject…" />
                   </div>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>
-                    HTML Email
-                  </span>
+
+                  {/* Body */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <EFieldLabel theme={theme}>Body</EFieldLabel>
+                    <EBodyTextarea theme={theme} value={body} onChange={e => setBody(e.target.value)} placeholder="Email body…" style={{ flex: 1, resize: 'none' }} />
+                  </div>
+
+                  {/* HTML Email toggle */}
+                  <div
+                    onClick={() => {
+                      const next = !htmlEmail;
+                      setHtmlEmail(next);
+                      htmlEmailRef.current = next;
+                      if (email) {
+                        apiFetch(`${apiBase}/email/bulk-update/`, {
+                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ updates: [{ email_id: email.id, html_email: next }] }),
+                        }).catch(() => {/* silent */});
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.6rem',
+                      cursor: 'pointer', userSelect: 'none', width: 'fit-content',
+                    }}
+                  >
+                    <div style={{
+                      width: 36, height: 20, borderRadius: 999, flexShrink: 0,
+                      background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300],
+                      position: 'relative', transition: 'background 0.2s',
+                      border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}`,
+                    }}>
+                      <div style={{
+                        position: 'absolute', top: 2, left: htmlEmail ? 17 : 2,
+                        width: 14, height: 14, borderRadius: '50%',
+                        background: '#fff', transition: 'left 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>
+                      HTML Email
+                    </span>
+                  </div>
                 </div>
-              </>
+
+                {/* ── Drag divider + right preview (only when HTML mode on) ── */}
+                {htmlEmail && (
+                  <>
+                    {/* Drag handle */}
+                    <div
+                      onMouseDown={onDividerMouseDown}
+                      style={{
+                        width: 6, flexShrink: 0, cursor: 'col-resize', position: 'relative',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent',
+                      }}
+                    >
+                      <div style={{
+                        width: 2, height: '40px', borderRadius: 2,
+                        background: theme.colors.base[300],
+                        transition: 'background 0.15s',
+                      }} />
+                    </div>
+                    {/* Preview column */}
+                    <div style={{
+                      flex: `0 0 calc(${splitRatio * 100}% - 3px)`, minWidth: 0, display: 'flex', flexDirection: 'column',
+                      gap: '0.4rem', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden',
+                    }}>
+                      <EFieldLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+                          <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                        </svg>
+                        Live Preview
+                      </EFieldLabel>
+                      <div style={{
+                        flex: 1, border: `1px solid ${theme.colors.base[300]}`,
+                        borderRadius: theme.radius.field, overflow: 'hidden',
+                        background: '#fff', minHeight: 320,
+                      }}>
+                        {body.trim() ? (
+                          <iframe
+                            key={body}
+                            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${body}</body></html>`}
+                            style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 320 }}
+                            sandbox="allow-same-origin"
+                            title="Email HTML Preview"
+                          />
+                        ) : (
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            height: '100%', minHeight: 320,
+                            fontSize: '0.8rem', opacity: 0.35, fontStyle: 'italic',
+                          }}>
+                            Preview will appear here…
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {/* ── ATTACHMENTS TAB — mirrors settings modal exactly ── */}

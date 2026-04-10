@@ -79,8 +79,9 @@ const Overlay = styled.div<{ $open: boolean }>`
   opacity:${p => p.$open ? 1 : 0};pointer-events:${p => p.$open ? 'all' : 'none'};
   transition:opacity 0.22s ease;
 `;
-const ModalBox = styled.div<{ theme: any; $open: boolean }>`
-  width:100%;max-width:1000px;height:calc(100vh - 3rem);
+const ModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
+  width:100%;max-width:${p => p.$wide ? '1300px' : '1000px'};height:calc(100vh - 3rem);
+  transition:max-width 0.25s ease;
   background:${p => p.theme.colors.base[200]};
   border:1px solid ${p => p.theme.colors.base[300]};
   border-radius:16px;box-shadow:0 32px 80px rgba(0,0,0,0.45);
@@ -654,6 +655,51 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // per-company state
   const [entries,    setEntries]    = useState<BulkEmailEntry[]>([]);
   const [activeIdx,  setActiveIdx]  = useState(0);
+
+  // preview resize
+  const [previewWidth, setPreviewWidth] = React.useState<number | null>(null);
+  const dragRef = React.useRef<{ dragging: boolean; startX: number; startWidth: number }>({ dragging: false, startX: 0, startWidth: 0 });
+  const previewContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Reset to half width whenever the active entry's htmlEmail state changes
+  const activeHtmlEmail = entries[activeIdx]?.htmlEmail;
+  React.useEffect(() => {
+    if (activeHtmlEmail && previewContainerRef.current) {
+      const half = Math.floor((previewContainerRef.current.offsetWidth - 6) / 2);
+      setPreviewWidth(half);
+      dragRef.current.startWidth = half;
+    } else {
+      setPreviewWidth(null);
+    }
+  }, [activeHtmlEmail]);
+
+  const onDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const currentWidth = previewWidth ?? 280;
+    dragRef.current = { dragging: true, startX: e.clientX, startWidth: currentWidth };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const cleanup = () => {
+      dragRef.current.dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.getSelection()?.removeAllRanges();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current.dragging) return;
+      if (ev.buttons === 0) { cleanup(); return; }
+      const delta = dragRef.current.startX - ev.clientX;
+      const containerW = previewContainerRef.current?.offsetWidth ?? 600;
+      const minW = 160;
+      const maxW = containerW - 200;
+      setPreviewWidth(Math.min(maxW, Math.max(minW, dragRef.current.startWidth + delta)));
+    };
+    const onUp = () => cleanup();
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   // footer state
   const [bulkActing, setBulkActing] = useState<'send'|'schedule'|'draft'|'gen-p'|'gen-t'|'gen-h'|null>(null);
@@ -1329,7 +1375,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         </ModalBox>
       ) : (
       <>
-      <ModalBox theme={theme} $open={isOpen} onClick={e=>e.stopPropagation()}>
+      <ModalBox theme={theme} $open={isOpen} $wide={!!(entry?.htmlEmail && topTab === 'companies')} onClick={e=>e.stopPropagation()}>
 
         {/* ── Generation overlay ── */}
         {isGenning && (
@@ -1453,18 +1499,58 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   )}
 
                   {entry.phase==='ready'&&entry.activeTab==='email'&&(
-                    <Scroll>
-                      <div><FieldLbl theme={theme}>Subject</FieldLbl><SubjectIn theme={theme} value={entry.subject} onChange={e=>{upd(activeIdx,{subject:e.target.value});markDirty();}} placeholder="Email subject…"/></div>
-                      <div><FieldLbl theme={theme}>Body</FieldLbl><BodyTA theme={theme} value={entry.body} onChange={e=>{upd(activeIdx,{body:e.target.value});markDirty();}} placeholder="Email body…"/></div>
-                      {/* HTML Email toggle */}
-                      <div onClick={()=>saveHtmlEmailFlag(activeIdx,!entry.htmlEmail)}
-                        style={{display:'inline-flex',alignItems:'center',gap:'0.6rem',cursor:'pointer',userSelect:'none' as const,width:'fit-content'}}>
-                        <div style={{width:36,height:20,borderRadius:999,flexShrink:0,background:entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300],position:'relative',transition:'background 0.2s',border:`1px solid ${entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300]}`}}>
-                          <div style={{position:'absolute',top:2,left:entry.htmlEmail?17:2,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                    <div ref={previewContainerRef} style={{flex:1,minHeight:0,display:'flex',overflow:'hidden'}}>
+                      {/* Editor column */}
+                      <Scroll style={{flex:1,minWidth:0}}>
+                        <div><FieldLbl theme={theme}>Subject</FieldLbl><SubjectIn theme={theme} value={entry.subject} onChange={e=>{upd(activeIdx,{subject:e.target.value});markDirty();}} placeholder="Email subject…"/></div>
+                        <div style={{flex:1,display:'flex',flexDirection:'column'}}><FieldLbl theme={theme}>Body</FieldLbl><BodyTA theme={theme} value={entry.body} onChange={e=>{upd(activeIdx,{body:e.target.value});markDirty();}} placeholder="Email body…" style={{resize:'none',flex:1}}/></div>
+                        {/* HTML Email toggle */}
+                        <div onClick={()=>saveHtmlEmailFlag(activeIdx,!entry.htmlEmail)}
+                          style={{display:'inline-flex',alignItems:'center',gap:'0.6rem',cursor:'pointer',userSelect:'none' as const,width:'fit-content'}}>
+                          <div style={{width:36,height:20,borderRadius:999,flexShrink:0,background:entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300],position:'relative',transition:'background 0.2s',border:`1px solid ${entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300]}`}}>
+                            <div style={{position:'absolute',top:2,left:entry.htmlEmail?17:2,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                          </div>
+                          <span style={{fontSize:'0.8rem',fontWeight:600,opacity:0.75}}>HTML Email</span>
                         </div>
-                        <span style={{fontSize:'0.8rem',fontWeight:600,opacity:0.75}}>HTML Email</span>
-                      </div>
-                    </Scroll>
+                      </Scroll>
+                      {/* Drag divider + live preview — only when HTML Email is on */}
+                      {entry.htmlEmail && (
+                        <>
+                          {/* Drag handle */}
+                          <div
+                            onMouseDown={onDividerMouseDown}
+                            style={{width:6,flexShrink:0,cursor:'col-resize',display:'flex',alignItems:'center',justifyContent:'center',alignSelf:'stretch'}}
+                          >
+                            <div style={{width:2,height:'40px',borderRadius:2,background:theme.colors.base[300]}}/>
+                          </div>
+                          {/* Preview column */}
+                          <div style={{width:previewWidth ?? 280,flexShrink:0,display:'flex',flexDirection:'column',padding:'1.5rem 1.25rem 1.5rem 0.75rem',overflow:'hidden'}}>
+                            <FieldLbl theme={theme} style={{display:'flex',alignItems:'center',gap:'0.35rem',marginBottom:'0.5rem'}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                              </svg>
+                              Live Preview
+                            </FieldLbl>
+                            <div style={{flex:1,border:`1px solid ${theme.colors.base[300]}`,borderRadius:theme.radius.field,overflow:'hidden',background:'#fff',minHeight:200}}>
+                              {entry.body.trim() ? (
+                                <iframe
+                                  key={entry.body}
+                                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${entry.body}</body></html>`}
+                                  style={{width:'100%',height:'100%',border:'none',display:'block',minHeight:200}}
+                                  sandbox="allow-same-origin"
+                                  title="Email HTML Preview"
+                                />
+                              ) : (
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',minHeight:200,fontSize:'0.75rem',opacity:0.35,fontStyle:'italic'}}>
+                                  Preview will appear here…
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
 
                   {/* ATTACHMENTS TAB */}
