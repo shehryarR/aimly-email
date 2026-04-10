@@ -1527,7 +1527,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         apiBase={API_BASE}
         initialTab="manual"
         onClose={() => setAddModalOpen(false)}
-        onSuccess={(active: number) => { setCompanyAdditionActive(active); if (active !== 0) startPollingAdditionStatus(); }}
+        onSuccess={(active: number) => { setCompanyAdditionActive(active); if (active !== 0) startPollingAdditionStatus(); else setRefreshTrigger(p => p + 1); }}
       />
 
       {/* Individual — assign company to category */}

@@ -375,20 +375,24 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
     } finally { setLoading(false); }
   };
 
-  // ── Submit CSV — close immediately, fire in background ──────
-  const submitCsv = () => {
+  // ── Submit CSV — close immediately, show spinner, refetch on done ──
+  const submitCsv = async () => {
     if (!csvFile) { setResult({ type: 'error', text: 'Select a CSV file first' }); return; }
-    resetAll(); onSuccess(0); onClose();
+    const fileSnapshot = csvFile;
+    resetAll(); onSuccess(1); onClose();
     const formData = new FormData();
-    formData.append('file', csvFile);
-    apiFetch(`${apiBase}/company/`, { method: 'POST', body: formData })
-      .catch(() => { /* silent — polling will stop naturally */ });
+    formData.append('file', fileSnapshot);
+    try {
+      await apiFetch(`${apiBase}/company/`, { method: 'POST', body: formData });
+    } catch { /* silent */ } finally {
+      onSuccess(0); // stops spinner + triggers setRefreshTrigger in parent
+    }
   };
 
-  // ── Submit AI — close immediately, fire in background ───────
+  // ── Submit AI — close immediately, show spinner, polling handles refetch ─
   const submitAi = () => {
     if (!aiQuery.trim()) { setResult({ type: 'error', text: 'Enter a search query' }); return; }
-    resetAll(); onSuccess(0); onClose();
+    resetAll(); onSuccess(1); onClose();
     const formData = new FormData();
     formData.append('ai_search', JSON.stringify({
       query: aiQuery.trim(),
