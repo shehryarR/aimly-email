@@ -16,18 +16,26 @@ BULK DELETE:
 - Handles file removal + DB deletion for all IDs in one transaction
 - Use this for both single and multi-attachment deletion
 
+BULK DOWNLOAD:
+- GET /attachments/download/?ids=1,2,3 replaces the old single GET /attachment/{id}/
+- Single file  → returns the file directly with its original filename
+- Multiple files → returns a zip archive named "attachments.zip"
+- Use for both single (ids=x) and multi-file downloads
+
 LIST RESPONSE:
-- GET /attachments/ now returns linked_global and linked_campaigns per attachment
+- GET /attachments/ returns linked_global and linked_campaigns per attachment
 - No separate per-attachment link-resolution calls needed on the frontend
 """
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pathlib import Path
 from pydantic import BaseModel
 from typing import Optional, List
 import os
+import io
 import shutil
+import zipfile
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 
@@ -49,7 +57,7 @@ def normalize_text_field(value: str | None) -> str | None:
 
 
 # ==================================================================================
-# POST /attachment - Upload a new attachment
+# POST /attachment/ - Upload a new attachment
 # ==================================================================================
 @attachment_router.post("/attachment/")
 async def upload_attachment(
@@ -108,7 +116,7 @@ async def upload_attachment(
 
 
 # ==================================================================================
-# DELETE /attachments/bulk - Bulk delete attachments (replaces single DELETE)
+# DELETE /attachments/bulk/ - Bulk delete attachments
 # Body: { "ids": [1, 2, 3] }
 # Use for both single (ids=[x]) and multi deletion.
 # ==================================================================================
@@ -156,7 +164,6 @@ async def bulk_delete_attachments(
                     detail=f"Not authorised to delete attachment IDs: {forbidden}"
                 )
 
-            # Delete files from disk
             for att_id in ids_to_delete:
                 original_filename = rows[att_id]["name"]
                 file_extension = Path(original_filename).suffix.lower()
@@ -166,7 +173,6 @@ async def bulk_delete_attachments(
                     os.remove(file_path)
                 deleted.append(att_id)
 
-            # Delete DB rows in one statement
             if ids_to_delete:
                 del_placeholders = ','.join(['%s'] * len(ids_to_delete))
                 cursor.execute(
@@ -188,90 +194,112 @@ async def bulk_delete_attachments(
 
 
 # ==================================================================================
-# GET /attachment/{attachment_id} - Download attachment file
+# GET /attachments/download/?ids=1,2,3 - Bulk download attachments
+#
+# Replaces the old single GET /attachment/{id}/ endpoint.
+# Single file  → streams the file directly with its original filename.
+# Multiple files → streams a zip archive named "attachments.zip".
+# Use for both single (ids=x) and multi-file downloads.
 # ==================================================================================
-@attachment_router.get("/attachment/{attachment_id}/")
-async def download_attachment(
-    attachment_id: int,
+@attachment_router.get("/attachments/download/")
+async def bulk_download_attachments(
+    ids: str = Query(..., description="Comma-separated attachment IDs to download"),
     current_user: dict = Depends(get_current_user)
 ):
     user_id = current_user["user_id"]
 
     try:
+        id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ids must be comma-separated integers")
+
+    if not id_list:
+        raise HTTPException(status_code=400, detail="ids must not be empty")
+
+    try:
         with get_connection() as conn:
             cursor = conn.cursor()
+            placeholders = ','.join(['%s'] * len(id_list))
             cursor.execute(
-                "SELECT name, user_id FROM attachments WHERE id = %s",
-                (attachment_id,)
+                f"SELECT id, name, user_id FROM attachments WHERE id IN ({placeholders})",
+                id_list
             )
-            result = cursor.fetchone()
+            rows = {row["id"]: row for row in cursor.fetchall()}
 
-            if not result:
-                raise HTTPException(status_code=404, detail="Attachment not found")
-            if result["user_id"] != user_id:
-                raise HTTPException(status_code=403, detail="Not authorised to access this attachment")
+        # Ownership + existence checks
+        for att_id in id_list:
+            if att_id not in rows:
+                raise HTTPException(status_code=404, detail=f"Attachment {att_id} not found")
+            if rows[att_id]["user_id"] != user_id:
+                raise HTTPException(status_code=403, detail=f"Not authorised to download attachment {att_id}")
 
-            original_filename = result["name"]
+        # Resolve file paths
+        files: list[tuple[str, Path]] = []
+        for att_id in id_list:
+            original_filename = rows[att_id]["name"]
             file_extension = Path(original_filename).suffix.lower()
-            saved_filename = f"{attachment_id}{file_extension}"
-            file_path = ATTACHMENT_UPLOAD_DIR / saved_filename
-
+            file_path = ATTACHMENT_UPLOAD_DIR / f"{att_id}{file_extension}"
             if not file_path.exists():
-                raise HTTPException(status_code=404, detail="File not found on disk")
+                raise HTTPException(status_code=404, detail=f"File '{original_filename}' not found on disk")
+            files.append((original_filename, file_path))
 
-        return FileResponse(
-            path=file_path,
-            filename=original_filename,
-            media_type="application/octet-stream"
+        # ── Single file → return directly ────────────────────────────────────
+        if len(files) == 1:
+            display_name, file_path = files[0]
+            return FileResponse(
+                path=file_path,
+                filename=display_name,
+                media_type="application/octet-stream"
+            )
+
+        # ── Multiple files → zip in memory and stream ─────────────────────────
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            seen_names: dict[str, int] = {}
+            for display_name, file_path in files:
+                # Deduplicate filenames inside the zip
+                if display_name in seen_names:
+                    seen_names[display_name] += 1
+                    stem = Path(display_name).stem
+                    ext  = Path(display_name).suffix
+                    arc_name = f"{stem} ({seen_names[display_name]}){ext}"
+                else:
+                    seen_names[display_name] = 0
+                    arc_name = display_name
+                zf.write(file_path, arcname=arc_name)
+
+        zip_buffer.seek(0)
+
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=attachments.zip"}
         )
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading attachments: {str(e)}")
 
 
 # ==================================================================================
-# GET /attachments - List attachments (paginated + search + sort + filter)
-#
-# Now returns linked_global and linked_campaigns per attachment directly.
-# The frontend no longer needs to make per-attachment link resolution calls.
+# GET /attachments/ - List attachments (paginated + search + sort + filter)
 # ==================================================================================
 @attachment_router.get("/attachments/")
 async def list_attachments(
     current_user: dict = Depends(get_current_user),
-    page:       int           = Query(1,   ge=1,        description="Page number (1-based)"),
-    page_size:  int           = Query(20,  ge=1,        description="Items per page"),
-    search:     Optional[str] = Query(None,             description="Search by filename (case-insensitive)"),
-    sort_by:    Optional[str] = Query(None,             description="Sort field: name | size | campaigns"),
-    sort_order: Optional[str] = Query("asc",            description="Sort direction: asc | desc"),
-    filter_global:    Optional[bool] = Query(None,      description="Filter to only globally-linked attachments"),
-    filter_campaigns: Optional[str]  = Query(None,      description="Comma-separated campaign IDs to filter by"),
-    filter_mode:      Optional[str]  = Query("any",     description="Campaign filter mode: any (OR) | all (AND)"),
+    page:       int           = Query(1,   ge=1),
+    page_size:  int           = Query(20,  ge=1),
+    search:     Optional[str] = Query(None),
+    sort_by:    Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("asc"),
+    filter_global:    Optional[bool] = Query(None),
+    filter_campaigns: Optional[str]  = Query(None),
+    filter_mode:      Optional[str]  = Query("any"),
 ):
-    """
-    List attachments with pagination, search, server-side sorting, and server-side filtering.
-
-    Each attachment in the response includes:
-    - linked_global: bool  — whether it is attached to global settings
-    - linked_campaigns: [{ id, name }]  — campaigns it is attached to (via campaign_preferences)
-
-    Sorting:
-    - sort_by=name      → alphabetical by filename
-    - sort_by=size      → by file size (computed from disk)
-    - sort_by=campaigns → by number of linked campaigns
-
-    Filtering:
-    - filter_global=true              → only attachments linked to global settings
-    - filter_campaigns=1,2,3          → attachments linked to ANY or ALL specified campaigns
-    - filter_mode=any                 → OR logic (default)
-    - filter_mode=all                 → AND logic
-
-    Both filters can be combined (AND logic with global).
-    """
     user_id = current_user["user_id"]
     offset  = (page - 1) * page_size
 
-    # Parse campaign filter IDs
     campaign_filter_ids: list[int] = []
     if filter_campaigns and filter_campaigns.strip():
         try:
@@ -279,7 +307,6 @@ async def list_attachments(
         except ValueError:
             raise HTTPException(status_code=400, detail="filter_campaigns must be comma-separated integers")
 
-    # Validate sort params
     valid_sort_fields = {"name", "size", "campaigns"}
     if sort_by and sort_by not in valid_sort_fields:
         sort_by = None
@@ -289,73 +316,57 @@ async def list_attachments(
         with get_connection() as conn:
             cursor = conn.cursor()
 
-            # ── Build base WHERE ──────────────────────────────────────────────────
-            base_where = "a.user_id = %s"
-            base_params: list = [user_id]
-
+            search_condition = ""
+            search_params: list = [user_id]
             if search and search.strip():
-                base_where += " AND a.name LIKE %s"
-                base_params.append(f"%{search.strip()}%")
+                search_condition = "AND a.name LIKE %s"
+                search_params.append(f"%{search.strip()}%")
 
-            # ── Step 1: Fetch all matching rows with link counts + link details ──
-            # linked_global:    1 if this attachment is in global_settings_attachments
-            # linked_campaigns: comma-separated "campaign_id:campaign_name" pairs
-            # campaign_count:   used for sort_by=campaigns
-            full_query = f"""
+            cursor.execute(f"""
                 SELECT
                     a.id,
                     a.name,
                     a.created_at,
-                    (
-                        SELECT COUNT(*)
-                        FROM global_settings_attachments gsa
-                        JOIN global_settings gs ON gsa.global_settings_id = gs.id
-                        WHERE gsa.attachment_id = a.id AND gs.user_id = a.user_id
-                    ) AS global_count,
-                    (
-                        SELECT COUNT(DISTINCT cp.campaign_id)
-                        FROM campaign_preference_attachments cpa
-                        JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-                        JOIN campaigns c ON cp.campaign_id = c.id
-                        WHERE cpa.attachment_id = a.id AND c.user_id = a.user_id
-                    ) AS campaign_count,
-                    (
-                        SELECT GROUP_CONCAT(DISTINCT CONCAT(c.id, ':', c.name) SEPARATOR '||')
-                        FROM campaign_preference_attachments cpa
-                        JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-                        JOIN campaigns c ON cp.campaign_id = c.id
-                        WHERE cpa.attachment_id = a.id AND c.user_id = a.user_id
+                    COUNT(DISTINCT cpa.campaign_preference_id) AS campaign_count,
+                    COUNT(DISTINCT gsa.global_settings_id)     AS global_count,
+                    GROUP_CONCAT(
+                        DISTINCT CONCAT(cp.campaign_id, ':', c.name)
+                        ORDER BY c.name SEPARATOR '||'
                     ) AS linked_campaign_pairs
                 FROM attachments a
-                WHERE {base_where}
-            """
-            cursor.execute(full_query, base_params)
+                LEFT JOIN campaign_preference_attachments cpa ON cpa.attachment_id = a.id
+                LEFT JOIN campaign_preferences cp             ON cp.id = cpa.campaign_preference_id
+                LEFT JOIN campaigns c                         ON c.id  = cp.campaign_id
+                LEFT JOIN global_settings_attachments gsa     ON gsa.attachment_id = a.id
+                WHERE a.user_id = %s {search_condition}
+                GROUP BY a.id, a.name, a.created_at
+            """, search_params)
+
             all_rows = cursor.fetchall()
 
-            # ── Step 2: Apply filter_global and filter_campaigns in Python ────────
+            # ── Resolve filter sets ───────────────────────────────────────────
+            globally_linked_ids = None
+            if filter_global is not None:
+                cursor.execute("SELECT id FROM global_settings WHERE user_id = %s", (user_id,))
+                gs_row = cursor.fetchone()
+                if gs_row:
+                    cursor.execute(
+                        "SELECT attachment_id FROM global_settings_attachments WHERE global_settings_id = %s",
+                        (gs_row["id"],)
+                    )
+                    globally_linked_ids = {row["attachment_id"] for row in cursor.fetchall()}
+                else:
+                    globally_linked_ids = set()
 
-            # Fetch globally-linked attachment IDs once (only when filter needed)
-            if filter_global is True or filter_global is False:
-                cursor.execute("""
-                    SELECT DISTINCT gsa.attachment_id
-                    FROM global_settings_attachments gsa
-                    JOIN global_settings gs ON gsa.global_settings_id = gs.id
-                    WHERE gs.user_id = %s
-                """, (user_id,))
-                globally_linked_ids = {row["attachment_id"] for row in cursor.fetchall()}
-            else:
-                globally_linked_ids = None
-
-            # Fetch per-campaign linked attachment ID sets once (only when filter needed)
-            campaign_linked_sets: list[set[int]] = []
-            if campaign_filter_ids:
-                for camp_id in campaign_filter_ids:
-                    cursor.execute("""
-                        SELECT DISTINCT cpa.attachment_id
-                        FROM campaign_preference_attachments cpa
-                        JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
-                        WHERE cp.campaign_id = %s
-                    """, (camp_id,))
+            campaign_linked_sets: list[set] = []
+            for cid in campaign_filter_ids:
+                cursor.execute("SELECT id FROM campaign_preferences WHERE campaign_id = %s", (cid,))
+                pref_row = cursor.fetchone()
+                if pref_row:
+                    cursor.execute(
+                        "SELECT attachment_id FROM campaign_preference_attachments WHERE campaign_preference_id = %s",
+                        (pref_row["id"],)
+                    )
                     campaign_linked_sets.append({row["attachment_id"] for row in cursor.fetchall()})
 
             # Apply filters
@@ -374,7 +385,7 @@ async def list_attachments(
                     if filter_mode == "all":
                         if not all(att_id in cs for cs in campaign_linked_sets):
                             continue
-                    else:  # any (OR)
+                    else:
                         if not any(att_id in cs for cs in campaign_linked_sets):
                             continue
 
@@ -382,9 +393,8 @@ async def list_attachments(
 
             total = len(filtered_rows)
 
-            # ── Step 3: Sort ──────────────────────────────────────────────────────
+            # Sort
             reverse = sort_dir == "DESC"
-
             if sort_by == "name":
                 filtered_rows.sort(key=lambda r: r["name"].lower(), reverse=reverse)
             elif sort_by == "campaigns":
@@ -398,13 +408,10 @@ async def list_attachments(
             else:
                 filtered_rows.sort(key=lambda r: r["created_at"] or "", reverse=True)
 
-            # ── Step 4: Paginate ──────────────────────────────────────────────────
             page_rows = filtered_rows[offset: offset + page_size]
 
-            # ── Step 5: Build response with link data ─────────────────────────────
             attachments = []
             for row in page_rows:
-                # Parse linked_campaign_pairs: "id:name||id:name" → [{id, name}]
                 linked_campaigns = []
                 if row["linked_campaign_pairs"]:
                     for pair in row["linked_campaign_pairs"].split("||"):
@@ -441,7 +448,7 @@ async def list_attachments(
 
 
 # ==================================================================================
-# GET /attachment/{attachment_id}/info - Get attachment metadata
+# GET /attachment/{attachment_id}/info/ - Get attachment metadata (no file data)
 # ==================================================================================
 @attachment_router.get("/attachment/{attachment_id}/info/")
 async def get_attachment_info(
@@ -486,7 +493,7 @@ async def get_attachment_info(
 
 
 # ==================================================================================
-# PUT /attachment/{attachment_id} - Update attachment metadata (rename)
+# PUT /attachment/{attachment_id}/ - Rename attachment
 # ==================================================================================
 @attachment_router.put("/attachment/{attachment_id}/")
 async def update_attachment(

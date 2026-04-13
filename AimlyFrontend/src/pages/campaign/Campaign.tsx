@@ -3785,16 +3785,11 @@ const EmailModal: React.FC<EmailModalProps> = ({
     } catch { /* silent */ } finally { setInheritSaving(false); }
   };
 
-  // ── Load email-linked attachments (called after email is populated) ───────────
-  const loadEmailLinkedAttachments = async (emailId: number) => {
-    try {
-      const res = await apiFetch(`${apiBase}/email/${emailId}/attachments/`);
-      if (res.ok) {
-        const d = await res.json();
-        setLinkedEmailAttachIds(new Set((d.attachments ?? []).map((a: any) => a.id)));
-      }
-    } catch { /* silent */ }
-  };
+  // ── Load email-linked attachments — read from already-fetched primary data ────
+  // linked_attachment_ids comes from POST /email/campaign/{id}/primaries/ response.
+  // populateEmail() already calls setLinkedEmailAttachIds from d.linked_attachment_ids,
+  // so no separate fetch is needed here.
+  const loadEmailLinkedAttachments = (_emailId: number) => { /* noop — handled by populateEmail */ };
 
   // ── Primary email load / generate ────────────────────────────────────────────
   const loadPrimaryEmail = async () => {
@@ -3969,9 +3964,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
       const newId: number = uploadData.id;
       // Auto-attach to this email
       const newIds = Array.from(new Set([...Array.from(linkedEmailAttachIds), newId]));
-      const attachRes = await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+      const attachRes = await apiFetch(`${apiBase}/email/bulk-attachments/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newIds),
+        body: JSON.stringify({ updates: [{ email_id: email.id, attachment_ids: newIds }] }),
       });
       if (attachRes.ok) setLinkedEmailAttachIds(new Set(newIds));
       await loadAllAttachments();
@@ -3989,9 +3984,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
     next.has(id) ? next.delete(id) : next.add(id);
     setLinkedEmailAttachIds(next);
     try {
-      await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+      await apiFetch(`${apiBase}/email/bulk-attachments/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Array.from(next)),
+        body: JSON.stringify({ updates: [{ email_id: email.id, attachment_ids: Array.from(next) }] }),
       });
     } catch { /* silent */ }
   };
@@ -4000,9 +3995,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
     if (!email) return;
     setAttachSaving(true); setAttachMsg(null);
     try {
-      const res = await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+      const res = await apiFetch(`${apiBase}/email/bulk-attachments/`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Array.from(linkedEmailAttachIds)),
+        body: JSON.stringify({ updates: [{ email_id: email.id, attachment_ids: Array.from(linkedEmailAttachIds) }] }),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
       setAttachMsg({ type: 'success', text: 'Attachments saved' });
@@ -4438,9 +4433,9 @@ const EmailModal: React.FC<EmailModalProps> = ({
                             setLinkedEmailAttachIds(new Set());
                             if (email) {
                               try {
-                                await apiFetch(`${apiBase}/email/${email.id}/attachments/`, {
+                                await apiFetch(`${apiBase}/email/bulk-attachments/`, {
                                   method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify([]),
+                                  body: JSON.stringify({ updates: [{ email_id: email.id, attachment_ids: [] }] }),
                                 });
                               } catch { /* silent */ }
                             }

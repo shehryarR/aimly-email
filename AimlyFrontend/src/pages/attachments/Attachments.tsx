@@ -547,7 +547,7 @@ const Attachments: React.FC = () => {
     setRenaming(true);
 
     try {
-      const res = await apiFetch(`${API_BASE}/attachment/${renameModal.attachmentId}/?new_name=${encodeURIComponent(renameModal.newName.trim())}`, {
+      const res = await apiFetch(`${API_BASE}/attachment/${renameModal.attachmentId}?new_name=${encodeURIComponent(renameModal.newName.trim())}`, {
         method: 'PUT',
       });
 
@@ -631,9 +631,12 @@ const Attachments: React.FC = () => {
   };
 
   // ── Download ────────────────────────────────────────────────
+  // Single file: passes ids=x → backend returns file directly.
+  // Bulk: passes ids=1,2,3 → backend returns a zip archive.
+  // Both use GET /attachments/download/?ids=... (no single-file endpoint).
   const downloadAttachment = async (att: Attachment) => {
     try {
-      const res = await apiFetch(`${API_BASE}/attachment/${att.id}/`);
+      const res = await apiFetch(`${API_BASE}/attachments/download/?ids=${att.id}`);
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -650,45 +653,43 @@ const Attachments: React.FC = () => {
   };
 
   const bulkDownload = async () => {
-    let attsToDownload: { id: number; filename: string }[];
+    let ids: number[];
 
     if (selectAllPages) {
       try {
         const res = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=${totalAttachments}`);
         if (!res.ok) { showToast('error', 'Failed to fetch all attachments'); return; }
         const data = await res.json();
-        attsToDownload = (data.attachments ?? []).map((a: any) => ({ id: a.id, filename: a.filename }));
+        ids = (data.attachments ?? []).map((a: any) => a.id as number);
       } catch {
         showToast('error', 'Failed to fetch all attachments for download');
         return;
       }
     } else {
-      const ids = Array.from(selected);
-      attsToDownload = ids.map(id => {
-        const att = attachments.find(a => a.id === id);
-        return { id, filename: att?.filename ?? `file_${id}` };
-      });
+      ids = Array.from(selected);
     }
 
-    for (const att of attsToDownload) {
-      try {
-        const res = await apiFetch(`${API_BASE}/attachment/${att.id}/`);
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = att.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        await new Promise(r => setTimeout(r, 300));
-      } catch {
-        showToast('error', `Failed to download ${att.filename}`);
-      }
+    if (ids.length === 0) return;
+
+    try {
+      const res = await apiFetch(`${API_BASE}/attachments/download/?ids=${ids.join(',')}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Single file keeps its own name; multiple files get a zip name
+      a.download = ids.length === 1
+        ? (attachments.find(att => att.id === ids[0])?.filename ?? `file_${ids[0]}`)
+        : 'attachments.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('success', `${ids.length} file${ids.length > 1 ? 's' : ''} downloaded`);
+    } catch {
+      showToast('error', 'Failed to download files');
     }
-    showToast('success', `${attsToDownload.length} file${attsToDownload.length > 1 ? 's' : ''} downloaded`);
   };
 
   const toggleSelect = (id: number, e: React.MouseEvent) => {

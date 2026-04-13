@@ -53,6 +53,13 @@ const API_BASE     = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_U
 // ─── types ────────────────────────────────────────────────────────────────────
 type EmailStatus = 'sent' | 'draft' | 'scheduled' | 'failed';
 
+interface EmailAttachment {
+  id: number;
+  filename: string;
+  file_size: number;
+  created_at: string | null;
+}
+
 interface EmailRecord {
   id: number;
   email_subject: string;
@@ -68,9 +75,10 @@ interface EmailRecord {
   campaign_name: string;
   signature?: string;
   logo_data?: string | null;
-  // FIX: added missing field — backend returns this but it was absent from the type,
-  // which caused the modal to never receive it and therefore never render it.
   failed_reason?: string;
+  // Baked-in from GET /email/ — no separate fetch needed.
+  // To download, use GET /attachments/download/?ids=1,2,3
+  attachments: EmailAttachment[];
 }
 
 interface AttachOption {
@@ -337,6 +345,7 @@ interface EmailDetailModalProps {
   brandSaving: boolean;
   brandMsg: { type: 'success' | 'error'; text: string } | null;
   brandLogoInputRef: React.RefObject<HTMLInputElement | null>;
+  onDownloadAttachments: (ids: number[], filenames: string[]) => void;
   formatDT: (s?: string) => string;
   minDT: string;
   theme: any;
@@ -357,6 +366,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   isDragOver, onDragOver, onDragLeave, onDrop, onClearUploadFile, uploadInputRef,
   brandSignature, onBrandSignatureChange, brandLogoData, onBrandLogoFile,
   onClearBrandLogo, brandLogoUploading, onSaveBranding, brandSaving, brandMsg, brandLogoInputRef,
+  onDownloadAttachments,
   formatDT, minDT, theme, isDirty = false,
 }) => {
   const [confirmClose, setConfirmClose] = useState(false);
@@ -690,13 +700,31 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                       <div style={{ fontSize: '0.8rem' }}>This email was sent without any attachments.</div>
                     </div>
                   : <div>
-                      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', opacity: 0.45, marginBottom: '0.6rem' }}>{sentAtts.length} attachment{sentAtts.length !== 1 ? 's' : ''}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', opacity: 0.45 }}>{sentAtts.length} attachment{sentAtts.length !== 1 ? 's' : ''}</div>
+                        {sentAtts.length > 1 && (
+                          <button
+                            onClick={() => onDownloadAttachments(sentAtts.map(a => a.id), sentAtts.map(a => a.filename))}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.65rem', borderRadius: theme.radius.field, border: `1px solid ${theme.colors.base[300]}`, background: 'transparent', color: theme.colors.base.content, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500, opacity: 0.65 }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="12" height="12"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download all
+                          </button>
+                        )}
+                      </div>
                       <div style={{ border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, overflow: 'hidden' }}>
                         {sentAtts.map((att, i) => { const ext = getExt(att.filename); return (
                           <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.65rem 0.85rem', background: i % 2 === 0 ? theme.colors.base[100] : 'transparent', borderBottom: i < sentAtts.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 34, height: 20, padding: '0 5px', borderRadius: 4, fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, background: EXT_BG[ext] || '#64748b20', color: EXT_COLOR[ext] || '#64748b' }}>{ext || '?'}</span>
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8375rem', fontWeight: 500 }}>{att.filename}</span>
                             {att.file_size != null && <span style={{ fontSize: '0.75rem', opacity: 0.4, flexShrink: 0 }}>{(att.file_size / 1024).toFixed(0)} KB</span>}
+                            <button
+                              onClick={() => onDownloadAttachments([att.id], [att.filename])}
+                              title="Download"
+                              style={{ flexShrink: 0, padding: '3px 6px', borderRadius: 4, border: `1px solid ${theme.colors.base[300]}`, background: 'transparent', color: theme.colors.base.content, cursor: 'pointer', opacity: 0.55, display: 'flex', alignItems: 'center' }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </button>
                           </div>
                         );})}
                       </div>
@@ -1215,7 +1243,7 @@ const EmailHistory: React.FC = () => {
     setBrandSignature(email.signature || '');
     setBrandLogoData(email.logo_data || null);
     setModalOpen(true);
-    loadEmailAttachments(email.id);
+    loadEmailAttachments(email);
     snapSubject.current   = email.email_subject;
     snapContent.current   = email.email_content;
     snapRecipient.current = email.recipient_email;
@@ -1261,19 +1289,21 @@ const EmailHistory: React.FC = () => {
   }, [editSubject, editContent, editRecipient]);
 
   // ── attachments ───────────────────────────────────────────────────────────
-  const loadEmailAttachments = async (emailId: number) => {
+  const loadEmailAttachments = async (email: EmailRecord) => {
     setAttachLoading(true);
     try {
-      const [allRes, linkedRes] = await Promise.all([
-        apiFetch(`${API_BASE}/attachments/?page=1&page_size=200`),
-        apiFetch(`${API_BASE}/email/${emailId}/attachments/`),
-      ]);
-      if (allRes.ok)    { const d = await allRes.json();    setAllAttachments(d.attachments ?? []); }
-      if (linkedRes.ok) {
-        const d = await linkedRes.json();
-        const ids: number[] = (d.attachments ?? []).map((a: any) => a.id as number);
-        setLinkedAttachIds(new Set(ids));
-        snapAttachIds.current = JSON.stringify([...ids].sort((a, b) => a - b));
+      // Seed linkedAttachIds from the record already available — no extra fetch needed.
+      const ids = (email.attachments ?? []).map((a: EmailAttachment) => a.id);
+      setLinkedAttachIds(new Set(ids));
+      snapAttachIds.current = JSON.stringify([...ids].sort((a, b) => a - b));
+
+      if (email.status === 'draft' || email.status === 'scheduled') {
+        // Editable statuses need the full attachment library for the picker
+        const allRes = await apiFetch(`${API_BASE}/attachments/?page=1&page_size=200`);
+        if (allRes.ok) { const d = await allRes.json(); setAllAttachments(d.attachments ?? []); }
+      } else {
+        // Sent/failed: read-only view — use the baked-in list directly
+        setAllAttachments(email.attachments ?? []);
       }
     } catch { /* silent */ } finally { setAttachLoading(false); }
   };
@@ -1318,7 +1348,7 @@ const EmailHistory: React.FC = () => {
         body: JSON.stringify({ updates: [{ email_id: activeEmail.id, attachment_ids: newIds }] }),
       });
       if (attRes.ok) setLinkedAttachIds(new Set(newIds));
-      await loadEmailAttachments(activeEmail.id);
+      await loadEmailAttachments(activeEmail);
       setUploadFile(null); if (uploadInputRef.current) uploadInputRef.current.value = '';
       setUploadMsg({ type: 'success', text: `"${upData.filename}" uploaded and attached` });
     } catch (err) { setUploadMsg({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' }); }
@@ -1429,6 +1459,25 @@ const EmailHistory: React.FC = () => {
       } catch (e: any) { showToast('Delete Failed', (e as any).message, 'error'); }
       finally { setActionLoading(false); }
     }, { danger: true, confirmLabel: 'Delete' });
+  };
+
+  const downloadAttachments = async (ids: number[], filenames: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const res = await apiFetch(`${API_BASE}/attachments/download/?ids=${ids.join(',')}`);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = ids.length === 1 ? (filenames[0] ?? `file_${ids[0]}`) : 'attachments.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast('Download Failed', 'Could not download attachment(s)', 'error');
+    }
   };
 
   const handleBulkDelete = () => {
@@ -1554,6 +1603,7 @@ const EmailHistory: React.FC = () => {
         onClearBrandLogo={() => { setBrandLogoData(null); setBrandMsg(null); }}
         brandLogoUploading={brandLogoUploading} onSaveBranding={saveBranding}
         brandSaving={brandSaving} brandMsg={brandMsg} brandLogoInputRef={brandLogoInputRef}
+        onDownloadAttachments={downloadAttachments}
         formatDT={formatDT} minDT={minDT} theme={theme}
       />
 

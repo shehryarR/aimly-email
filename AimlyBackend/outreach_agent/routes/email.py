@@ -13,10 +13,17 @@ READING PRIMARY EMAIL (branding: signature + logo):
 
 UPDATING PRIMARY EMAIL:
   inherit_campaign_branding = 1 → signature and logo fields cannot be edited.
+
+GET /email/ ATTACHMENT DATA:
+  Each email record includes an `attachments` array with id, filename,
+  file_size, and created_at. No separate fetch needed on the frontend.
+  To download any attachment use GET /attachments/download/?ids=1,2,3
 """
 
+import os
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional, List
+from pathlib import Path
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 from .utils.email_helpers import (
@@ -28,6 +35,8 @@ from .utils.email_helpers import (
 )
 from pydantic import BaseModel
 
+ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/attachments")
+
 
 class BulkDeleteRequest(BaseModel):
     ids: List[int]
@@ -37,45 +46,25 @@ email_router = APIRouter(prefix="/email", tags=["Email Management"])
 
 # ==================================================================================
 # GET /email/campaign/{campaign_id} - Get all emails for a campaign
-#
-# Query params:
-#   page          — page number (default 1)
-#   size          — page size (default 20, max 500)
-#   search        — filter by email_subject OR recipient_email (case-insensitive)
-#   status        — filter by status: sent | draft | scheduled | failed
-#   sort_by       — sort field: date | subject  (default: created_at DESC)
-#   sort_order    — asc | desc  (default: desc)
-#   company_ids   — comma-separated company IDs to filter; omit or empty = all companies
-#   deletable_only— true = return only draft/scheduled emails (used for bulk-delete)
 # ==================================================================================
 @email_router.get("/campaign/{campaign_id}/")
 def get_campaign_emails(
     campaign_id: int,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    search: Optional[str] = Query(None, description="Search by email subject or recipient email"),
-    status: Optional[str] = Query(None, description="sent | draft | scheduled | failed"),
-    sort_by: Optional[str] = Query(None, description="date | subject"),
-    sort_order: Optional[str] = Query("desc", description="asc | desc"),
-    company_ids: Optional[str] = Query(None, description="Comma-separated company IDs; empty = all"),
-    deletable_only: bool = Query(False, description="Return only draft/scheduled emails"),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("desc"),
+    company_ids: Optional[str] = Query(None),
+    deletable_only: bool = Query(False),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get emails for a campaign with full server-side filtering, sorting, and pagination.
-
-    - company_ids omitted/empty  → all companies in the campaign (no filter)
-    - company_ids=1,2,3          → only emails belonging to those companies
-    - deletable_only=true        → ignores status param, returns draft+scheduled only
-                                   (for bulk-delete: collect IDs before deleting)
-    - Returns company_id and company_name on every email record.
-    """
     user_id = current_user["user_id"]
 
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Verify campaign belongs to user
         cursor.execute(
             "SELECT id FROM campaigns WHERE id = %s AND user_id = %s",
             (campaign_id, user_id)
@@ -83,7 +72,6 @@ def get_campaign_emails(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        # ── Build WHERE conditions ─────────────────────────────────────────────
         conditions = [
             "cc.campaign_id = %s",
             "camp.user_id = %s",
@@ -91,17 +79,13 @@ def get_campaign_emails(
         ]
         params: list = [campaign_id, user_id]
 
-        # Optional company filter — omit or empty means all companies
         if company_ids and company_ids.strip():
-            co_id_list = [
-                int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()
-            ]
+            co_id_list = [int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()]
             if co_id_list:
                 placeholders = ",".join(["%s"] * len(co_id_list))
                 conditions.append(f"co.id IN ({placeholders})")
                 params.extend(co_id_list)
 
-        # Status filter — deletable_only overrides status param
         if deletable_only:
             conditions.append("e.status IN ('draft', 'scheduled')")
         else:
@@ -110,7 +94,6 @@ def get_campaign_emails(
                 conditions.append("e.status = %s")
                 params.append(status.strip())
 
-        # Search filter — subject OR recipient email
         if search and search.strip():
             pattern = f"%{search.strip()}%"
             conditions.append("(e.email_subject LIKE %s OR e.recipient_email LIKE %s)")
@@ -126,7 +109,6 @@ def get_campaign_emails(
             LEFT JOIN failed_emails fe ON fe.email_id = e.id
         """
 
-        # ── ORDER BY ──────────────────────────────────────────────────────────
         sort_dir_sql = "ASC" if sort_order and sort_order.lower() == "asc" else "DESC"
         if sort_by == "subject":
             order_clause = f"ORDER BY LOWER(e.email_subject) {sort_dir_sql}"
@@ -135,14 +117,9 @@ def get_campaign_emails(
         else:
             order_clause = "ORDER BY e.created_at DESC"
 
-        # ── Total count ────────────────────────────────────────────────────────
-        cursor.execute(
-            f"SELECT COUNT(*) AS total {join_clause} WHERE {where_clause}",
-            params
-        )
+        cursor.execute(f"SELECT COUNT(*) AS total {join_clause} WHERE {where_clause}", params)
         total = cursor.fetchone()["total"]
 
-        # ── Paginated results ──────────────────────────────────────────────────
         offset = (page - 1) * size
         cursor.execute(f"""
             SELECT
@@ -159,10 +136,8 @@ def get_campaign_emails(
 
         rows = cursor.fetchall()
 
-    email_list = [dict(row) for row in rows]
-
     return {
-        "emails": email_list,
+        "emails": [dict(row) for row in rows],
         "total":  total,
         "page":   page,
         "size":   size,
@@ -171,37 +146,23 @@ def get_campaign_emails(
 
 # ==================================================================================
 # GET /email/company/{company_id} - Get all emails for a company
-#
-# Query params:
-#   page         — page number (default 1)
-#   size         — page size (default 20, max 500)
-#   status       — filter by status: sent | draft | scheduled | failed | primary
-#   sort_by      — sort field: date | subject  (default: created_at DESC)
-#   sort_order   — asc | desc  (default: desc)
-#   campaign_ids — comma-separated campaign IDs to filter by (OR logic)
 # ==================================================================================
 @email_router.get("/company/{company_id}/")
 def get_company_emails(
     company_id: int,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    status: Optional[str] = Query(None, description="sent | draft | scheduled | failed"),
-    sort_by: Optional[str] = Query(None, description="date | subject"),
-    sort_order: Optional[str] = Query("desc", description="asc | desc"),
-    campaign_ids: Optional[str] = Query(None, description="Comma-separated campaign IDs (OR filter)"),
+    status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("desc"),
+    campaign_ids: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get all emails belonging to a company across all campaigns.
-    Returns campaign_id and campaign_name on every email record.
-    Primary emails are always excluded.
-    """
     user_id = current_user["user_id"]
 
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Verify company belongs to user
         cursor.execute(
             "SELECT id FROM companies WHERE id = %s AND user_id = %s",
             (company_id, user_id)
@@ -244,10 +205,7 @@ def get_company_emails(
         else:
             order_clause = "ORDER BY e.created_at DESC"
 
-        cursor.execute(
-            f"SELECT COUNT(*) AS total {join_clause} WHERE {where_clause}",
-            params
-        )
+        cursor.execute(f"SELECT COUNT(*) AS total {join_clause} WHERE {where_clause}", params)
         total = cursor.fetchone()["total"]
 
         offset = (page - 1) * size
@@ -287,12 +245,6 @@ def get_primary_emails_bulk(
     request: BulkPrimaryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get primary emails for multiple companies in a campaign in one call.
-    Returns a list of results keyed by company_id.
-    Companies with no primary email are omitted from the response.
-    Branding and attachment resolution follows the same rules as the single endpoint.
-    """
     import base64 as _b64
 
     user_id = current_user["user_id"]
@@ -307,7 +259,6 @@ def get_primary_emails_bulk(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        # Load campaign prefs and global prefs once
         cursor.execute("""
             SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
             FROM campaign_preferences WHERE campaign_id = %s
@@ -319,7 +270,6 @@ def get_primary_emails_bulk(
         """, (user_id,))
         global_prefs = cursor.fetchone()
 
-        # Fetch all campaign_company rows for the requested companies in one query
         placeholders = ",".join(["%s"] * len(request.company_ids))
         cursor.execute(f"""
             SELECT cc.id, cc.company_id, cc.inherit_campaign_branding, cc.inherit_campaign_attachments
@@ -328,7 +278,6 @@ def get_primary_emails_bulk(
         """, [campaign_id] + request.company_ids)
         cc_rows = {row["company_id"]: row for row in cursor.fetchall()}
 
-        # Fetch all primary emails for those campaign_company rows in one query
         cc_ids = [row["id"] for row in cc_rows.values()]
         if not cc_ids:
             return {"primaries": []}
@@ -343,7 +292,6 @@ def get_primary_emails_bulk(
         """, cc_ids)
         emails_by_cc = {row["campaign_company_id"]: row for row in cursor.fetchall()}
 
-        # Fetch linked attachment IDs for all primary emails in one query
         email_ids = [row["id"] for row in emails_by_cc.values()]
         linked_by_email: dict = {eid: [] for eid in email_ids}
         if email_ids:
@@ -355,7 +303,6 @@ def get_primary_emails_bulk(
             for row in cursor.fetchall():
                 linked_by_email[row["email_id"]].append(row["attachment_id"])
 
-        # Map company_id -> cc_id for reverse lookup
         cc_id_to_company_id = {row["id"]: cid for cid, row in cc_rows.items()}
 
         inherit_global_attachments = (
@@ -410,13 +357,6 @@ def bulk_update_emails(
     request: BulkUpdateRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Update multiple emails in a single call.
-    Each item in updates must include email_id plus any fields to update.
-    Skips failures with logged errors and returns a summary.
-    Allowed statuses: primary, draft, scheduled.
-    When primary and inherit_campaign_branding = 1, signature/logo cannot be edited.
-    """
     import base64 as _b64
     from datetime import datetime
 
@@ -549,9 +489,6 @@ def delete_emails(
     request: BulkDeleteRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Delete emails by ID list. Ownership verified, primary emails skipped.
-    """
     user_id = current_user["user_id"]
 
     with get_connection() as conn:
@@ -587,8 +524,6 @@ def delete_emails(
 
 # ==================================================================================
 # GET /email/ids/ - Get IDs of all matching emails (no pagination cap)
-#
-# Same filters as GET /email/ but returns only IDs — used for select-all + delete.
 # ==================================================================================
 @email_router.get("/ids/")
 def get_email_ids(
@@ -645,48 +580,26 @@ def get_email_ids(
 # ==================================================================================
 # GET /email/ - Get ALL emails across every campaign and company (unified history)
 #
-# Query params:
-#   page          — page number (default 1)
-#   size          — page size (default 20, max 500)
-#   search        — filter by email_subject OR recipient_email (case-insensitive)
-#   status        — filter by status: sent | draft | scheduled | failed
-#   sort_by       — sort field: date | subject  (default: created_at DESC)
-#   sort_order    — asc | desc  (default: desc)
-#   company_ids   — comma-separated company IDs to filter by (OR logic); omit = all
-#   campaign_ids  — comma-separated campaign IDs to filter by (OR logic); omit = all
-#   email_ids     — comma-separated email IDs to fetch specific emails; omit = all
+# NOTE: Must be defined LAST so FastAPI does not match /email/campaign/1/ here.
 #
-# NOTE: This route MUST be defined after all other /email/* routes so that FastAPI's
-# router does not match e.g. /email/campaign/1/ against this handler first.
+# Each email record now includes:
+#   attachments: [{ id, filename, file_size, created_at }]
+# No separate attachment fetch needed on the frontend.
+# To download, use GET /attachments/download/?ids=1,2,3
 # ==================================================================================
 @email_router.get("/")
 def get_all_emails(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=500),
-    search: Optional[str] = Query(None, description="Search by email subject or recipient email"),
-    status: Optional[str] = Query(None, description="sent | draft | scheduled | failed"),
-    sort_by: Optional[str] = Query(None, description="date | subject"),
-    sort_order: Optional[str] = Query("desc", description="asc | desc"),
-    company_ids: Optional[str] = Query(None, description="Comma-separated company IDs (OR filter); omit = all"),
-    campaign_ids: Optional[str] = Query(None, description="Comma-separated campaign IDs (OR filter); omit = all"),
-    email_ids: Optional[str] = Query(None, description="Comma-separated email IDs to fetch specific emails; omit = all"),
+    search: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("desc"),
+    company_ids: Optional[str] = Query(None),
+    campaign_ids: Optional[str] = Query(None),
+    email_ids: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get ALL emails for the authenticated user across every campaign and company.
-    Primary emails are always excluded.
-
-    Returns both company_id / company_name AND campaign_id / campaign_name on every
-    email record so the unified history page can display both tags simultaneously.
-    Also returns logo_data (base64 data URL) and signature on every record.
-
-    Filter logic:
-      - email_ids    provided             → fetch only those specific emails (AND with other filters)
-      - company_ids  omitted/empty        → no company restriction (all companies)
-      - campaign_ids omitted/empty        → no campaign restriction (all campaigns)
-      - Both company_ids & campaign_ids   → AND between the two groups
-      - Within each group                 → OR logic (any matching ID qualifies)
-    """
     import base64 as _b64
 
     user_id = current_user["user_id"]
@@ -694,50 +607,38 @@ def get_all_emails(
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # ── Build WHERE conditions ─────────────────────────────────────────────
         conditions = [
             "camp.user_id = %s",
             "e.status != 'primary'",
         ]
         params: list = [user_id]
 
-        # Optional email IDs filter
         if email_ids and email_ids.strip():
-            em_id_list = [
-                int(x.strip()) for x in email_ids.split(",") if x.strip().isdigit()
-            ]
+            em_id_list = [int(x.strip()) for x in email_ids.split(",") if x.strip().isdigit()]
             if em_id_list:
                 placeholders = ",".join(["%s"] * len(em_id_list))
                 conditions.append(f"e.id IN ({placeholders})")
                 params.extend(em_id_list)
 
-        # Optional company filter
         if company_ids and company_ids.strip():
-            co_id_list = [
-                int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()
-            ]
+            co_id_list = [int(x.strip()) for x in company_ids.split(",") if x.strip().isdigit()]
             if co_id_list:
                 placeholders = ",".join(["%s"] * len(co_id_list))
                 conditions.append(f"co.id IN ({placeholders})")
                 params.extend(co_id_list)
 
-        # Optional campaign filter
         if campaign_ids and campaign_ids.strip():
-            ca_id_list = [
-                int(x.strip()) for x in campaign_ids.split(",") if x.strip().isdigit()
-            ]
+            ca_id_list = [int(x.strip()) for x in campaign_ids.split(",") if x.strip().isdigit()]
             if ca_id_list:
                 placeholders = ",".join(["%s"] * len(ca_id_list))
                 conditions.append(f"camp.id IN ({placeholders})")
                 params.extend(ca_id_list)
 
-        # Status filter
         valid_statuses = {"sent", "draft", "scheduled", "failed"}
         if status and status.strip() in valid_statuses:
             conditions.append("e.status = %s")
             params.append(status.strip())
 
-        # Search filter — subject OR recipient email
         if search and search.strip():
             pattern = f"%{search.strip()}%"
             conditions.append("(e.email_subject LIKE %s OR e.recipient_email LIKE %s)")
@@ -753,7 +654,6 @@ def get_all_emails(
             LEFT JOIN failed_emails fe ON fe.email_id = e.id
         """
 
-        # ── ORDER BY ──────────────────────────────────────────────────────────
         sort_dir_sql = "ASC" if sort_order and sort_order.lower() == "asc" else "DESC"
         if sort_by == "subject":
             order_clause = f"ORDER BY LOWER(e.email_subject) {sort_dir_sql}"
@@ -762,14 +662,15 @@ def get_all_emails(
         else:
             order_clause = "ORDER BY e.created_at DESC"
 
-        # ── Total count ────────────────────────────────────────────────────────
         cursor.execute(
             f"SELECT COUNT(*) AS total {join_clause} WHERE {where_clause}",
             params
         )
         total = cursor.fetchone()["total"]
 
-        # ── Paginated results ──────────────────────────────────────────────────
+        # attachment_data uses ASCII unit-separator (\x1f) between fields within
+        # one attachment, and ASCII record-separator (\x1e) between attachments.
+        # These characters are safe against any real-world filename content.
         offset = (page - 1) * size
         cursor.execute(f"""
             SELECT
@@ -780,7 +681,16 @@ def get_all_emails(
                 co.name   AS company_name,
                 camp.id   AS campaign_id,
                 camp.name AS campaign_name,
-                fe.reason AS failed_reason
+                fe.reason AS failed_reason,
+                (
+                    SELECT GROUP_CONCAT(
+                        CONCAT(a.id, '\x1f', a.name, '\x1f', COALESCE(a.created_at, ''))
+                        ORDER BY a.name SEPARATOR '\x1e'
+                    )
+                    FROM email_attachments ea
+                    JOIN attachments a ON ea.attachment_id = a.id
+                    WHERE ea.email_id = e.id
+                ) AS attachment_data
             {join_clause}
             WHERE {where_clause}
             {order_clause}
@@ -789,16 +699,43 @@ def get_all_emails(
 
         rows = cursor.fetchall()
 
-    # ── Post-process: decode logo blob → base64 data URL ──────────────────────
     email_list = []
     for row in rows:
         r = dict(row)
+
+        # Decode logo blob → base64 data URL
         logo_blob = r.pop("logo", None)
         logo_mime = r.pop("logo_mime_type", None)
         r["logo_data"] = (
             f"data:{logo_mime};base64,{_b64.b64encode(logo_blob).decode()}"
             if logo_blob and logo_mime else None
         )
+
+        # Parse attachment_data → structured list
+        # Format: "id\x1fname\x1fcreated_at\x1eid\x1fname\x1fcreated_at"
+        raw_att = r.pop("attachment_data", None)
+        attachments_out = []
+        if raw_att:
+            for entry in raw_att.split("\x1e"):
+                parts = entry.split("\x1f", 2)
+                if len(parts) == 3:
+                    try:
+                        att_id      = int(parts[0])
+                        att_name    = parts[1]
+                        att_created = parts[2] or None
+                        att_ext     = Path(att_name).suffix.lower()
+                        att_path    = Path(ATTACHMENT_STORAGE_PATH) / f"{att_id}{att_ext}"
+                        att_size    = att_path.stat().st_size if att_path.exists() else 0
+                        attachments_out.append({
+                            "id":         att_id,
+                            "filename":   att_name,
+                            "created_at": att_created,
+                            "file_size":  att_size,
+                        })
+                    except (ValueError, Exception):
+                        pass
+
+        r["attachments"] = attachments_out
         email_list.append(r)
 
     return {
