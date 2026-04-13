@@ -3804,9 +3804,11 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setHtmlEmail(!!(d.html_email));
     setBrandSignature((d as any).signature || '');
     setBrandLogoData((d as any).logo_data || null);
+    // attachment_ids  = resolved inherited set (campaign or global)
+    // linked_attachment_ids = email's own directly-attached files
     setInheritedAttachIds(d.attachment_ids ?? []);
+    setLinkedEmailAttachIds(new Set<number>(d.linked_attachment_ids ?? []));
     setPhase('ready');
-    loadEmailLinkedAttachments(d.id);
   };
 
   const generateEmail = async (queryType: 'plain' | 'html' | 'template' | null) => {
