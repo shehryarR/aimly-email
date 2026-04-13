@@ -547,7 +547,7 @@ const Attachments: React.FC = () => {
     setRenaming(true);
 
     try {
-      const res = await apiFetch(`${API_BASE}/attachment/${renameModal.attachmentId}?new_name=${encodeURIComponent(renameModal.newName.trim())}`, {
+      const res = await apiFetch(`${API_BASE}/attachment/${renameModal.attachmentId}/?new_name=${encodeURIComponent(renameModal.newName.trim())}`, {
         method: 'PUT',
       });
 
