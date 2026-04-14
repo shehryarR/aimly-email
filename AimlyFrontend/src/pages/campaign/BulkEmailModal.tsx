@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
 import { apiFetch } from '../../App';
 
@@ -490,8 +491,10 @@ const SplitBtnChevron = styled.span<{ theme: any; $open: boolean }>`
   svg{width:10px;height:10px;transition:transform 0.15s;transform:${p => p.$open ? 'rotate(180deg)' : 'none'};}
   &:hover{background:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.content};}
 `;
-const SplitDropMenu = styled.div<{ theme: any }>`
-  position:absolute;top:calc(100% + 4px);right:0;z-index:3000;
+const SplitDropMenu = styled.div<{ theme: any; $openUpward?: boolean }>`
+  position:absolute;
+  ${p => p.$openUpward ? 'bottom:calc(100% + 4px);' : 'top:calc(100% + 4px);'}
+  right:0;z-index:3000;
   background:${p => p.theme.colors.base[200]};border:1px solid ${p => p.theme.colors.base[300]};
   border-radius:${p => p.theme.radius.field};
   box-shadow:0 8px 24px rgba(0,0,0,0.18);min-width:130px;overflow:hidden;
@@ -515,6 +518,31 @@ const BulkRegenDropdown: React.FC<{
   onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
 }> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
+  const chevronRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
+
+  const handleChevron = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) {
+      const menuHeight = 88; // 2 items × ~40px + gap
+      const openUpward = window.innerHeight - rect.bottom < menuHeight + 8;
+      setMenuPos({
+        top: openUpward ? rect.top : rect.bottom + 4,
+        left: rect.right,
+        openUpward,
+      });
+    }
+    setOpen(v => !v);
+  };
+
   return (
     <SplitBtn theme={theme} $disabled={acting}>
       <SplitBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
@@ -524,15 +552,27 @@ const BulkRegenDropdown: React.FC<{
         <SplitBtnLabel>Plain Text</SplitBtnLabel>
       </SplitBtnLeft>
       <SplitBtnDivider theme={theme} />
-      <SplitBtnChevron theme={theme} $open={open} onClick={e => { e.stopPropagation(); setOpen(v => !v); }}>
+      <SplitBtnChevron ref={chevronRef} theme={theme} $open={open} onClick={handleChevron}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </SplitBtnChevron>
-      {open && (
+      {open && createPortal(
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }} onClick={e => { e.stopPropagation(); setOpen(false); }} />
-          <SplitDropMenu theme={theme}>
+          <div style={{
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
+            transform: menuPos.openUpward ? 'translateX(-100%) translateY(-100%)' : 'translateX(-100%)',
+            zIndex: 3000,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            minWidth: 130,
+            overflow: 'hidden',
+          }}>
             <SplitDropItem theme={theme} onClick={e => { e.stopPropagation(); onRegenerate('html'); setOpen(false); }}>
               <IcoHtml />HTML Email
             </SplitDropItem>
@@ -542,8 +582,9 @@ const BulkRegenDropdown: React.FC<{
               title={!hasTemplateEmail ? 'No template set — configure in Campaign Settings' : undefined}>
               <IcoTemplate />From Template
             </SplitDropItem>
-          </SplitDropMenu>
-        </>
+          </div>
+        </>,
+        document.body
       )}
     </SplitBtn>
   );

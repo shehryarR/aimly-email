@@ -3563,13 +3563,29 @@ const RegenDropdown: React.FC<{
   onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
 }> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
   const chevronRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
 
   const openMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     const rect = chevronRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.right });
+    if (rect) {
+      const menuHeight = 88;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < menuHeight + 8;
+      setMenuPos({
+        top: openUpward ? rect.top : rect.bottom + 4,
+        left: rect.right,
+        openUpward,
+      });
+    }
     setOpen(v => !v);
   };
 
@@ -3595,7 +3611,7 @@ const RegenDropdown: React.FC<{
             position: 'fixed',
             top: menuPos.top,
             left: menuPos.left,
-            transform: 'translateX(-100%)',
+            transform: menuPos.openUpward ? 'translateX(-100%) translateY(-100%)' : 'translateX(-100%)',
             zIndex: 9999,
             background: theme.colors.base[200],
             border: `1px solid ${theme.colors.base[300]}`,
@@ -4972,15 +4988,29 @@ const CompanyGenBtn: React.FC<{
   onOpen: (company: Company) => void;
 }> = ({ company, theme, disabled, hasTemplateEmail, mode, onModeChange, onOpen }) => {
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
   const chevronRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
 
   const openMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
     const rect = chevronRef.current?.getBoundingClientRect();
     if (rect) {
-      setMenuPos({ top: rect.bottom + 4, left: rect.right });
+      const menuHeight = 88;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < menuHeight + 8;
+      setMenuPos({
+        top: openUpward ? rect.top : rect.bottom + 4,
+        left: rect.right,
+        openUpward,
+      });
     }
     setOpen(v => !v);
   };
@@ -5009,7 +5039,7 @@ const CompanyGenBtn: React.FC<{
             position: 'fixed',
             top: menuPos.top,
             left: menuPos.left,
-            transform: 'translateX(-100%)',
+            transform: menuPos.openUpward ? 'translateX(-100%) translateY(-100%)' : 'translateX(-100%)',
             zIndex: 9999,
             background: theme.colors.base[200],
             border: `1px solid ${theme.colors.base[300]}`,
@@ -5064,13 +5094,29 @@ const BulkGenBtn: React.FC<{
 }> = ({ theme, disabled, hasTemplateEmail, onOpen }) => {
   const [open, setOpen] = useState(false);
   const chevronRef = useRef<HTMLSpanElement>(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
 
   const openMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (disabled) return;
     const rect = chevronRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.right });
+    if (rect) {
+      const menuHeight = 88;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < menuHeight + 8;
+      setMenuPos({
+        top: openUpward ? rect.top : rect.bottom + 4,
+        left: rect.right,
+        openUpward,
+      });
+    }
     setOpen(v => !v);
   };
 
@@ -5090,7 +5136,8 @@ const BulkGenBtn: React.FC<{
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={e => { e.stopPropagation(); setOpen(false); }} />
           <div style={{
-            position: 'fixed', top: menuPos.top, left: menuPos.left, transform: 'translateX(-100%)',
+            position: 'fixed', top: menuPos.top, left: menuPos.left,
+            transform: menuPos.openUpward ? 'translateX(-100%) translateY(-100%)' : 'translateX(-100%)',
             zIndex: 9999, background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`,
             borderRadius: theme.radius.field,
             boxShadow: theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)',
