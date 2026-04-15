@@ -56,40 +56,6 @@ def get_subscription_by_paddle_id(paddle_subscription_id: str) -> dict | None:
         conn.close()
 
 
-def upsert_subscription(user_id: int, data: dict):
-    """Insert or update a subscription row."""
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO subscriptions
-                (user_id, paddle_subscription_id, paddle_customer_id,
-                 status, price_id, next_billed_at, current_period_ends_at, scheduled_change)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                paddle_subscription_id  = VALUES(paddle_subscription_id),
-                paddle_customer_id      = VALUES(paddle_customer_id),
-                status                  = VALUES(status),
-                price_id                = VALUES(price_id),
-                next_billed_at          = VALUES(next_billed_at),
-                current_period_ends_at  = VALUES(current_period_ends_at),
-                scheduled_change        = VALUES(scheduled_change),
-                updated_at              = CURRENT_TIMESTAMP
-        """, (
-            user_id,
-            data.get("paddle_subscription_id"),
-            data.get("paddle_customer_id"),
-            data.get("status", "inactive"),
-            data.get("price_id"),
-            data.get("next_billed_at"),
-            data.get("current_period_ends_at"),
-            json.dumps(data.get("scheduled_change")) if data.get("scheduled_change") else None,
-        ))
-        conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
 
 def update_subscription_by_paddle_id(paddle_subscription_id: str, data: dict):
     """Update an existing subscription row by Paddle subscription ID."""
@@ -178,12 +144,19 @@ def get_subscription_status(request: Request):
         return {
             "status": "inactive",
             "has_access": False,
+            "special_access": False,
         }
 
     status = subscription.get("status", "inactive")
+    special_access = bool(subscription.get("special_access", 0))
+
+    # Special access overrides status — user gets in regardless of payment state
+    has_access = special_access or (status in ACTIVE_STATUSES)
+
     return {
         "status": status,
-        "has_access": status in ACTIVE_STATUSES,
+        "has_access": has_access,
+        "special_access": special_access,
         "next_billed_at": subscription.get("next_billed_at"),
         "current_period_ends_at": subscription.get("current_period_ends_at"),
     }
@@ -242,7 +215,7 @@ async def paddle_webhook(request: Request):
             return {"status": "ok"}
 
         user_id = int(user_id_raw)
-        upsert_subscription(user_id, {
+        update_subscription_by_user(user_id, {
             "paddle_subscription_id": paddle_subscription_id,
             "paddle_customer_id": paddle_customer_id,
             "status": status,  # "trialing" or "active"

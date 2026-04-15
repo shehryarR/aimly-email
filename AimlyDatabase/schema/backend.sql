@@ -250,6 +250,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     next_billed_at          DATETIME,
     current_period_ends_at  DATETIME,
     scheduled_change        JSON,
+    special_access          TINYINT(1) DEFAULT 0,
     created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
