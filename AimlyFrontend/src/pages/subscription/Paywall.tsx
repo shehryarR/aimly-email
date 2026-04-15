@@ -13,6 +13,7 @@ import { useAuth } from '../../App';
 
 // ── Paddle env vars ───────────────────────────────────────
 const PADDLE_CLIENT_TOKEN = import.meta.env.VITE_PADDLE_CLIENT_TOKEN || '';
+const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
 const PADDLE_PRICE_ID     = import.meta.env.VITE_PADDLE_PRICE_ID || '';
 const PADDLE_SANDBOX      = import.meta.env.VITE_PADDLE_SANDBOX !== 'false';
 
@@ -191,7 +192,7 @@ const CheckIcon = styled.span<{ theme: any }>`
   svg { width: 10px; height: 10px; }
 `;
 
-const CtaButton = styled.button<{ theme: any; $loading?: boolean }>`
+const CtaButton = styled.button<{ theme: any; $loading?: boolean; $disabled?: boolean }>`
   width: 100%;
   padding: 0.9rem 1.5rem;
   border-radius: ${p => p.theme.radius.field};
@@ -264,7 +265,7 @@ const LegalLinks = styled.p<{ theme: any }>`
   text-align: center;
   margin: 0.5rem 0 0 0;
   line-height: 1.6;
-  color: \${p => p.theme.colors.base.content};
+  color: ${p => p.theme.colors.base.content};
 `;
 
 const LegalLink = styled(Link)<{ theme: any }>`
@@ -274,6 +275,23 @@ const LegalLink = styled(Link)<{ theme: any }>`
   opacity: 0.7;
   transition: opacity 0.15s;
   &:hover { opacity: 1; }
+`;
+
+
+const ComingSoonBanner = styled.div<{ theme: any }>`
+  background: ${p => p.theme.colors.warning?.main || '#f59e0b'}15;
+  border: 1px solid ${p => p.theme.colors.warning?.main || '#f59e0b'}50;
+  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
+  border-radius: ${p => p.theme.radius.field};
+  padding: 0.65rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 `;
 
 // ── Component ─────────────────────────────────────────────
@@ -379,12 +397,12 @@ const Paywall: React.FC = () => {
 
         <Title>Unlock Full Access</Title>
         <Subtitle theme={theme}>
-          Start your 15-day free trial today. No charges until your trial ends — cancel anytime.
+          {PADDLE_ENABLED ? 'Start your 15-day free trial today. No charges until your trial ends — cancel anytime.' : 'You\'re in early access — payments are not yet active.'}
         </Subtitle>
 
         <PriceBox theme={theme}>
           <PriceLeft>
-            <PriceLabel>After free trial</PriceLabel>
+            <PriceLabel>{PADDLE_ENABLED ? 'After free trial' : 'Early Access'}</PriceLabel>
             <PriceValue>$29<span style={{ fontSize: '1rem', fontWeight: 500 }}>/mo</span></PriceValue>
             <PriceSub>Billed monthly · Cancel anytime</PriceSub>
           </PriceLeft>
@@ -404,11 +422,20 @@ const Paywall: React.FC = () => {
           ))}
         </FeatureList>
 
+        {!PADDLE_ENABLED && (
+          <ComingSoonBanner theme={theme}>
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Payments coming soon — access is currently free
+          </ComingSoonBanner>
+        )}
         <CtaButton
           theme={theme}
           $loading={loading}
-          onClick={handleSubscribe}
-          disabled={loading}
+          $disabled={!PADDLE_ENABLED}
+          onClick={!PADDLE_ENABLED ? undefined : handleSubscribe}
+          disabled={loading || !PADDLE_ENABLED}
         >
           {loading ? (
             <>
@@ -421,7 +448,7 @@ const Paywall: React.FC = () => {
                 <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
                 <line x1="1" y1="10" x2="23" y2="10"/>
               </svg>
-              Start Free Trial
+              {PADDLE_ENABLED ? 'Start Free Trial' : 'Early Access'}
             </>
           )}
         </CtaButton>
@@ -429,8 +456,7 @@ const Paywall: React.FC = () => {
         {error && <ErrorMsg theme={theme}>{error}</ErrorMsg>}
 
         <Disclaimer theme={theme}>
-          Card required to start trial. You won't be charged for 15 days.
-          Cancel before trial ends to avoid any charges.
+          {PADDLE_ENABLED ? "Card required to start trial. You won't be charged for 15 days. Cancel before trial ends to avoid any charges." : 'No payment required. Payments will be activated soon.'}
         </Disclaimer>
         <LegalLinks theme={theme}>
           By subscribing you agree to our{' '}

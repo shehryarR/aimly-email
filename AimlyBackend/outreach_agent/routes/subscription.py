@@ -13,13 +13,14 @@ import hashlib
 import json
 from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException
-from core.database.connection import get_connection
-from routes.auth import get_current_user
+from core.database.connection import get_connection as get_db_connection
+from middleware.auth import get_current_user
 
 subscription_router = APIRouter(prefix="/subscription", tags=["subscription"])
 
 # ── Paddle config ─────────────────────────────────────────────────────────────
 PADDLE_WEBHOOK_SECRET = os.getenv("PADDLE_WEBHOOK_SECRET", "")
+PADDLE_ENABLED = os.getenv("PADDLE_ENABLED", "true").lower() == "true"
 ACTIVE_STATUSES = {"trialing", "active"}
 
 
@@ -27,83 +28,100 @@ ACTIVE_STATUSES = {"trialing", "active"}
 
 def get_subscription_by_user(user_id: int) -> dict | None:
     """Fetch subscription row for a given user_id."""
-    with get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT * FROM subscriptions WHERE user_id = %s",
-                (user_id,)
-            )
-            return cursor.fetchone()
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM subscriptions WHERE user_id = %s",
+            (user_id,)
+        )
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_subscription_by_paddle_id(paddle_subscription_id: str) -> dict | None:
     """Fetch subscription row by Paddle subscription ID."""
-    with get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT * FROM subscriptions WHERE paddle_subscription_id = %s",
-                (paddle_subscription_id,)
-            )
-            return cursor.fetchone()
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM subscriptions WHERE paddle_subscription_id = %s",
+            (paddle_subscription_id,)
+        )
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def upsert_subscription(user_id: int, data: dict):
     """Insert or update a subscription row."""
-    with get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO subscriptions
-                    (user_id, paddle_subscription_id, paddle_customer_id,
-                     status, price_id, next_billed_at, current_period_ends_at, scheduled_change)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    paddle_subscription_id  = VALUES(paddle_subscription_id),
-                    paddle_customer_id      = VALUES(paddle_customer_id),
-                    status                  = VALUES(status),
-                    price_id                = VALUES(price_id),
-                    next_billed_at          = VALUES(next_billed_at),
-                    current_period_ends_at  = VALUES(current_period_ends_at),
-                    scheduled_change        = VALUES(scheduled_change),
-                    updated_at              = CURRENT_TIMESTAMP
-            """, (
-                user_id,
-                data.get("paddle_subscription_id"),
-                data.get("paddle_customer_id"),
-                data.get("status", "inactive"),
-                data.get("price_id"),
-                data.get("next_billed_at"),
-                data.get("current_period_ends_at"),
-                json.dumps(data.get("scheduled_change")) if data.get("scheduled_change") else None,
-            ))
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO subscriptions
+                (user_id, paddle_subscription_id, paddle_customer_id,
+                 status, price_id, next_billed_at, current_period_ends_at, scheduled_change)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                paddle_subscription_id  = VALUES(paddle_subscription_id),
+                paddle_customer_id      = VALUES(paddle_customer_id),
+                status                  = VALUES(status),
+                price_id                = VALUES(price_id),
+                next_billed_at          = VALUES(next_billed_at),
+                current_period_ends_at  = VALUES(current_period_ends_at),
+                scheduled_change        = VALUES(scheduled_change),
+                updated_at              = CURRENT_TIMESTAMP
+        """, (
+            user_id,
+            data.get("paddle_subscription_id"),
+            data.get("paddle_customer_id"),
+            data.get("status", "inactive"),
+            data.get("price_id"),
+            data.get("next_billed_at"),
+            data.get("current_period_ends_at"),
+            json.dumps(data.get("scheduled_change")) if data.get("scheduled_change") else None,
+        ))
         conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def update_subscription_by_paddle_id(paddle_subscription_id: str, data: dict):
     """Update an existing subscription row by Paddle subscription ID."""
-    with get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE subscriptions
-                SET status                 = %s,
-                    next_billed_at         = %s,
-                    current_period_ends_at = %s,
-                    scheduled_change       = %s,
-                    updated_at             = CURRENT_TIMESTAMP
-                WHERE paddle_subscription_id = %s
-            """, (
-                data.get("status"),
-                data.get("next_billed_at"),
-                data.get("current_period_ends_at"),
-                json.dumps(data.get("scheduled_change")) if data.get("scheduled_change") else None,
-                paddle_subscription_id,
-            ))
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE subscriptions
+            SET status                 = %s,
+                next_billed_at         = %s,
+                current_period_ends_at = %s,
+                scheduled_change       = %s,
+                updated_at             = CURRENT_TIMESTAMP
+            WHERE paddle_subscription_id = %s
+        """, (
+            data.get("status"),
+            data.get("next_billed_at"),
+            data.get("current_period_ends_at"),
+            json.dumps(data.get("scheduled_change")) if data.get("scheduled_change") else None,
+            paddle_subscription_id,
+        ))
         conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def verify_paddle_signature(raw_body: bytes, signature_header: str) -> bool:
     """
     Verify Paddle webhook signature.
     Paddle sends: Paddle-Signature: ts=<timestamp>;h1=<hmac_hash>
+    Docs: https://developer.paddle.com/webhooks/signature-verification
     """
     if not PADDLE_WEBHOOK_SECRET:
         print("Warning: PADDLE_WEBHOOK_SECRET not set — skipping signature verification")
@@ -132,6 +150,7 @@ def parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
+        # Paddle sends ISO 8601 e.g. "2025-04-14T12:00:00Z"
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except Exception:
         return None
@@ -144,9 +163,14 @@ def get_subscription_status(request: Request):
     """
     Returns the current user's subscription status.
     Called by the frontend on every page load to decide whether to show the paywall.
+    When PADDLE_ENABLED=false, always returns has_access: true.
     """
     user = get_current_user(request)
     user_id = user["user_id"]
+
+    # Paddle disabled — grant access to everyone
+    if not PADDLE_ENABLED:
+        return {"status": "active", "has_access": True}
 
     subscription = get_subscription_by_user(user_id)
 
@@ -169,10 +193,20 @@ def get_subscription_status(request: Request):
 async def paddle_webhook(request: Request):
     """
     Receives Paddle webhook events and updates subscription status in DB.
+
     No JWT auth — verified by Paddle signature instead.
+    Must be added to public_endpoints in OptionalAuthMiddleware.
+
+    Handles per Paddle docs (subscription.created + subscription.updated
+    cover the full lifecycle):
+      - subscription.created  → new trial or subscription
+      - subscription.updated  → any status change (trial→active, past_due, canceled, paused)
+
+    Docs: https://developer.paddle.com/build/subscriptions/provision-access-webhooks
     """
     raw_body = await request.body()
 
+    # Verify Paddle signature
     signature_header = request.headers.get("Paddle-Signature", "")
     if not verify_paddle_signature(raw_body, signature_header):
         raise HTTPException(status_code=401, detail="Invalid Paddle signature")
@@ -183,21 +217,26 @@ async def paddle_webhook(request: Request):
 
     print(f"Paddle webhook received: {event_type}")
 
+    # user_id passed via customData in Paddle.js checkout
     custom_data = data.get("custom_data") or {}
     user_id_raw = custom_data.get("user_id")
     paddle_subscription_id = data.get("id")
     paddle_customer_id = data.get("customer_id")
     status = data.get("status")
 
+    # Per Paddle docs — recommended fields to store
     next_billed_at = parse_datetime(data.get("next_billed_at"))
     current_period = data.get("current_billing_period") or {}
     current_period_ends_at = parse_datetime(current_period.get("ends_at"))
-    scheduled_change = data.get("scheduled_change")
+    scheduled_change = data.get("scheduled_change")  # pending pause/cancel
 
+    # Price ID — from first item in subscription items list
     items = data.get("items", [])
     price_id = items[0].get("price", {}).get("id") if items else None
 
     if event_type == "subscription.created":
+        # New subscription or trial started
+        # user_id must be in custom_data — passed from Paddle.js checkout
         if not user_id_raw:
             print("Warning: subscription.created received with no user_id in custom_data")
             return {"status": "ok"}
@@ -206,7 +245,7 @@ async def paddle_webhook(request: Request):
         upsert_subscription(user_id, {
             "paddle_subscription_id": paddle_subscription_id,
             "paddle_customer_id": paddle_customer_id,
-            "status": status,
+            "status": status,  # "trialing" or "active"
             "price_id": price_id,
             "next_billed_at": next_billed_at,
             "current_period_ends_at": current_period_ends_at,
@@ -215,6 +254,8 @@ async def paddle_webhook(request: Request):
         print(f"Subscription created for user {user_id}: status={status}")
 
     elif event_type == "subscription.updated":
+        # Covers: trial→active, active→past_due, paused, canceled
+        # Look up by paddle_subscription_id since user_id may not be in custom_data
         if not paddle_subscription_id:
             print("Warning: subscription.updated received with no subscription id")
             return {"status": "ok"}

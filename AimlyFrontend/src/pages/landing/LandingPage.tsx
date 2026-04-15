@@ -7,6 +7,8 @@
 import React, { useEffect } from 'react';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
 import { useNavigate, Link } from 'react-router-dom';
+
+const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
 import { useTheme } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
@@ -453,6 +455,22 @@ const Divider = styled.div<{ theme: any }>`
 `;
 
 // ── Pricing ───────────────────────────────────────────────
+const ComingSoonBanner = styled.div<{ theme: any }>`
+  background: ${p => p.theme.colors.warning?.main || '#f59e0b'}15;
+  border: 1px solid ${p => p.theme.colors.warning?.main || '#f59e0b'}50;
+  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
+  border-radius: ${p => p.theme.radius.field};
+  padding: 0.65rem 0.875rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
 const PricingWrap = styled.div`
   display: flex;
   justify-content: center;
@@ -732,7 +750,7 @@ const LandingPage: React.FC = () => {
         {/* ── Stats Strip ── */}
         <StatsStrip theme={theme}>
           {[
-            { num: '15-day', desc: 'Free Trial' },
+            { num: PADDLE_ENABLED ? '15-day' : 'Early', desc: PADDLE_ENABLED ? 'Free Trial' : 'Access' },
             { num: '∞',      desc: 'Campaigns'  },
             { num: 'AI',     desc: 'Powered'    },
             { num: '$0',     desc: 'Setup Fee'  },
@@ -810,9 +828,17 @@ const LandingPage: React.FC = () => {
 
           <PricingWrap>
             <PricingCard theme={theme}>
+              {!PADDLE_ENABLED && (
+                <ComingSoonBanner theme={theme}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  Payments not yet active — access is currently free
+                </ComingSoonBanner>
+              )}
               <PricingBadge theme={theme}>
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                15-day free trial
+                {PADDLE_ENABLED ? '15-day free trial' : 'Early Access'}
               </PricingBadge>
 
               <PricingAmount>

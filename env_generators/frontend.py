@@ -58,10 +58,13 @@ paddle_client_token  = ask("Paddle Client-Side Token")
 paddle_price_id      = ask("Paddle Price ID (starts with pri_)")
 paddle_sandbox_input = input("  Use Paddle Sandbox? (true/false) [true]: ").strip()
 paddle_sandbox       = paddle_sandbox_input if paddle_sandbox_input else "true"
+paddle_enabled_input = input("  Enable Paddle payments? (true/false) [false]: ").strip()
+paddle_enabled       = paddle_enabled_input if paddle_enabled_input else "false"
 
 write_section("Paddle Frontend", [
     "# ── Paddle Billing (Frontend) ────────────────────────",
     f"VITE_PADDLE_CLIENT_TOKEN={paddle_client_token}",
     f"VITE_PADDLE_PRICE_ID={paddle_price_id}",
     f"VITE_PADDLE_SANDBOX={paddle_sandbox}",
+    f"VITE_PADDLE_ENABLED={paddle_enabled}",
 ])

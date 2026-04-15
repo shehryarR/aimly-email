@@ -86,6 +86,8 @@ paddle_webhook_secret = ask_secret("Paddle Webhook Secret")
 paddle_price_id      = ask("Paddle Price ID (starts with pri_)")
 paddle_sandbox_input = input("  Use Paddle Sandbox? (true/false) [true]: ").strip()
 paddle_sandbox       = paddle_sandbox_input if paddle_sandbox_input else "true"
+paddle_enabled_input = input("  Enable Paddle payments? (true/false) [false]: ").strip()
+paddle_enabled       = paddle_enabled_input if paddle_enabled_input else "false"
 
 write_section("Paddle", [
     "# ── Paddle Billing ───────────────────────────────────",
@@ -93,4 +95,5 @@ write_section("Paddle", [
     f"PADDLE_WEBHOOK_SECRET={paddle_webhook_secret}",
     f"PADDLE_PRICE_ID={paddle_price_id}",
     f"PADDLE_SANDBOX={paddle_sandbox}",
+    f"PADDLE_ENABLED={paddle_enabled}",
 ])

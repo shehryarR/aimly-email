@@ -9,6 +9,8 @@ import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
 import { useAuth } from '../../App';
 
+const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
+
 const LandingFont = createGlobalStyle`
   @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 `;
@@ -105,6 +107,23 @@ const FaqItem = styled.div<{ theme: any }>`border-bottom: 1px solid ${p => p.the
 const FaqQ = styled.h3<{ theme: any }>`font-size: 0.9375rem; font-weight: 600; margin: 0 0 0.5rem 0; letter-spacing: -0.01em; color: ${p => p.theme.colors.base.content};`;
 const FaqA = styled.p<{ theme: any }>`font-size: 0.875rem; line-height: 1.7; opacity: 0.55; margin: 0; color: ${p => p.theme.colors.base.content};`;
 
+
+const ComingSoonBanner = styled.div<{ theme: any }>`
+  background: ${p => p.theme.colors.warning?.main || '#f59e0b'}15;
+  border: 1px solid ${p => p.theme.colors.warning?.main || '#f59e0b'}50;
+  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
+  border-radius: ${p => p.theme.radius.field};
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+`;
+
 const FEATURES = [
   'Unlimited AI-powered email campaigns',
   'Bulk email generation & scheduling',
@@ -144,13 +163,21 @@ const PricingPage: React.FC = () => {
         <Hero>
           <HeroLabel theme={theme}>Pricing</HeroLabel>
           <HeroTitle theme={theme}>Simple, transparent pricing</HeroTitle>
-          <HeroSub theme={theme}>One plan. Everything included. Start with a 15-day free trial — no charge until it ends.</HeroSub>
+          <HeroSub theme={theme}>{PADDLE_ENABLED ? 'One plan. Everything included. Start with a 15-day free trial — no charge until it ends.' : 'One plan. Everything included. Early access — currently free while payments are being set up.'}</HeroSub>
         </Hero>
         <CardWrap>
           <Card theme={theme}>
+            {!PADDLE_ENABLED && (
+              <ComingSoonBanner theme={theme}>
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                Payments not yet active — access is currently free
+              </ComingSoonBanner>
+            )}
             <TrialBadge theme={theme}>
               <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-              15-day free trial
+              {PADDLE_ENABLED ? '15-day free trial' : 'Early Access'}
             </TrialBadge>
             <PlanName theme={theme}>Aimly Pro</PlanName>
             <PriceRow>
@@ -174,7 +201,7 @@ const PricingPage: React.FC = () => {
               <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               Get Started
             </CtaBtn>
-            <Disclaimer theme={theme}>Card required. No charge for 15 days. Cancel before trial ends to avoid billing.</Disclaimer>
+            <Disclaimer theme={theme}>{PADDLE_ENABLED ? 'Card required. No charge for 15 days. Cancel before trial ends to avoid billing.' : 'No payment required during early access.'}</Disclaimer>
           </Card>
         </CardWrap>
         <FaqSection>

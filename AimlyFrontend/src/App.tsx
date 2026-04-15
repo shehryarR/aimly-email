@@ -46,6 +46,7 @@ type AppState = 'loading' | 'server-down' | 'ready';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
+const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
 
 // ── Auth storage helpers ──────────────────────────────────
 const saveUser = (user: User): void => {
@@ -140,6 +141,13 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
   }, [logout]);
 
   const refreshSubscription = useCallback(async () => {
+    // Paddle disabled — grant access immediately, no backend call needed
+    if (!PADDLE_ENABLED) {
+      setSubscriptionStatus('active');
+      setHasSubscription(true);
+      setSubscriptionLoading(false);
+      return;
+    }
     setSubscriptionLoading(true);
     try {
       const res = await apiFetch(`${API_BASE}/subscription/status`);
