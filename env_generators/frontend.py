@@ -47,3 +47,21 @@ if vite_port:
 write_section("Frontend", lines)
 
 print()
+
+# ── Paddle (appended by subscription implementation) ──────────
+print()
+print("  ── Paddle Billing ───────────────────────────────")
+print("  ℹ️   Get client token from Paddle Dashboard →")
+print("      Developer Tools → Authentication → Client-side tokens")
+print("      Sandbox tokens start with 'test_'")
+paddle_client_token  = ask("Paddle Client-Side Token")
+paddle_price_id      = ask("Paddle Price ID (starts with pri_)")
+paddle_sandbox_input = input("  Use Paddle Sandbox? (true/false) [true]: ").strip()
+paddle_sandbox       = paddle_sandbox_input if paddle_sandbox_input else "true"
+
+write_section("Paddle Frontend", [
+    "# ── Paddle Billing (Frontend) ────────────────────────",
+    f"VITE_PADDLE_CLIENT_TOKEN={paddle_client_token}",
+    f"VITE_PADDLE_PRICE_ID={paddle_price_id}",
+    f"VITE_PADDLE_SANDBOX={paddle_sandbox}",
+])

@@ -49,6 +49,9 @@ from routes import (
 from routes.attachment import attachment_router
 from routes.attachment_management import attachment_manager_router
 
+# Subscription router
+from routes.subscription import subscription_router
+
 # ── Environment ───────────────────────────────────────────────────────────────
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8000")
@@ -135,6 +138,7 @@ app.include_router(attachment_router)                          # /attachment/*
 app.include_router(attachment_manager_router)                  # /email/{id}/attachments, etc.
 app.include_router(category_router)                            # /category/*
 app.include_router(category_company_router)                    # /category/{id}/company/*
+app.include_router(subscription_router)                        # /subscription/*
 
 
 # ── Global exception handler ──────────────────────────────────────────────────

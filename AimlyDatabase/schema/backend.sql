@@ -236,3 +236,21 @@ CREATE TABLE IF NOT EXISTS category_company (
     FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE,
     FOREIGN KEY (company_id)  REFERENCES companies  (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- ------------------------------------------------------------------
+-- Subscriptions
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                      INT AUTO_INCREMENT PRIMARY KEY,
+    user_id                 INT NOT NULL UNIQUE,
+    paddle_subscription_id  VARCHAR(255),
+    paddle_customer_id      VARCHAR(255),
+    status                  ENUM('trialing','active','past_due','paused','canceled','inactive')
+                            DEFAULT 'inactive',
+    price_id                VARCHAR(255),
+    next_billed_at          DATETIME,
+    current_period_ends_at  DATETIME,
+    scheduled_change        JSON,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

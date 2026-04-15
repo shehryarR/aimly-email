@@ -17,6 +17,12 @@ import Companies from './pages/companies/Companies';
 import Attachments from './pages/attachments/Attachments';
 import Categories from './pages/categories/Categories';
 import ServerDown from './pages/warnings/ServerDown';
+import Paywall from './pages/subscription/Paywall';
+import LandingPage from './pages/landing/LandingPage';
+import TermsOfService from './pages/legal/TermsOfService';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import RefundPolicy from './pages/legal/RefundPolicy';
+import PricingPage from './pages/pricing/PricingPage';
 import { performHealthChecks, healthMonitor } from './utils/healthCheck';
 
 // ── Types ─────────────────────────────────────────────────
@@ -33,9 +39,6 @@ const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
 // ── Auth storage helpers ──────────────────────────────────
-// Only store non-sensitive user info (username, user_id) for UI display.
-// JWT tokens are now stored in HttpOnly cookies managed by the backend.
-
 const saveUser = (user: User): void => {
   localStorage.setItem('user', JSON.stringify(user));
 };
@@ -44,10 +47,7 @@ const clearAuthData = (): void => {
   localStorage.removeItem('user');
 };
 
-// ── apiFetch — drop-in fetch replacement ─────────────────
-// Cookies are sent automatically with every request (credentials: 'include').
-// On 401, attempts a token refresh via the backend, then retries once.
-// If refresh also fails, forces logout.
+// ── apiFetch ──────────────────────────────────────────────
 let _forceLogoutCallback: (() => void) | null = null;
 
 export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Promise<Response> => {
@@ -58,7 +58,6 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
 
   let response = await fetch(input, { ...init, headers, credentials: 'include' });
 
-  // 401 received — attempt refresh then retry once
   if (response.status === 401) {
     console.log('Received 401, attempting token refresh...');
     try {
@@ -67,10 +66,8 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
         credentials: 'include',
       });
       if (refreshRes.ok) {
-        // Retry original request — new access_token cookie is now set
         response = await fetch(input, { ...init, headers, credentials: 'include' });
       } else {
-        // Refresh failed — backend already cleared cookies, clear localStorage too
         console.warn('Token refresh failed, forcing logout.');
         clearAuthData();
         _forceLogoutCallback?.();
@@ -89,18 +86,26 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
 // ── Auth Context ──────────────────────────────────────────
 interface AuthContextValue {
   user: User | null;
-  authReady: boolean;           // true once the initial auth check is done
+  authReady: boolean;
   isAuthenticated: boolean;
+  hasSubscription: boolean;
+  subscriptionStatus: string;
+  subscriptionLoading: boolean;
   login: (user: User) => void;
   logout: () => void;
+  refreshSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   authReady: false,
   isAuthenticated: false,
+  hasSubscription: false,
+  subscriptionStatus: 'inactive',
+  subscriptionLoading: true,
   login: () => {},
   logout: () => {},
+  refreshSubscription: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -108,11 +113,15 @@ export const useAuth = () => useContext(AuthContext);
 const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }> = ({ children, onLogout }) => {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
 
-  // Wire up the force-logout callback for apiFetch
   const logout = useCallback(() => {
     clearAuthData();
     setUser(null);
+    setHasSubscription(false);
+    setSubscriptionStatus('inactive');
     onLogout();
   }, [onLogout]);
 
@@ -121,37 +130,68 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
     return () => { _forceLogoutCallback = null; };
   }, [logout]);
 
-  // Single auth check on mount — validate cookie session with backend
+  const refreshSubscription = useCallback(async () => {
+    setSubscriptionLoading(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/subscription/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubscriptionStatus(data.status || 'inactive');
+        setHasSubscription(data.has_access === true);
+      } else {
+        setSubscriptionStatus('inactive');
+        setHasSubscription(false);
+      }
+    } catch {
+      setSubscriptionStatus('inactive');
+      setHasSubscription(false);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const initialize = async () => {
       try {
         const res = await fetch(`${API_BASE}/auth/validate/`, { credentials: 'include' });
         if (res.ok) {
           const raw = localStorage.getItem('user');
-          if (raw) setUser(JSON.parse(raw));
+          if (raw) {
+            setUser(JSON.parse(raw));
+            await refreshSubscription();
+          } else {
+            setSubscriptionLoading(false);
+          }
         } else {
           clearAuthData();
+          setSubscriptionLoading(false);
         }
       } catch {
         clearAuthData();
+        setSubscriptionLoading(false);
       }
       setAuthReady(true);
     };
     initialize();
-  }, []);
+  }, [refreshSubscription]);
 
   const login = useCallback((userData: User) => {
     saveUser(userData);
     setUser(userData);
-  }, []);
+    refreshSubscription();
+  }, [refreshSubscription]);
 
   return (
     <AuthContext.Provider value={{
       user,
       authReady,
       isAuthenticated: !!user,
+      hasSubscription,
+      subscriptionStatus,
+      subscriptionLoading,
       login,
       logout,
+      refreshSubscription,
     }}>
       {children}
     </AuthContext.Provider>
@@ -160,10 +200,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
 
 // ── Spinner ───────────────────────────────────────────────
 const Spinner: React.FC = () => (
-  <div style={{
-    minHeight: '60vh', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-  }}>
+  <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div style={{
       width: '32px', height: '32px',
       border: '3px solid #e2e8f0', borderTop: '3px solid #3b82f6',
@@ -189,6 +226,16 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// ── Subscription Guard ────────────────────────────────────
+// Sits inside ProtectedRoute — user is already authenticated here.
+// Shows Paywall if subscription is inactive/missing.
+const SubscriptionRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { hasSubscription, subscriptionLoading } = useAuth();
+  if (subscriptionLoading) return <Spinner />;
+  if (!hasSubscription) return <Paywall />;
+  return <>{children}</>;
+};
+
 // ── Smart Redirect ────────────────────────────────────────
 const SmartRedirect: React.FC = () => {
   const { authReady, isAuthenticated } = useAuth();
@@ -209,44 +256,34 @@ const AppRouter: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, hasSubscription } = useAuth();
 
-  // Initial server health check
   useEffect(() => {
     const initializeApp = async () => {
       console.log('Performing initial server health check...');
       try {
         const healthResult = await performHealthChecks(3, 1000);
         if (healthResult.isHealthy) {
-          console.log('Server is healthy, initializing app...');
           setAppState('ready');
         } else {
-          console.warn('Server health check failed:', healthResult.error);
           setAppState('server-down');
         }
       } catch (error) {
-        console.error('Critical error during app initialization:', error);
         setAppState('server-down');
       }
     };
     initializeApp();
   }, []);
 
-  // Start health monitoring once app is ready
   useEffect(() => {
     if (appState === 'ready') {
-      console.log('Starting health monitor...');
       healthMonitor.start((isHealthy, result) => {
-        if (!isHealthy) {
-          console.warn('Server became unhealthy during operation:', result.error);
-          setAppState('server-down');
-        }
+        if (!isHealthy) setAppState('server-down');
       });
       return () => { healthMonitor.stop(); };
     }
   }, [appState]);
 
-  // After login: redirect back to the page the user was trying to reach
   const handleLoginSuccess = (userData: User) => {
     login(userData);
     const intendedPath = (location.state as { from?: string })?.from;
@@ -255,12 +292,8 @@ const AppRouter: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      // Clear API key cookies on backend before clearing local state
-      // so the next user on the same browser doesn't inherit them
       await apiFetch(`${API_BASE}/auth/logout/`, { method: 'POST' });
-    } catch {
-      // Ignore errors — still proceed with local logout
-    }
+    } catch { }
     logout();
     setShowSettings(false);
     navigate('/auth');
@@ -270,24 +303,17 @@ const AppRouter: React.FC = () => {
   const handleBackToCampaigns = () => navigate('/campaigns');
 
   const handleServerHealthRetry = async () => {
-    console.log('User requested server health retry...');
     try {
       const healthResult = await performHealthChecks(3, 1000);
       if (healthResult.isHealthy) {
-        console.log('Server is now healthy, returning to app...');
         setAppState('ready');
-        healthMonitor.start((isHealthy, result) => {
-          if (!isHealthy) {
-            console.warn('Server became unhealthy again:', result.error);
-            setAppState('server-down');
-          }
+        healthMonitor.start((isHealthy) => {
+          if (!isHealthy) setAppState('server-down');
         });
       } else {
-        console.warn('Server is still unhealthy:', healthResult.error);
         throw new Error(healthResult.error || 'Server health check failed');
       }
     } catch (error) {
-      console.error('Health retry failed:', error);
       throw error;
     }
   };
@@ -304,7 +330,6 @@ const AppRouter: React.FC = () => {
     return '';
   };
 
-  // Loading screen
   if (appState === 'loading') {
     return (
       <div style={{
@@ -328,16 +353,21 @@ const AppRouter: React.FC = () => {
   }
 
   const isAuthPage = location.pathname === '/auth';
+  const isLandingPage = ['/', '/pricing', '/terms', '/privacy', '/refunds'].includes(location.pathname);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar
-        pageTitle={!isAuthPage ? getPageTitle() : ''}
-        user={user ? { username: user.username } : undefined}
-        onSettingsClick={() => setShowSettings(true)}
-        onThemeToggle={() => { console.log('Theme toggled'); }}
-        isAuthPage={isAuthPage}
-      />
+      {!isLandingPage && (
+        <Navbar
+          pageTitle={!isAuthPage ? getPageTitle() : ''}
+          user={user ? { username: user.username } : undefined}
+          onSettingsClick={() => setShowSettings(true)}
+          onThemeToggle={() => { console.log('Theme toggled'); }}
+          onLogout={handleLogout}
+          isAuthPage={isAuthPage}
+          hasSubscription={hasSubscription}
+        />
+      )}
 
       {user && (
         <Settings
@@ -363,7 +393,9 @@ const AppRouter: React.FC = () => {
             path="/companies"
             element={
               <ProtectedRoute>
-                <Companies />
+                <SubscriptionRoute>
+                  <Companies />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
@@ -372,7 +404,9 @@ const AppRouter: React.FC = () => {
             path="/categories"
             element={
               <ProtectedRoute>
-                <Categories />
+                <SubscriptionRoute>
+                  <Categories />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
@@ -381,7 +415,9 @@ const AppRouter: React.FC = () => {
             path="/history"
             element={
               <ProtectedRoute>
-                <EmailHistory />
+                <SubscriptionRoute>
+                  <EmailHistory />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
@@ -390,7 +426,9 @@ const AppRouter: React.FC = () => {
             path="/campaigns"
             element={
               <ProtectedRoute>
-                <Campaigns onCampaignClick={handleCampaignClick} />
+                <SubscriptionRoute>
+                  <Campaigns onCampaignClick={handleCampaignClick} />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
@@ -399,7 +437,9 @@ const AppRouter: React.FC = () => {
             path="/campaign/:campaignId"
             element={
               <ProtectedRoute>
-                <CampaignWrapper onBack={handleBackToCampaigns} />
+                <SubscriptionRoute>
+                  <CampaignWrapper onBack={handleBackToCampaigns} />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
@@ -408,17 +448,23 @@ const AppRouter: React.FC = () => {
             path="/attachments"
             element={
               <ProtectedRoute>
-                <Attachments />
+                <SubscriptionRoute>
+                  <Attachments />
+                </SubscriptionRoute>
               </ProtectedRoute>
             }
           />
 
-          <Route path="/" element={<SmartRedirect />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/refunds" element={<RefundPolicy />} />
           <Route path="*" element={<SmartRedirect />} />
         </Routes>
       </main>
 
-      <Footer />
+      {!isLandingPage && <Footer />}
     </div>
   );
 };
@@ -446,4 +492,4 @@ const App: React.FC = () => (
   </BrowserRouter>
 );
 
-export default App; 
+export default App;

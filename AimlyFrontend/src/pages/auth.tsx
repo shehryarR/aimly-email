@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { EyeIcon, EyeOffIcon } from '../theme/icons';
@@ -333,10 +334,31 @@ const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 // Use port only if defined and not empty
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
+
+const LegalNote = styled.p<{ theme: any }>`
+  font-size: 0.72rem;
+  text-align: center;
+  opacity: 0.4;
+  margin: 0.5rem 0 0 0;
+  line-height: 1.6;
+  color: \${props => props.theme.colors.base.content};
+`;
+
+const LegalNoteLink = styled(Link)`
+  text-decoration: underline;
+  color: inherit;
+  cursor: pointer;
+  &:hover { opacity: 0.8; }
+`;
+
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const { theme } = useTheme();
   const { executeRecaptcha } = useGoogleReCaptcha();
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>(
+    searchParams.get('tab') === 'register' ? 'register' : 'login'
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'neutral'; text: string } | null>(null);
   
@@ -945,6 +967,13 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               <Button theme={theme} type="submit" disabled={loading}>
                 {loading ? 'Registering...' : 'Register'}
               </Button>
+
+              <LegalNote theme={theme}>
+                By registering you agree to our{' '}
+                <LegalNoteLink to="/terms">Terms of Service</LegalNoteLink>
+                {' and '}
+                <LegalNoteLink to="/privacy">Privacy Policy</LegalNoteLink>
+              </LegalNote>
 
               {/* Google Sign-In */}
               <OrDivider theme={theme}>or</OrDivider>

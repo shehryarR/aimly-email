@@ -16,6 +16,7 @@ from .email_actions import email_actions_router
 from .stats import stats_router
 from .category import category_router
 from .category_company import category_company_router
+from .subscription import subscription_router
 
 __all__ = [
     "server_router",
@@ -32,5 +33,6 @@ __all__ = [
     "stats_router",
     "category_router",
     "category_company_router",
+    "subscription_router",
     "get_current_user",
 ]
