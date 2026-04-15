@@ -370,6 +370,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const { executeRecaptcha } = useGoogleReCaptcha();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(
     searchParams.get('tab') === 'register' ? 'register' : 'login'
   );
@@ -677,22 +678,29 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // Registration handler
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Validate first, then show consent modal before proceeding
     if (!registerData.username || !registerData.email || !registerData.password || !registerData.confirm_password) {
       setMessage({ type: 'error', text: 'All fields are required' });
       return;
     }
-    
     if (!validatePassword(registerData.password)) {
       setMessage({ type: 'error', text: 'Password does not meet requirements' });
       return;
     }
-    
     if (registerData.password !== registerData.confirm_password) {
       setMessage({ type: 'error', text: 'Passwords do not match' });
       return;
     }
 
+    // Show consent modal — actual registration runs in handleConsentAccept
+    setShowConsentModal(true);
+    return;
+  };
+
+  const handleConsentAccept = async () => {
+    setShowConsentModal(false);
+    
     if (!executeRecaptcha) {
       setMessage({ type: 'error', text: 'reCAPTCHA not ready. Please try again.' });
       return;
@@ -982,13 +990,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 {loading ? 'Registering...' : 'Register'}
               </Button>
 
-              <LegalNote theme={theme}>
-                By registering you agree to our{' '}
-                <LegalNoteLink to="/terms">Terms of Service</LegalNoteLink>
-                {' and '}
-                <LegalNoteLink to="/privacy">Privacy Policy</LegalNoteLink>
-              </LegalNote>
-
               {/* Google Sign-In */}
               <OrDivider theme={theme}>or</OrDivider>
               <GoogleButton theme={theme} type="button" onClick={handleGoogleSignIn} disabled={loading}>
@@ -1011,6 +1012,99 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           </RecaptchaDisclosure>
         </AuthCard>
       </AuthContainer>
+
+      {/* ── Consent Modal ── */}
+      {showConsentModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }}
+          onClick={() => setShowConsentModal(false)}
+        >
+          <div style={{
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.box,
+            padding: '2rem',
+            maxWidth: '420px',
+            width: '100%',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+          }}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 40, height: 40, borderRadius: '50%',
+                background: theme.colors.primary.main + '18',
+                color: theme.colors.primary.main, flexShrink: 0,
+              }}>
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.15rem' }}>
+                  Before you continue
+                </div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.5 }}>
+                  Please review and accept our policies
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <p style={{ fontSize: '0.875rem', lineHeight: 1.7, opacity: 0.65, marginBottom: '1.5rem' }}>
+              By creating an account you agree to our{' '}
+              <Link to="/terms" target="_blank" rel="noopener noreferrer"
+                style={{ color: theme.colors.primary.main, textDecoration: 'underline' }}>
+                Terms of Service
+              </Link>
+              {' '}and{' '}
+              <Link to="/privacy" target="_blank" rel="noopener noreferrer"
+                style={{ color: theme.colors.primary.main, textDecoration: 'underline' }}>
+                Privacy Policy
+              </Link>
+              . These documents explain your rights and how we handle your data.
+            </p>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConsentModal(false)}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: theme.radius.field,
+                  border: `1px solid ${theme.colors.base[300]}`,
+                  background: 'transparent',
+                  color: theme.colors.base.content,
+                  cursor: 'pointer', fontWeight: 500, fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConsentAccept}
+                style={{
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: theme.radius.field,
+                  border: 'none',
+                  background: theme.colors.primary.main,
+                  color: theme.colors.primary.content,
+                  cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                }}
+              >
+                I Agree & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading overlay */}
       {loading && (
