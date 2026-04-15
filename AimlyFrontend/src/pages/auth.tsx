@@ -4,8 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { EyeIcon, EyeOffIcon } from '../theme/icons';
@@ -350,6 +349,20 @@ const LegalNoteLink = styled(Link)`
   color: inherit;
   cursor: pointer;
   &:hover { opacity: 0.8; }
+`;
+
+const RecaptchaDisclosure = styled.p<{ theme: any }>`
+  font-size: 0.7rem;
+  text-align: center;
+  opacity: 0.35;
+  margin: 1.25rem 0 0 0;
+  line-height: 1.6;
+  color: \${props => props.theme.colors.base.content};
+  a {
+    color: inherit;
+    text-decoration: underline;
+    &:hover { opacity: 0.7; }
+  }
 `;
 
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
@@ -989,6 +1002,13 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               </GoogleButton>
             </Form>
           )}
+          <RecaptchaDisclosure theme={theme}>
+            This site is protected by reCAPTCHA and the Google{' '}
+            <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+            {' '}and{' '}
+            <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {' '}apply.
+          </RecaptchaDisclosure>
         </AuthCard>
       </AuthContainer>
 

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useContext, createContext, useCallback } from 'react';
+import { createGlobalStyle } from 'styled-components';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './theme/styles';
 import Navbar from './template/navbar';
@@ -24,6 +25,14 @@ import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import RefundPolicy from './pages/legal/RefundPolicy';
 import PricingPage from './pages/pricing/PricingPage';
 import { performHealthChecks, healthMonitor } from './utils/healthCheck';
+
+
+// Hide reCAPTCHA badge — disclosure text shown on auth page per Google ToS
+const GlobalStyle = createGlobalStyle`
+  .grecaptcha-badge {
+    visibility: hidden !important;
+  }
+`;
 
 // ── Types ─────────────────────────────────────────────────
 interface User {
@@ -487,6 +496,7 @@ const AppRouterWithAuth: React.FC = () => {
 const App: React.FC = () => (
   <BrowserRouter>
     <ThemeProvider>
+      <GlobalStyle />
       <AppRouterWithAuth />
     </ThemeProvider>
   </BrowserRouter>
