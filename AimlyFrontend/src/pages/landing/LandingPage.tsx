@@ -119,8 +119,9 @@ const HeroTitle = styled.h1<{ theme: any }>`
 
 const HeroSub = styled.p<{ theme: any }>`
   font-size: 1.125rem;
-  line-height: 1.7;
-  opacity: 0.6;
+  font-weight: 400;
+  line-height: 1.75;
+  opacity: 0.8;
   max-width: 540px;
   margin: 0 0 2.75rem 0;
   color: ${p => p.theme.colors.base.content};
@@ -171,7 +172,7 @@ const SecondaryBtn = styled(Link)<{ theme: any }>`
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  opacity: 0.75;
+  opacity: 0.9;
   &:hover {
     opacity: 1;
     border-color: ${p => p.theme.colors.primary.main};
@@ -238,7 +239,7 @@ const PreviewLabel = styled.div<{ theme: any }>`
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  opacity: 0.4;
+  opacity: 0.55;
   margin-bottom: 0.4rem;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -298,7 +299,7 @@ const StatNum = styled.div<{ theme: any }>`
 
 const StatDesc = styled.div<{ theme: any }>`
   font-size: 0.75rem;
-  opacity: 0.5;
+  opacity: 0.7;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 500;
@@ -328,8 +329,9 @@ const SectionTitle = styled.h2<{ theme: any }>`
 
 const SectionSub = styled.p<{ theme: any }>`
   font-size: 1rem;
-  line-height: 1.7;
-  opacity: 0.55;
+  font-weight: 400;
+  line-height: 1.75;
+  opacity: 0.8;
   max-width: 520px;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
@@ -392,9 +394,10 @@ const FeatureTitle = styled.h3<{ theme: any }>`
 `;
 
 const FeatureDesc = styled.p<{ theme: any }>`
-  font-size: 0.8375rem;
-  line-height: 1.65;
-  opacity: 0.55;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.75;
+  opacity: 0.8;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -439,9 +442,10 @@ const StepTitle = styled.h3<{ theme: any }>`
 `;
 
 const StepDesc = styled.p<{ theme: any }>`
-  font-size: 0.8375rem;
-  line-height: 1.65;
-  opacity: 0.5;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.75;
+  opacity: 0.8;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -527,7 +531,7 @@ const PricingAmount = styled.div`
 const PricingCurrency = styled.span<{ theme: any }>`
   font-size: 1.25rem;
   font-weight: 600;
-  opacity: 0.6;
+  opacity: 0.75;
   align-self: flex-start;
   margin-top: 0.5rem;
   color: ${p => p.theme.colors.base.content};
@@ -544,13 +548,13 @@ const PricingNumber = styled.span<{ theme: any }>`
 
 const PricingPer = styled.span<{ theme: any }>`
   font-size: 0.875rem;
-  opacity: 0.45;
+  opacity: 0.65;
   color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingSub = styled.p<{ theme: any }>`
   font-size: 0.8125rem;
-  opacity: 0.4;
+  opacity: 0.65;
   margin: 0 0 1.75rem 0;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -568,8 +572,8 @@ const PricingFeature = styled.li<{ theme: any }>`
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  font-size: 0.875rem;
-  opacity: 0.8;
+  font-size: 0.9rem;
+  opacity: 0.9;
   color: ${p => p.theme.colors.base.content};
 `;
 
@@ -611,7 +615,7 @@ const PricingCta = styled(Link)<{ theme: any }>`
 
 const PricingDisclaimer = styled.p<{ theme: any }>`
   font-size: 0.72rem;
-  opacity: 0.35;
+  opacity: 0.6;
   text-align: center;
   margin: 1rem 0 0 0;
   line-height: 1.5;
@@ -718,7 +722,7 @@ const LandingPage: React.FC = () => {
                   <PreviewDot $c="#ff5f57" />
                   <PreviewDot $c="#ffbd2e" />
                   <PreviewDot $c="#28ca41" />
-                  <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', opacity: 0.3, fontFamily: 'DM Sans', color: theme.colors.base.content }}>
+                  <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', opacity: 0.5, fontFamily: 'DM Sans', color: theme.colors.base.content }}>
                     app.aimly.io/campaigns
                   </span>
                 </PreviewBar>

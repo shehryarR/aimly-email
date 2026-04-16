@@ -12,13 +12,13 @@ const Root = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[1
 const Hero = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[200]}; border-bottom: 1px solid ${p => p.theme.colors.base[300]}; padding: 3.5rem 2rem; text-align: center;`;
 const HeroLabel = styled.div<{ theme: any }>`font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 0.75rem;`;
 const HeroTitle = styled.h1<{ theme: any }>`font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 0.5rem 0; color: ${p => p.theme.colors.base.content};`;
-const HeroDate = styled.p<{ theme: any }>`font-size: 0.8125rem; opacity: 0.4; margin: 0; color: ${p => p.theme.colors.base.content};`;
+const HeroDate = styled.p<{ theme: any }>`font-size: 0.8125rem; opacity: 0.55; margin: 0; color: ${p => p.theme.colors.base.content};`;
 const Body = styled.div`max-width: 760px; margin: 0 auto; padding: 4rem 2rem;`;
 const Section = styled.section`margin-bottom: 2.75rem;`;
 const SectionTitle = styled.h2<{ theme: any }>`font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; padding-bottom: 0.625rem; border-bottom: 1px solid ${p => p.theme.colors.base[300]};`;
-const P = styled.p<{ theme: any }>`font-size: 0.9rem; line-height: 1.8; opacity: 0.65; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; &:last-child { margin-bottom: 0; }`;
+const P = styled.p<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.85; opacity: 0.85; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; &:last-child { margin-bottom: 0; }`;
 const Ul = styled.ul`padding-left: 1.25rem; margin: 0 0 0.875rem 0; display: flex; flex-direction: column; gap: 0.4rem;`;
-const Li = styled.li<{ theme: any }>`font-size: 0.9rem; line-height: 1.7; opacity: 0.65; color: ${p => p.theme.colors.base.content};`;
+const Li = styled.li<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.75; opacity: 0.85; color: ${p => p.theme.colors.base.content};`;
 const HighlightBox = styled.div<{ theme: any }>`
   background: ${p => p.theme.colors.accent.main}10;
   border: 1px solid ${p => p.theme.colors.accent.main}40;
@@ -28,7 +28,7 @@ const HighlightBox = styled.div<{ theme: any }>`
 `;
 const HighlightText = styled.p<{ theme: any }>`font-size: 0.9rem; line-height: 1.7; color: ${p => p.theme.colors.accent.main}; margin: 0; font-weight: 500;`;
 const ContactBox = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[200]}; border: 1px solid ${p => p.theme.colors.base[300]}; border-radius: ${p => p.theme.radius.box}; padding: 1.5rem; margin-top: 1rem;`;
-const ContactLine = styled.p<{ theme: any }>`font-size: 0.875rem; opacity: 0.6; margin: 0 0 0.3rem 0; color: ${p => p.theme.colors.base.content}; &:last-child { margin: 0; }`;
+const ContactLine = styled.p<{ theme: any }>`font-size: 0.9rem; opacity: 0.8; margin: 0 0 0.3rem 0; color: ${p => p.theme.colors.base.content}; &:last-child { margin: 0; }`;
 
 const RefundPolicy: React.FC = () => {
   const { theme } = useTheme();

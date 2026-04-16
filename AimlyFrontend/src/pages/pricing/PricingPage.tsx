@@ -44,7 +44,7 @@ const Root = styled.div<{ theme: any }>`
 const Hero = styled.div`text-align: center; padding: 5rem 2rem 3rem; position: relative; z-index: 1;`;
 const HeroLabel = styled.div<{ theme: any }>`font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 1rem; animation: ${fadeUp} 0.5s ease both;`;
 const HeroTitle = styled.h1<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 400; letter-spacing: -0.02em; margin: 0 0 1rem 0; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.1s ease both;`;
-const HeroSub = styled.p<{ theme: any }>`font-size: 1rem; opacity: 0.55; max-width: 460px; margin: 0 auto; line-height: 1.7; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.2s ease both;`;
+const HeroSub = styled.p<{ theme: any }>`font-size: 1rem; opacity: 0.8; max-width: 460px; margin: 0 auto; line-height: 1.7; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.2s ease both;`;
 
 const CardWrap = styled.div`display: flex; justify-content: center; padding: 3rem 2rem; position: relative; z-index: 1;`;
 
@@ -72,16 +72,16 @@ const TrialBadge = styled.div<{ theme: any }>`
   text-transform: uppercase; margin-bottom: 1.5rem;
 `;
 
-const PlanName = styled.div<{ theme: any }>`font-size: 0.8125rem; font-weight: 600; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; color: ${p => p.theme.colors.base.content};`;
+const PlanName = styled.div<{ theme: any }>`font-size: 0.8125rem; font-weight: 600; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; color: ${p => p.theme.colors.base.content};`;
 const PriceRow = styled.div`display: flex; align-items: baseline; gap: 0.25rem; margin-bottom: 0.4rem;`;
-const Currency = styled.span<{ theme: any }>`font-size: 1.25rem; font-weight: 600; opacity: 0.6; align-self: flex-start; margin-top: 0.6rem; color: ${p => p.theme.colors.base.content};`;
+const Currency = styled.span<{ theme: any }>`font-size: 1.25rem; font-weight: 600; opacity: 0.75; align-self: flex-start; margin-top: 0.6rem; color: ${p => p.theme.colors.base.content};`;
 const Amount = styled.span<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: 4rem; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: ${p => p.theme.colors.base.content};`;
-const Per = styled.span<{ theme: any }>`font-size: 0.875rem; opacity: 0.45; color: ${p => p.theme.colors.base.content};`;
-const PriceSub = styled.p<{ theme: any }>`font-size: 0.8125rem; opacity: 0.4; margin: 0 0 2rem 0; color: ${p => p.theme.colors.base.content};`;
+const Per = styled.span<{ theme: any }>`font-size: 0.875rem; opacity: 0.65; color: ${p => p.theme.colors.base.content};`;
+const PriceSub = styled.p<{ theme: any }>`font-size: 0.8125rem; opacity: 0.65; margin: 0 0 2rem 0; color: ${p => p.theme.colors.base.content};`;
 const Divider = styled.div<{ theme: any }>`height: 1px; background: ${p => p.theme.colors.base[300]}; margin-bottom: 1.5rem;`;
 
 const FeatureList = styled.ul`list-style: none; padding: 0; margin: 0 0 2rem 0; display: flex; flex-direction: column; gap: 0.75rem;`;
-const FeatureItem = styled.li<{ theme: any }>`display: flex; align-items: center; gap: 0.65rem; font-size: 0.875rem; opacity: 0.8; color: ${p => p.theme.colors.base.content};`;
+const FeatureItem = styled.li<{ theme: any }>`display: flex; align-items: center; gap: 0.65rem; font-size: 0.9rem; opacity: 0.9; color: ${p => p.theme.colors.base.content};`;
 const Check = styled.span<{ theme: any }>`
   width: 18px; height: 18px; min-width: 18px; border-radius: 50%;
   background: ${p => p.theme.colors.accent.main}20;
@@ -99,13 +99,13 @@ const CtaBtn = styled(Link)<{ theme: any }>`
   cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
   &:hover { background: ${p => p.theme.colors.accent.main}; color: ${p => p.theme.colors.accent.content}; transform: translateY(-2px); box-shadow: 0 8px 28px ${p => p.theme.colors.accent.main}40; }
 `;
-const Disclaimer = styled.p<{ theme: any }>`font-size: 0.72rem; opacity: 0.35; text-align: center; margin: 0.875rem 0 0 0; line-height: 1.5; color: ${p => p.theme.colors.base.content};`;
+const Disclaimer = styled.p<{ theme: any }>`font-size: 0.72rem; opacity: 0.6; text-align: center; margin: 0.875rem 0 0 0; line-height: 1.5; color: ${p => p.theme.colors.base.content};`;
 
 const FaqSection = styled.div`max-width: 640px; margin: 0 auto; padding: 2rem 2rem 5rem; position: relative; z-index: 1;`;
 const FaqTitle = styled.h2<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; letter-spacing: -0.02em; text-align: center; margin: 0 0 2.5rem 0; color: ${p => p.theme.colors.base.content};`;
 const FaqItem = styled.div<{ theme: any }>`border-bottom: 1px solid ${p => p.theme.colors.base[300]}; padding: 1.25rem 0; &:first-of-type { border-top: 1px solid ${p => p.theme.colors.base[300]}; }`;
 const FaqQ = styled.h3<{ theme: any }>`font-size: 0.9375rem; font-weight: 600; margin: 0 0 0.5rem 0; letter-spacing: -0.01em; color: ${p => p.theme.colors.base.content};`;
-const FaqA = styled.p<{ theme: any }>`font-size: 0.875rem; line-height: 1.7; opacity: 0.55; margin: 0; color: ${p => p.theme.colors.base.content};`;
+const FaqA = styled.p<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.85; opacity: 0.85; margin: 0; color: ${p => p.theme.colors.base.content};`;
 
 
 const ComingSoonBanner = styled.div<{ theme: any }>`
