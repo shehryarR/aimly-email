@@ -17,6 +17,8 @@ Logo is stored as LONGBLOB and returned as a base64 data URL on GET.
 
 from datetime import datetime
 import base64
+import smtplib
+import ssl
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Query
@@ -24,7 +26,7 @@ from pydantic import BaseModel
 
 from core.database.connection import get_connection
 from routes.auth import get_current_user
-from routes.utils.crypto import encrypt_smtp_password
+from routes.utils.crypto import encrypt_smtp_password, decrypt_smtp_password
 
 brands_router = APIRouter(prefix="/brands", tags=["Brands"])
 
@@ -89,6 +91,82 @@ async def _read_logo(logo: Optional[UploadFile]):
 
     # Sent but empty → clear
     return None, None, True
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# SMTP STATUS CHECK HELPER
+# ══════════════════════════════════════════════════════════════════════════════════
+
+class SmtpStatus(BaseModel):
+    status_text: str
+    status_code: int  # 0=not configured  1=working  2=auth error  3=connection error
+
+
+def _check_smtp_status(host: Optional[str], port: Optional[int],
+                       email: Optional[str], encrypted_password: Optional[str]) -> SmtpStatus:
+    """
+    Live SMTP connection test. Mirrors the status code convention used by
+    _check_llm_status / _check_tavily_status in user_keys.py:
+      0 = not configured
+      1 = working
+      2 = auth error  (credentials rejected — same as "limit" slot, semantically "creds bad")
+      3 = connection error (host unreachable, timeout, TLS failure, etc.)
+    """
+    if not host or not port or not email or not encrypted_password:
+        return SmtpStatus(status_text="Not configured", status_code=0)
+
+    try:
+        password = decrypt_smtp_password(encrypted_password)
+    except ValueError:
+        return SmtpStatus(status_text="Stored password is corrupted — re-save the brand", status_code=3)
+
+    try:
+        context = ssl.create_default_context()
+
+        if port == 465:
+            # SSL from the start
+            with smtplib.SMTP_SSL(host, port, context=context, timeout=10) as server:
+                server.login(email, password)
+        else:
+            # STARTTLS (587 or 25)
+            with smtplib.SMTP(host, port, timeout=10) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
+                server.login(email, password)
+
+        return SmtpStatus(status_text="Working", status_code=1)
+
+    except smtplib.SMTPAuthenticationError:
+        return SmtpStatus(
+            status_text="Authentication failed — check email address and app password",
+            status_code=2,
+        )
+    except smtplib.SMTPConnectError:
+        return SmtpStatus(
+            status_text=f"Could not connect to {host}:{port}",
+            status_code=3,
+        )
+    except smtplib.SMTPServerDisconnected:
+        return SmtpStatus(
+            status_text="Server disconnected unexpectedly",
+            status_code=3,
+        )
+    except (TimeoutError, OSError) as e:
+        return SmtpStatus(
+            status_text=f"Connection timed out or refused — {str(e)[:60]}",
+            status_code=3,
+        )
+    except ssl.SSLError as e:
+        return SmtpStatus(
+            status_text=f"TLS/SSL error — {str(e)[:60]}",
+            status_code=3,
+        )
+    except Exception as e:
+        return SmtpStatus(
+            status_text=f"Unexpected error — {str(e)[:80]}",
+            status_code=3,
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
@@ -164,6 +242,50 @@ def get_brands(current_user: dict = Depends(get_current_user)):
         ))
 
     return BrandsListResponse(brands=brands, total=len(brands))
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# GET /brands/status/ — live SMTP connection test for one brand
+# ══════════════════════════════════════════════════════════════════════════════════
+
+@brands_router.get("/status/", response_model=SmtpStatus)
+def get_brand_smtp_status(
+    brand_id: int = Query(..., description="Brand ID to test"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Live SMTP connection test for a single brand.
+
+    Decrypts the stored email_password, then attempts SMTP login.
+    Never returns the decrypted password.
+
+    Status codes:
+      0 = not configured (missing host/port/email/password)
+      1 = working
+      2 = authentication error (wrong credentials)
+      3 = connection / TLS error
+    """
+    user_id = current_user["user_id"]
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT smtp_host, smtp_port, email_address, email_password
+            FROM brands
+            WHERE id = %s AND user_id = %s
+        """, (brand_id, user_id))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Brand not found")
+
+    r = dict(row)
+    return _check_smtp_status(
+        host=r.get("smtp_host"),
+        port=r.get("smtp_port"),
+        email=r.get("email_address"),
+        encrypted_password=r.get("email_password"),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════════

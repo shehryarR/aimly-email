@@ -543,6 +543,12 @@ interface BrandForm {
   is_default: boolean;
 }
 
+interface SmtpStatusState {
+  status_code: number;  // 0=not configured  1=working  2=auth error  3=conn error
+  status_text: string;
+  checking: boolean;
+}
+
 interface Statuses { llm: StatusColor; tavily: StatusColor; }
 interface Messages { llm: string; tavily: string; }
 
@@ -675,6 +681,39 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [showBrandPwd,    setShowBrandPwd]    = useState(false);
   const [brandPwdMasked,  setBrandPwdMasked]  = useState(false);
   const [expandedBrandId, setExpandedBrandId] = useState<number | 'new' | null>(null);
+
+  // ── SMTP status state ─────────────────────────────────────────
+  const [smtpStatuses, setSmtpStatuses] = useState<Record<number, SmtpStatusState>>({});
+
+  const mapSmtpCode = (code: number): StatusColor =>
+    ({ 1: 'green', 2: 'orange', 3: 'red' } as Record<number, StatusColor>)[code] ?? 'gray';
+
+  const checkSmtpStatus = async (brandId: number) => {
+    setSmtpStatuses(prev => ({
+      ...prev,
+      [brandId]: { status_code: 0, status_text: 'Checking…', checking: true },
+    }));
+    try {
+      const res = await apiFetch(`${API_BASE}/brands/status/?brand_id=${brandId}`, { headers: {} });
+      if (res.ok) {
+        const d = await res.json();
+        setSmtpStatuses(prev => ({
+          ...prev,
+          [brandId]: { status_code: d.status_code, status_text: d.status_text, checking: false },
+        }));
+      } else {
+        setSmtpStatuses(prev => ({
+          ...prev,
+          [brandId]: { status_code: 3, status_text: 'Failed to reach server', checking: false },
+        }));
+      }
+    } catch {
+      setSmtpStatuses(prev => ({
+        ...prev,
+        [brandId]: { status_code: 3, status_text: 'Network error', checking: false },
+      }));
+    }
+  };
 
   // ── Attachment state ──────────────────────────────────────────
   const [allAttachments,      setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -983,6 +1022,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       setPendingLogo(null); setPendingLogoPreview(null);
       savedKeys.current = null; savedGlobal.current = null;
       setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); setShowBrandPwd(false); setBrandPwdMasked(false);
+      setSmtpStatuses({});
     }
   }, [isOpen]);
 
@@ -1023,7 +1063,13 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     setBrandsLoading(true);
     try {
       const res = await apiFetch(`${API_BASE}/brands/`, { headers: {} });
-      if (res.ok) { const d = await res.json(); setBrands(d.brands ?? d ?? []); }
+      if (res.ok) {
+        const d = await res.json();
+        const list: Brand[] = d.brands ?? d ?? [];
+        setBrands(list);
+        // Auto-check SMTP status for every brand, same as LLM/Tavily on tab open
+        list.forEach(b => checkSmtpStatus(b.id));
+      }
     } catch (e) { console.error(e); }
     finally { setBrandsLoading(false); }
   };
@@ -1598,6 +1644,19 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                               </div>
                             </div>
 
+                            {/* SMTP status dot — shown after a test has been run */}
+                            {smtpStatuses[brand.id] && !smtpStatuses[brand.id].checking && (
+                              <StatusDot
+                                $status={mapSmtpCode(smtpStatuses[brand.id].status_code)}
+                                title={smtpStatuses[brand.id].status_text}
+                                onClick={e => { e.stopPropagation(); checkSmtpStatus(brand.id); }}
+                                style={{ cursor: 'pointer', flexShrink: 0 }}
+                              />
+                            )}
+                            {smtpStatuses[brand.id]?.checking && (
+                              <StatusDot $status="checking" title="Checking SMTP…" style={{ flexShrink: 0 }} />
+                            )}
+
                             {/* Chevron */}
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                               style={{ flexShrink: 0, opacity: 0.4, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
@@ -1758,12 +1817,37 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                                 </div>
                               )}
 
+                              {/* SMTP status message — shown after a test */}
+                              {smtpStatuses[brand.id] && (
+                                <Msg
+                                  theme={theme}
+                                  $type={
+                                    smtpStatuses[brand.id].checking ? 'checking' :
+                                    smtpStatuses[brand.id].status_code === 1 ? 'success' :
+                                    smtpStatuses[brand.id].status_code === 2 ? 'warning' : 'error'
+                                  }
+                                  style={{ marginBottom: '0.75rem' }}
+                                >
+                                  {smtpStatuses[brand.id].checking ? 'Testing SMTP connection…' : smtpStatuses[brand.id].status_text}
+                                </Msg>
+                              )}
+
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Btn theme={theme} $variant="danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                                   onClick={() => { deleteBrand(brand.id); setExpandedBrandId(null); setBrandForm(null); }}>
                                   Delete
                                 </Btn>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <Btn
+                                    theme={theme}
+                                    $variant="secondary"
+                                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                                    disabled={smtpStatuses[brand.id]?.checking}
+                                    onClick={() => checkSmtpStatus(brand.id)}
+                                    title="Test SMTP connection with stored credentials"
+                                  >
+                                    {smtpStatuses[brand.id]?.checking ? 'Testing…' : 'Test connection'}
+                                  </Btn>
                                   <Btn theme={theme} $variant="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                                     onClick={() => { setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); }}>Cancel</Btn>
                                   <Btn theme={theme} onClick={saveBrand} disabled={brandSaving} style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}>
