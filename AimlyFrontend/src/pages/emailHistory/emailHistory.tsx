@@ -73,6 +73,7 @@ interface EmailRecord {
   company_name: string;
   campaign_id: number;
   campaign_name: string;
+  html_email?: boolean;
   signature?: string;
   logo_data?: string | null;
   failed_reason?: string;
@@ -315,8 +316,8 @@ interface EmailDetailModalProps {
   onSend: (email: EmailRecord) => void;
   onSaveDraft: (email: EmailRecord) => void;
   onDelete: (id: number, label?: string) => void;
-  tab: 'email' | 'attachments' | 'branding';
-  onTabChange: (t: 'email' | 'attachments' | 'branding') => void;
+  tab: 'email' | 'attachments';
+  onTabChange: (t: 'email' | 'attachments') => void;
   attachLoading: boolean;
   allAttachments: AttachOption[];
   linkedAttachIds: Set<number>;
@@ -335,16 +336,6 @@ interface EmailDetailModalProps {
   onDragOver: () => void; onDragLeave: () => void;
   onDrop: (file: File) => void; onClearUploadFile: () => void;
   uploadInputRef: React.RefObject<HTMLInputElement | null>;
-  brandSignature: string;
-  onBrandSignatureChange: (v: string) => void;
-  brandLogoData: string | null;
-  onBrandLogoFile: (file: File) => void;
-  onClearBrandLogo: () => void;
-  brandLogoUploading: boolean;
-  onSaveBranding: () => void;
-  brandSaving: boolean;
-  brandMsg: { type: 'success' | 'error'; text: string } | null;
-  brandLogoInputRef: React.RefObject<HTMLInputElement | null>;
   onDownloadAttachments: (ids: number[], filenames: string[]) => void;
   formatDT: (s?: string) => string;
   minDT: string;
@@ -364,12 +355,45 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   onAttachSearchChange, onToggleAttachment, onSaveAttachments, attachSaving, attachMsg,
   uploadFile, onFilePick, onUpload, uploading, uploadMsg,
   isDragOver, onDragOver, onDragLeave, onDrop, onClearUploadFile, uploadInputRef,
-  brandSignature, onBrandSignatureChange, brandLogoData, onBrandLogoFile,
-  onClearBrandLogo, brandLogoUploading, onSaveBranding, brandSaving, brandMsg, brandLogoInputRef,
   onDownloadAttachments,
   formatDT, minDT, theme, isDirty = false,
 }) => {
   const [confirmClose, setConfirmClose] = useState(false);
+  const [htmlEmail, setHtmlEmail] = useState<boolean>(false);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const dragStateRef = useRef<{ dragging: boolean; startX: number; startRatio: number; containerW: number }>({ dragging: false, startX: 0, startRatio: 0.5, containerW: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync htmlEmail whenever the modal opens a different email
+  useEffect(() => {
+    setHtmlEmail(!!activeEmail?.html_email);
+    setSplitRatio(0.5);
+  }, [activeEmail?.id]);
+
+  const onDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const containerW = containerRef.current?.offsetWidth ?? 800;
+    dragStateRef.current = { dragging: true, startX: e.clientX, startRatio: splitRatio, containerW };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const cleanup = () => {
+      dragStateRef.current.dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragStateRef.current.dragging) return;
+      if (ev.buttons === 0) { cleanup(); return; }
+      const { startX, startRatio, containerW: cW } = dragStateRef.current;
+      const newRatio = Math.min(0.75, Math.max(0.25, startRatio + (ev.clientX - startX) / cW));
+      setSplitRatio(newRatio);
+    };
+    const onUp = () => cleanup();
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const handleClose = () => {
     if (isDirty) { setConfirmClose(true); return; }
@@ -383,15 +407,6 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const isSent      = activeEmail.status === 'sent';
   const isFailed    = activeEmail.status === 'failed';
 
-  // ── DEBUG LOGGING ──────────────────────────────────────────────────────────
-  console.log('[EmailDetailModal] render — activeEmail:', {
-    id:            activeEmail.id,
-    status:        activeEmail.status,
-    isFailed,
-    failed_reason: activeEmail.failed_reason,
-    hasReason:     !!activeEmail.failed_reason,
-  });
-
   const filteredAtts    = allAttachments.filter(a => a.filename.toLowerCase().includes(attachSearch.toLowerCase()));
   const attachedFiles   = filteredAtts.filter(a =>  linkedAttachIds.has(a.id));
   const unattachedFiles = filteredAtts.filter(a => !linkedAttachIds.has(a.id));
@@ -399,13 +414,12 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   const tabDef = [
     { id: 'email' as const,       label: 'Email',       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> },
     { id: 'attachments' as const, label: 'Attachments', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> },
-    { id: 'branding' as const,    label: 'Branding',    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
   ];
 
   return (
     <>
     <ModalOverlay $isOpen={isOpen} onClick={handleClose}>
-      <ModalContent theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+      <ModalContent theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ maxWidth: htmlEmail && tab === 'email' ? 1100 : 680, transition: 'max-width 0.25s' }}>
 
         {/* Header */}
         <ModalHeader theme={theme}>
@@ -440,31 +454,79 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 
         {/* ── EMAIL TAB ── */}
         {tab === 'email' && (<>
-          <ModalBody>
-            <FormGroup>
-              <FormLabel theme={theme}>Recipient</FormLabel>
-              {(isDraft || isScheduled)
-                ? <FormInput theme={theme} value={editRecipient} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onRecipientChange(e.target.value)} placeholder="recipient@example.com" />
-                : <ReadBlock theme={theme} style={{ fontFamily: 'SF Mono, Monaco, monospace', fontSize: '0.825rem' }}>{activeEmail.recipient_email}</ReadBlock>
-              }
-            </FormGroup>
-            <FormGroup>
-              <FormLabel theme={theme}>Subject</FormLabel>
-              {(isDraft || isScheduled)
-                ? <FormInput theme={theme} value={editSubject} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSubjectChange(e.target.value)} placeholder="Email subject" />
-                : <ReadBlock theme={theme}>{activeEmail.email_subject}</ReadBlock>
-              }
-            </FormGroup>
-            <FormGroup>
-              <FormLabel theme={theme}>Content</FormLabel>
-              {(isDraft || isScheduled)
-                ? <FormTextarea theme={theme} value={editContent} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onContentChange(e.target.value)} placeholder="Email body…" />
-                : <ReadBlock theme={theme}>{activeEmail.email_content}</ReadBlock>
-              }
-            </FormGroup>
+          <div ref={containerRef} style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
-            {(activeEmail.status === 'draft' || activeEmail.status === 'failed')
-              ? activeEmail.created_at && (
+            {/* Editor column */}
+            <ModalBody style={{ flex: `0 0 ${htmlEmail ? `${(1 - splitRatio) * 100}%` : '100%'}`, transition: htmlEmail ? 'none' : 'flex 0.25s' }}>
+              <FormGroup>
+                <FormLabel theme={theme}>Recipient</FormLabel>
+                {(isDraft || isScheduled)
+                  ? <FormInput theme={theme} value={editRecipient} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onRecipientChange(e.target.value)} placeholder="recipient@example.com" />
+                  : <ReadBlock theme={theme} style={{ fontFamily: 'SF Mono, Monaco, monospace', fontSize: '0.825rem' }}>{activeEmail.recipient_email}</ReadBlock>
+                }
+              </FormGroup>
+              <FormGroup>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                  <FormLabel theme={theme} style={{ margin: 0 }}>Subject</FormLabel>
+                  {/* HTML toggle — inline with Subject label */}
+                  {(isDraft || isScheduled) ? (
+                    <div
+                      onClick={async () => {
+                        if (!activeEmail) return;
+                        const next = !htmlEmail;
+                        setHtmlEmail(next);
+                        if (!next) setSplitRatio(0.5);
+                        try {
+                          await apiFetch(`${API_BASE}/email/bulk-update/`, {
+                            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ updates: [{ email_id: activeEmail.id, html_email: next }] }),
+                          });
+                        } catch { /* silent */ }
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <span style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>HTML</span>
+                      <div style={{ width: 32, height: 18, borderRadius: 999, flexShrink: 0, background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300], position: 'relative', transition: 'background 0.2s', border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}` }}>
+                        <div style={{ position: 'absolute', top: 2, left: htmlEmail ? 14 : 2, width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{htmlEmail ? 'HTML' : 'Plain'}</span>
+                  )}
+                </div>
+                {(isDraft || isScheduled)
+                  ? <FormInput theme={theme} value={editSubject} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSubjectChange(e.target.value)} placeholder="Email subject" />
+                  : <ReadBlock theme={theme}>{activeEmail.email_subject}</ReadBlock>
+                }
+              </FormGroup>
+              <FormGroup>
+                <FormLabel theme={theme}>Content</FormLabel>
+                {(isDraft || isScheduled)
+                  ? <FormTextarea theme={theme} value={editContent} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onContentChange(e.target.value)} placeholder="Email body…" />
+                  : <ReadBlock theme={theme}>{activeEmail.email_content}</ReadBlock>
+                }
+              </FormGroup>
+
+              {/* ── Signature (read-only) ── */}
+              {activeEmail.signature && (
+                <FormGroup>
+                  <FormLabel theme={theme}>Signature</FormLabel>
+                  <ReadBlock theme={theme} style={{ whiteSpace: 'pre-wrap' }}>{activeEmail.signature}</ReadBlock>
+                </FormGroup>
+              )}
+
+              {/* ── Logo (read-only) ── */}
+              {activeEmail.logo_data && (
+                <FormGroup>
+                  <FormLabel theme={theme}>Logo</FormLabel>
+                  <div style={{ padding: '0.65rem 1rem', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[400] }}>
+                    <img src={activeEmail.logo_data} alt="Logo" style={{ maxHeight: 48, maxWidth: 180, objectFit: 'contain', display: 'block' }} />
+                  </div>
+                </FormGroup>
+              )}
+
+              {(activeEmail.status === 'draft' || activeEmail.status === 'failed')
+                ? activeEmail.created_at && (
                   <FormGroup>
                     <FormLabel theme={theme}>Created At</FormLabel>
                     <ReadBlock theme={theme} style={{ fontSize: '0.825rem' }}>{formatDT(activeEmail.created_at)}</ReadBlock>
@@ -512,6 +574,39 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               </FormGroup>
             )}
           </ModalBody>
+
+          {/* Drag divider + live preview — only when HTML is on */}
+          {htmlEmail && (
+            <>
+              <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}>
+                <div style={{ width: 2, height: 40, borderRadius: 2, background: theme.colors.base[300] }} />
+              </div>
+              <div style={{ flex: `0 0 ${splitRatio * 100}%`, display: 'flex', flexDirection: 'column', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden', minWidth: 0 }}>
+                <FormLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+                    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                  </svg>
+                  Live Preview
+                </FormLabel>
+                <div style={{ flex: 1, border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, overflow: 'hidden', background: '#fff', minHeight: 200 }}>
+                  {(isDraft || isScheduled ? editContent : activeEmail.email_content).trim() ? (
+                    <iframe
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${isDraft || isScheduled ? editContent : activeEmail.email_content}</body></html>`}
+                      style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 200 }}
+                      sandbox="allow-same-origin"
+                      title="Email HTML Preview"
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 200, fontSize: '0.75rem', opacity: 0.35, fontStyle: 'italic' }}>
+                      Preview will appear here…
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+          </div>
 
           <ModalFooter theme={theme}>
             {(isDraft || isScheduled) && autoSaving && <AutoSaveNote><MiniSpinner theme={theme} />Saving…</AutoSaveNote>}
@@ -734,70 +829,6 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
           </ModalBody>
         )}
 
-        {/* ── BRANDING TAB ── */}
-        {tab === 'branding' && (
-          <ModalBody style={{ gap: '1.25rem' }}>
-            {(isDraft || isScheduled) ? (<>
-              <FormGroup>
-                <FormLabel theme={theme}>Logo <span style={{ fontSize: '0.7rem', fontWeight: 400, opacity: 0.5, marginLeft: '0.3rem', textTransform: 'none', letterSpacing: 0 }}>PNG, JPG, GIF or WebP · max 5 MB</span></FormLabel>
-                <div onClick={() => !brandLogoUploading && brandLogoInputRef.current?.click()}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); if (!brandLogoUploading) { const f = e.dataTransfer.files[0]; if (f) onBrandLogoFile(f); } }}
-                  style={{ width: '100%', height: brandLogoData ? 90 : 76, border: `2px dashed ${brandLogoData ? theme.colors.primary.main : theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[400], display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: brandLogoUploading ? 'not-allowed' : 'pointer', position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s', opacity: brandLogoUploading ? 0.6 : 1 }}>
-                  {brandLogoData ? (<>
-                    <img src={brandLogoData} alt="Logo" style={{ maxHeight: 66, maxWidth: '92%', objectFit: 'contain', borderRadius: 4 }} />
-                    <button onClick={e => { e.stopPropagation(); onClearBrandLogo(); }} style={{ position: 'absolute', top: 5, right: 5, width: 20, height: 20, borderRadius: '50%', border: `1px solid ${theme.colors.base[300]}`, background: theme.colors.base[400], color: theme.colors.base.content, fontSize: '0.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.75 }}>✕</button>
-                  </>) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem', opacity: 0.4, fontSize: '0.75rem', pointerEvents: 'none' }}>
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                      <span>{brandLogoUploading ? 'Processing…' : 'Click or drag to upload'}</span>
-                    </div>
-                  )}
-                </div>
-                <input ref={brandLogoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f && !brandLogoUploading) onBrandLogoFile(f); e.target.value = ''; }} disabled={brandLogoUploading} />
-              </FormGroup>
-
-              <FormGroup>
-                <FormLabel theme={theme}>Email Signature</FormLabel>
-                <FormTextarea theme={theme} rows={4} placeholder={'Best,\nJohn Smith\nAcme Corp'}
-                  value={brandSignature}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onBrandSignatureChange(e.target.value)}
-                  style={{ minHeight: 100 }} />
-              </FormGroup>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                {brandMsg && <div style={{ fontSize: '0.8rem', fontWeight: 500, color: brandMsg.type === 'success' ? (theme.colors.success?.main || '#22c55e') : theme.colors.error.main }}>{brandMsg.text}</div>}
-                <PrimaryButton theme={theme} onClick={onSaveBranding} disabled={brandSaving} style={{ marginLeft: 'auto', padding: '0.5rem 1.1rem', fontSize: '0.8rem' }}>
-                  {brandSaving ? <BtnSpinner /> : null} {brandSaving ? 'Saving…' : 'Save'}
-                </PrimaryButton>
-              </div>
-            </>) : (
-              (brandLogoData || brandSignature) ? (<>
-                {brandLogoData && (
-                  <FormGroup>
-                    <FormLabel theme={theme}>Logo</FormLabel>
-                    <div style={{ padding: '0.75rem 1rem', background: theme.colors.base[400], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80 }}>
-                      <img src={brandLogoData} alt="Logo" style={{ maxHeight: 64, maxWidth: '100%', objectFit: 'contain', borderRadius: 4 }} />
-                    </div>
-                  </FormGroup>
-                )}
-                {brandSignature && (
-                  <FormGroup>
-                    <FormLabel theme={theme}>Email Signature</FormLabel>
-                    <ReadBlock theme={theme} style={{ whiteSpace: 'pre-wrap', minHeight: 60 }}>{brandSignature}</ReadBlock>
-                  </FormGroup>
-                )}
-              </>) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '3rem 2rem', gap: '0.5rem', opacity: 0.45, textAlign: 'center' }}>
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>No branding set</div>
-                  <div style={{ fontSize: '0.8rem' }}>This email was sent without a logo or signature.</div>
-                </div>
-              )
-            )}
-          </ModalBody>
-        )}
 
       </ModalContent>
     </ModalOverlay>
@@ -1005,7 +1036,7 @@ const EmailHistory: React.FC = () => {
   const [allSelected,  setAllSelected]  = useState(false);
 
   // modal
-  type ModalTab = 'email' | 'attachments' | 'branding';
+  type ModalTab = 'email' | 'attachments';
   const [modalOpen,     setModalOpen]     = useState(false);
   const [modalTab,      setModalTab]      = useState<ModalTab>('email');
   const [activeEmail,   setActiveEmail]   = useState<EmailRecord | null>(null);
@@ -1018,8 +1049,6 @@ const EmailHistory: React.FC = () => {
   const snapSubject   = useRef('');
   const snapContent   = useRef('');
   const snapRecipient = useRef('');
-  const snapSignature = useRef('');
-  const snapLogo      = useRef<string | null>(null);
   const snapAttachIds = useRef('');
 
   // attachments
@@ -1035,13 +1064,7 @@ const EmailHistory: React.FC = () => {
   const [isDragOver,      setIsDragOver]      = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  // branding
-  const [brandSignature,     setBrandSignature]     = useState('');
-  const [brandLogoData,      setBrandLogoData]      = useState<string | null>(null);
-  const [brandLogoUploading, setBrandLogoUploading] = useState(false);
-  const [brandSaving,        setBrandSaving]        = useState(false);
-  const [brandMsg,           setBrandMsg]           = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const brandLogoInputRef = useRef<HTMLInputElement>(null);
+  // branding — removed (read-only, sourced directly from activeEmail.signature / activeEmail.logo_data)
 
   // schedule / reschedule
   const [schedOpen,   setSchedOpen]   = useState(false);
@@ -1133,10 +1156,6 @@ const EmailHistory: React.FC = () => {
       const r = await apiFetch(`${API_BASE}/email/?${qp}`);
       if (!r.ok) throw new Error();
       const d = await r.json();
-      // DEBUG: log raw API response to verify failed_reason is present
-      console.log('[fetchEmails] raw emails from API:', d.emails?.map((e: any) => ({
-        id: e.id, status: e.status, failed_reason: e.failed_reason,
-      })));
       setEmails(d.emails ?? []); setServerTotal(d.total ?? 0);
     } catch { showToast('Error', 'Failed to load emails', 'error'); }
     finally { setLoading(false); }
@@ -1226,29 +1245,17 @@ const EmailHistory: React.FC = () => {
 
   // ── modal ─────────────────────────────────────────────────────────────────
   const openModal = (email: EmailRecord) => {
-    // DEBUG: log the full email record when opening the modal
-    console.log('[openModal] email record:', {
-      id:            email.id,
-      status:        email.status,
-      failed_reason: email.failed_reason,
-      full:          email,
-    });
-
     setActiveEmail(email); setEditSubject(email.email_subject);
     setEditContent(email.email_content); setEditRecipient(email.recipient_email);
     setModalTab('email'); setAttachSearch(''); setAttachMsg(null);
-    setUploadMsg(null); setUploadFile(null); setIsDragOver(false); setBrandMsg(null);
+    setUploadMsg(null); setUploadFile(null); setIsDragOver(false);
     if (uploadInputRef.current) uploadInputRef.current.value = '';
     lastSaved.current = JSON.stringify({ s: email.email_subject, c: email.email_content, r: email.recipient_email });
-    setBrandSignature(email.signature || '');
-    setBrandLogoData(email.logo_data || null);
     setModalOpen(true);
     loadEmailAttachments(email);
     snapSubject.current   = email.email_subject;
     snapContent.current   = email.email_content;
     snapRecipient.current = email.recipient_email;
-    snapSignature.current = email.signature || '';
-    snapLogo.current      = email.logo_data || null;
     snapAttachIds.current = '';
   };
 
@@ -1262,7 +1269,6 @@ const EmailHistory: React.FC = () => {
     setSchedOpen(false); setSchedTime(''); setReschedOpen(false); setReschedTime('');
     setModalTab('email'); setAllAttachments([]); setLinkedAttachIds(new Set());
     setUploadFile(null); setUploadMsg(null); setAttachMsg(null);
-    setBrandMsg(null); setBrandSignature(''); setBrandLogoData(null);
     if (uploadInputRef.current) uploadInputRef.current.value = '';
   };
 
@@ -1353,32 +1359,6 @@ const EmailHistory: React.FC = () => {
       setUploadMsg({ type: 'success', text: `"${upData.filename}" uploaded and attached` });
     } catch (err) { setUploadMsg({ type: 'error', text: err instanceof Error ? err.message : 'Upload failed' }); }
     finally { setUploading(false); }
-  };
-
-  // ── branding ──────────────────────────────────────────────────────────────
-  const handleBrandLogoFile = (file: File) => {
-    if (file.size > 5 * 1024 * 1024) { setBrandMsg({ type: 'error', text: 'Logo must be under 5 MB' }); return; }
-    setBrandLogoUploading(true); setBrandMsg(null);
-    const reader = new FileReader();
-    reader.onload  = () => { setBrandLogoData(reader.result as string); setBrandLogoUploading(false); };
-    reader.onerror = () => { setBrandMsg({ type: 'error', text: 'Failed to read file' }); setBrandLogoUploading(false); };
-    reader.readAsDataURL(file);
-  };
-
-  const saveBranding = async () => {
-    if (!activeEmail) return;
-    setBrandSaving(true); setBrandMsg(null);
-    try {
-      const res = await apiFetch(`${API_BASE}/email/bulk-update/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: [{ email_id: activeEmail.id, signature: brandSignature ?? '', ...(brandLogoData ? { logo_data: brandLogoData } : { logo_clear: true }) }] }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed'); }
-      setBrandMsg({ type: 'success', text: 'Branding saved' });
-      snapSignature.current = brandSignature ?? '';
-      snapLogo.current      = brandLogoData;
-    } catch (err) { setBrandMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save branding' }); }
-    finally { setBrandSaving(false); }
   };
 
   // ── actions ───────────────────────────────────────────────────────────────
@@ -1598,11 +1578,6 @@ const EmailHistory: React.FC = () => {
         onDrop={handleFilePick}
         onClearUploadFile={() => { setUploadFile(null); setUploadMsg(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}
         uploadInputRef={uploadInputRef}
-        brandSignature={brandSignature} onBrandSignatureChange={v => { setBrandSignature(v); setBrandMsg(null); }}
-        brandLogoData={brandLogoData} onBrandLogoFile={handleBrandLogoFile}
-        onClearBrandLogo={() => { setBrandLogoData(null); setBrandMsg(null); }}
-        brandLogoUploading={brandLogoUploading} onSaveBranding={saveBranding}
-        brandSaving={brandSaving} brandMsg={brandMsg} brandLogoInputRef={brandLogoInputRef}
         onDownloadAttachments={downloadAttachments}
         formatDT={formatDT} minDT={minDT} theme={theme}
       />
