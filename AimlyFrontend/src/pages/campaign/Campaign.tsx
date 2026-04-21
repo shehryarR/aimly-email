@@ -2200,16 +2200,20 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         const r = await apiFetch(`${API_BASE}/company/addition-status`);
         if (r.ok) {
           const d = await r.json();
+          const prev = companyAdditionActive;
           setCompanyAdditionActive(d.company_addition_active);
           setAdditionCampaignId(d.campaign_id ?? null);
           if (d.company_addition_active === 0) {
             clearInterval(pollRef.current!);
             pollRef.current = null;
             setRefresh(p => p + 1);
+          } else if (prev !== null && d.company_addition_active < prev) {
+            // Count reduced — new companies were added, refresh the list
+            setRefresh(p => p + 1);
           }
         }
       } catch { /* silent */ }
-    }, 2000);
+    }, 10000);
   };
 
   const handleCancelSearch = async () => {

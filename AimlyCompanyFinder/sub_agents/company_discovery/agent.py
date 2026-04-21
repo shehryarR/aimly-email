@@ -18,11 +18,12 @@ from typing import List, Dict, Callable
 class OpenClawClient:
     """Simple HTTP client for the OpenClaw container."""
 
-    def __init__(self, base_url: str, server_api_key: str, gemini_key: str, tavily_key: str):
+    def __init__(self, base_url: str, server_api_key: str, gemini_key: str, tavily_key: str, llm_model: str = "gemini-2.5-flash"):
         self.base_url       = base_url.rstrip("/")
         self.server_api_key = server_api_key
         self.gemini_key     = gemini_key
         self.tavily_key     = tavily_key
+        self.llm_model      = llm_model
 
     def query(self, message: str, timeout: int = 120) -> str:
         """Send a message to OpenClaw and return the text response."""
@@ -33,6 +34,7 @@ class OpenClawClient:
                 "message":    message,
                 "gemini_key": self.gemini_key,
                 "tavily_key": self.tavily_key,
+                "llm_model":  self.llm_model,
             },
             timeout=timeout,
         )

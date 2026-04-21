@@ -328,15 +328,19 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         const r = await apiFetch(`${API_BASE}/company/addition-status`);
         if (r.ok) {
           const d = await r.json();
+          const prev = companyAdditionActive;
           setCompanyAdditionActive(d.company_addition_active);
           if (d.company_addition_active === 0) {
             clearInterval(pollRef.current!);
             pollRef.current = null;
             setRefreshTrigger(p => p + 1);
+          } else if (prev !== null && d.company_addition_active < prev) {
+            // Count reduced — new companies were added, refresh the list
+            setRefreshTrigger(p => p + 1);
           }
         }
       } catch { /* silent */ }
-    }, 2000);
+    }, 10000);
   };
 
   // ── Cancel AI search ───────────────────────────────────────
