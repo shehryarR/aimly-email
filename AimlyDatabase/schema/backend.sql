@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS brands (
 -- Global Settings
 -- Removed: business_name, business_info, logo, logo_mime_type, signature
 -- Renamed: email_instruction → writing_guidelines, extras → additional_notes
--- Added:   llm_model
 -- ------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS global_settings (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
@@ -98,7 +97,6 @@ CREATE TABLE IF NOT EXISTS campaign_company (
     company_id                   INT NOT NULL,
     campaign_id                  INT NOT NULL,
     inherit_campaign_attachments INT DEFAULT 1,
-    inherit_campaign_branding    INT DEFAULT 1,
     created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_company_campaign (company_id, campaign_id),
     FOREIGN KEY (company_id)  REFERENCES companies (id) ON DELETE CASCADE,

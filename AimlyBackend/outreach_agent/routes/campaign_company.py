@@ -4,7 +4,6 @@ Campaign-Company Relationship Routes
 Handles many-to-many relationships between campaigns and companies
 UPDATED: Added search functionality to GET endpoints
          Added inherit_campaign_attachments field support
-         Added inherit_campaign_branding field support
          Added optedOut field to company response (checks microservice opt-out list)
 """
 
@@ -89,8 +88,8 @@ def get_bulk_inherit_flags(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Get inherit_campaign_attachments and inherit_campaign_branding for multiple
-    companies in a campaign in a single query.
+    Get inherit_campaign_attachments for multiple companies in a campaign
+    in a single query.
 
     Returns a dict keyed by company_id.
     """
@@ -104,7 +103,7 @@ def get_bulk_inherit_flags(
 
         placeholders = ",".join(["%s"] * len(request.company_ids))
         cursor.execute(f"""
-            SELECT cc.company_id, cc.inherit_campaign_attachments, cc.inherit_campaign_branding
+            SELECT cc.company_id, cc.inherit_campaign_attachments
             FROM campaign_company cc
             JOIN campaigns camp ON cc.campaign_id = camp.id
             JOIN companies comp ON cc.company_id = comp.id
@@ -117,7 +116,6 @@ def get_bulk_inherit_flags(
     return {
         row["company_id"]: {
             "inherit_campaign_attachments": row["inherit_campaign_attachments"],
-            "inherit_campaign_branding": row["inherit_campaign_branding"],
         }
         for row in rows
     }
@@ -128,7 +126,6 @@ def get_bulk_inherit_flags(
 class BulkInheritUpdateItem(BaseModel):
     company_id: int
     inherit_campaign_attachments: int
-    inherit_campaign_branding: int
 
 class BulkInheritUpdateRequest(BaseModel):
     updates: List[BulkInheritUpdateItem]
@@ -140,9 +137,8 @@ def bulk_update_inherit_flags(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Update inherit_campaign_attachments and inherit_campaign_branding
-    for multiple companies in a campaign in a single call.
-    Skips failures with logged errors and returns a summary.
+    Update inherit_campaign_attachments for multiple companies in a campaign
+    in a single call. Skips failures with logged errors and returns a summary.
     """
     user_id = current_user["user_id"]
 
@@ -155,9 +151,6 @@ def bulk_update_inherit_flags(
     for item in request.updates:
         if item.inherit_campaign_attachments not in (0, 1):
             errors.append({"company_id": item.company_id, "reason": "inherit_campaign_attachments must be 0 or 1"})
-            continue
-        if item.inherit_campaign_branding not in (0, 1):
-            errors.append({"company_id": item.company_id, "reason": "inherit_campaign_branding must be 0 or 1"})
             continue
 
         try:
@@ -179,10 +172,9 @@ def bulk_update_inherit_flags(
 
                 cursor.execute("""
                     UPDATE campaign_company
-                    SET inherit_campaign_attachments = %s,
-                        inherit_campaign_branding = %s
+                    SET inherit_campaign_attachments = %s
                     WHERE id = %s
-                """, (item.inherit_campaign_attachments, item.inherit_campaign_branding, row["id"]))
+                """, (item.inherit_campaign_attachments, row["id"]))
                 conn.commit()
                 updated += 1
 

@@ -2,17 +2,11 @@
 Email Management Routes — Core CRUD Operations
 Handles fetching, updating, and deleting emails.
 
-INHERITANCE RULES:
+BRANDING:
 ══════════════════════════════════════════════════════════════════════
-
-READING PRIMARY EMAIL (branding: signature + logo):
-  inherit_campaign_branding = 0 → use email's own signature/logo, no fallback
-  inherit_campaign_branding = 1:
-    inherit_global_settings = 0 → use campaign signature/logo, no fallback
-    inherit_global_settings = 1 → use global signature/logo, no fallback
-
-UPDATING PRIMARY EMAIL:
-  inherit_campaign_branding = 1 → signature and logo fields cannot be edited.
+Branding (signature + logo) is always sourced from the campaign's linked
+brand (or the user's default brand). It is baked into the email row at
+send/draft/schedule time. It is not editable per-email or per-company.
 
 GET /email/ ATTACHMENT DATA:
   Each email record includes an `attachments` array with id, filename,
@@ -30,8 +24,6 @@ from .utils.email_helpers import (
     MessageResponse,
     BulkUpdateRequest,
     BulkUpdateResponse,
-    resolve_branding,
-    resolve_attachment_ids_for_primary,
 )
 from pydantic import BaseModel
 
@@ -260,19 +252,31 @@ def get_primary_emails_bulk(
             raise HTTPException(status_code=404, detail="Campaign not found")
 
         cursor.execute("""
-            SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-            FROM campaign_preferences WHERE campaign_id = %s
+            SELECT cp.inherit_global_settings, cp.inherit_global_attachments, cp.brand_id
+            FROM campaign_preferences cp WHERE cp.campaign_id = %s
         """, (campaign_id,))
         campaign_prefs = cursor.fetchone()
 
-        cursor.execute("""
-            SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-        """, (user_id,))
-        global_prefs = cursor.fetchone()
+        # Resolve branding from campaign's linked brand (or default brand)
+        brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
+        if brand_id:
+            cursor.execute(
+                "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                (brand_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                (user_id,)
+            )
+        brand_row = cursor.fetchone()
+        campaign_signature      = brand_row["signature"]      if brand_row else None
+        campaign_logo_blob      = brand_row["logo"]           if brand_row else None
+        campaign_logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
 
         placeholders = ",".join(["%s"] * len(request.company_ids))
         cursor.execute(f"""
-            SELECT cc.id, cc.company_id, cc.inherit_campaign_branding, cc.inherit_campaign_attachments
+            SELECT cc.id, cc.company_id, cc.inherit_campaign_attachments
             FROM campaign_company cc
             WHERE cc.campaign_id = %s AND cc.company_id IN ({placeholders})
         """, [campaign_id] + request.company_ids)
@@ -297,19 +301,72 @@ def get_primary_emails_bulk(
         if email_ids:
             ph3 = ",".join(["%s"] * len(email_ids))
             cursor.execute(f"""
-                SELECT email_id, attachment_id FROM email_attachments
-                WHERE email_id IN ({ph3})
+                SELECT ea.email_id, a.id, a.name
+                FROM email_attachments ea
+                JOIN attachments a ON ea.attachment_id = a.id
+                WHERE ea.email_id IN ({ph3})
             """, email_ids)
             for row in cursor.fetchall():
-                linked_by_email[row["email_id"]].append(row["attachment_id"])
+                linked_by_email[row["email_id"]].append({"id": row["id"], "name": row["name"]})
 
-        cc_id_to_company_id = {row["id"]: cid for cid, row in cc_rows.items()}
+        # ── Resolve campaign-level attachments ────────────────────────────────
+        cursor.execute("""
+            SELECT a.id, a.name
+            FROM attachments a
+            JOIN campaign_preference_attachments cpa ON a.id = cpa.attachment_id
+            JOIN campaign_preferences cp ON cpa.campaign_preference_id = cp.id
+            WHERE cp.campaign_id = %s
+        """, (campaign_id,))
+        campaign_attachments = [{"id": r["id"], "name": r["name"]} for r in cursor.fetchall()]
 
-        inherit_global_attachments = (
+        # ── Resolve global-level attachments ─────────────────────────────────
+        inherit_global_flag = (
             campaign_prefs["inherit_global_attachments"]
             if campaign_prefs and campaign_prefs["inherit_global_attachments"] is not None
             else 1
         )
+        global_attachments = []
+        if inherit_global_flag:
+            cursor.execute("""
+                SELECT a.id, a.name
+                FROM attachments a
+                JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
+                JOIN global_settings gs ON gsa.global_settings_id = gs.id
+                WHERE gs.user_id = %s
+            """, (user_id,))
+            global_attachments = [{"id": r["id"], "name": r["name"]} for r in cursor.fetchall()]
+
+        cc_id_to_company_id = {row["id"]: cid for cid, row in cc_rows.items()}
+
+        # Build source sets for badge rendering
+        campaign_ids_set = {a["id"] for a in campaign_attachments}
+        global_ids_set   = {a["id"] for a in global_attachments}
+
+        # Merge campaign + global into a single deduped list.
+        # Each entry gets a `sources` list so the frontend can show both badges
+        # when an attachment appears in both campaign and global.
+        all_inherited_ids = list(campaign_ids_set | global_ids_set)
+        # Preserve order: campaign-first, then global-only
+        ordered_ids: list[int] = []
+        seen_order: set = set()
+        for a in campaign_attachments + global_attachments:
+            if a["id"] not in seen_order:
+                seen_order.add(a["id"])
+                ordered_ids.append(a["id"])
+
+        id_to_name = {a["id"]: a["name"] for a in campaign_attachments + global_attachments}
+        inherited_attachments_base = [
+            {
+                "id":      aid,
+                "name":    id_to_name[aid],
+                "sources": (
+                    ["campaign", "global"] if (aid in campaign_ids_set and aid in global_ids_set)
+                    else ["campaign"]      if aid in campaign_ids_set
+                    else ["global"]
+                ),
+            }
+            for aid in ordered_ids
+        ]
 
         results = []
         for cc_id, email_row in emails_by_cc.items():
@@ -318,30 +375,31 @@ def get_primary_emails_bulk(
                 continue
             cc = cc_rows[company_id]
 
-            signature, logo_blob, logo_mime_type = resolve_branding(
-                email_row, campaign_prefs, global_prefs, cc["inherit_campaign_branding"]
-            )
-
             logo_data = None
-            if logo_blob and logo_mime_type:
+            if campaign_logo_blob and campaign_logo_mime_type:
                 try:
-                    logo_data = f"data:{logo_mime_type};base64,{_b64.b64encode(logo_blob).decode()}"
+                    logo_data = f"data:{campaign_logo_mime_type};base64,{_b64.b64encode(campaign_logo_blob).decode()}"
                 except Exception:
                     logo_data = None
 
-            attachment_ids = resolve_attachment_ids_for_primary(
-                email_row["id"], campaign_id, user_id, cursor,
-                cc["inherit_campaign_attachments"], inherit_global_attachments
-            )
+            # own_attachments: files directly linked to this specific email
+            own_attachments = linked_by_email.get(email_row["id"], [])
+
+            # inherited_attachments: always resolved so the frontend can show the list
+            # immediately when the user toggles it ON mid-session.
+            inherited_attachments = inherited_attachments_base  # [] if nothing, [...] if files exist
+
 
             r = dict(email_row)
-            r["company_id"] = company_id
-            r["signature"] = signature
-            r["logo_data"] = logo_data
-            r["attachment_ids"] = attachment_ids
-            r["linked_attachment_ids"] = linked_by_email.get(email_row["id"], [])
+            r["company_id"]                   = company_id
+            r["signature"]                    = campaign_signature
+            r["logo_data"]                    = logo_data
+            r["own_attachments"]              = own_attachments          # [{id, name}]
+            r["inherited_attachments"]        = inherited_attachments     # [{id, name, sources:[...]}]
             r["inherit_campaign_attachments"] = cc["inherit_campaign_attachments"]
-            r["inherit_campaign_branding"] = cc["inherit_campaign_branding"]
+            r["inherit_global_attachments"]   = inherit_global_flag
+            # Keep legacy field for any other consumers
+            r["linked_attachment_ids"]        = [a["id"] for a in own_attachments]
             r.pop("logo", None)
             r.pop("logo_mime_type", None)
             results.append(r)
@@ -375,7 +433,7 @@ def bulk_update_emails(
                 cursor = conn.cursor()
 
                 cursor.execute("""
-                    SELECT e.*, cc.campaign_id, cc.inherit_campaign_branding, c.user_id
+                    SELECT e.*, cc.campaign_id, c.user_id
                     FROM emails e
                     JOIN campaign_company cc ON e.campaign_company_id = cc.id
                     JOIN campaigns c ON cc.campaign_id = c.id
@@ -391,9 +449,11 @@ def bulk_update_emails(
                     errors.append({"email_id": email_id, "reason": f"Cannot update email with status '{email['status']}'"})
                     continue
 
-                if email["status"] == "primary" and email["inherit_campaign_branding"]:
+                # Branding (signature/logo) on primary emails is baked in at send time
+                # from the campaign's brand — not editable per-email.
+                if email["status"] == "primary":
                     if item.signature is not None or item.logo_data is not None or item.logo_clear:
-                        errors.append({"email_id": email_id, "reason": "Cannot edit signature or logo while inherit_campaign_branding is enabled"})
+                        errors.append({"email_id": email_id, "reason": "Signature and logo are managed via the campaign's brand and cannot be edited per email"})
                         continue
 
                 update_fields = []

@@ -83,7 +83,7 @@ const CsTitle = styled.h2`
   display: flex; align-items: center; gap: 0.6rem;
   svg { width: 20px; height: 20px; opacity: 0.8; }
 `;
-const CsCloseBtn = styled.button<{ theme: any }>`
+export const CsCloseBtn = styled.button<{ theme: any }>`
   width: 32px; height: 32px; padding: 0;
   border-radius: 8px;
   border: 1px solid ${p => p.theme.colors.base[300]};
@@ -102,7 +102,7 @@ const CsNavBody = styled.div`
   display: flex; flex: 1; min-height: 0;
 `;
 const CsNav = styled.nav<{ theme: any }>`
-  width: 190px; flex-shrink: 0;
+  width: 220px; flex-shrink: 0;
   background: ${p => p.theme.colors.base[200]};
   border-right: 1px solid ${p => p.theme.colors.base[300]};
   padding: 0.75rem 0.5rem;
@@ -120,12 +120,13 @@ const CsNavBtn = styled.button<{ theme: any; $active: boolean }>`
   width: 100%; padding: 0.6rem 0.75rem;
   border: none; border-radius: 8px; cursor: pointer;
   display: flex; align-items: center; gap: 0.6rem;
-  font-size: 0.875rem; font-weight: ${p => p.$active ? 600 : 500};
-  text-align: left; transition: all 0.15s;
+  font-size: 0.875rem; font-weight: 600;
+  text-align: left; transition: background 0.15s, color 0.15s;
   background: ${p => p.$active ? p.theme.colors.primary.main + '18' : 'transparent'};
   color: ${p => p.$active ? p.theme.colors.primary.main : p.theme.colors.base.content};
-  &:hover { background: ${p => p.$active ? p.theme.colors.primary.main + '22' : p.theme.colors.base[300]}; }
-  svg { width: 16px; height: 16px; flex-shrink: 0; opacity: ${p => p.$active ? 1 : 0.6}; }
+  opacity: ${p => p.$active ? 1 : 0.72};
+  &:hover { background: ${p => p.$active ? p.theme.colors.primary.main + '22' : p.theme.colors.base[300]}; opacity: 1; }
+  svg { width: 16px; height: 16px; flex-shrink: 0; opacity: ${p => p.$active ? 1 : 0.7}; }
 `;
 const CsNavLabel = styled.span`flex: 1;`;
 
@@ -276,6 +277,50 @@ const AttachName = styled.span`
 `;
 const AttachEmpty = styled.div<{ theme: any }>`
   padding: 1.25rem; text-align: center; font-size: 0.8125rem; opacity: 0.5;
+`;
+
+// ─────────────────────────────────────────────────────────────
+// STYLED COMPONENTS — COLLAPSIBLE SECTIONS (mirrors settings.tsx)
+// ─────────────────────────────────────────────────────────────
+const CsSectionHeader = styled.div<{ theme: any; $isExpanded: boolean }>`
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.$isExpanded ? p.theme.colors.primary.main + '80' : p.theme.colors.base[300]};
+  border-radius: ${p => p.$isExpanded ? `${p.theme.radius.field} ${p.theme.radius.field} 0 0` : p.theme.radius.field};
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  margin-bottom: 0;
+  &:hover {
+    background: ${p => p.theme.colors.base[300]};
+    border-color: ${p => p.theme.colors.primary.main};
+  }
+  &:not(:first-child) { margin-top: 0.5rem; }
+`;
+const CsSectionTitle = styled.div<{ theme: any; $isExpanded?: boolean }>`
+  font-weight: 600; font-size: 0.9rem;
+  color: ${p => p.$isExpanded ? p.theme.colors.primary.main : p.theme.colors.base.content};
+  display: flex; align-items: center; gap: 0.5rem;
+  transition: color 0.2s ease;
+  svg { width: 14px; height: 14px; opacity: ${p => p.$isExpanded ? 1 : 0.8}; transition: opacity 0.2s ease; }
+`;
+const CsSectionIcon = styled.div<{ theme: any; $isExpanded: boolean }>`
+  color: ${p => p.$isExpanded ? p.theme.colors.primary.main : p.theme.colors.base.content};
+  opacity: ${p => p.$isExpanded ? 1 : 0.6};
+  transition: transform 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+  transform: ${p => p.$isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'};
+  svg { width: 16px; height: 16px; }
+`;
+const CsSectionContent = styled.div<{ $isExpanded: boolean }>`
+  display: ${p => p.$isExpanded ? 'block' : 'none'};
+  padding: 1.25rem 1rem 1rem 1rem;
+  margin-bottom: ${p => p.$isExpanded ? '0.5rem' : '0'};
+  border: 1px solid transparent;
+  @keyframes csFadeIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  animation: ${p => p.$isExpanded ? 'csFadeIn 0.2s ease' : 'none'};
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -478,7 +523,7 @@ const TemplateGenDropdown: React.FC<{
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
-export type CsTab = 'inherit' | 'brand' | 'strategy' | 'email' | 'branding' | 'attachments' | 'template';
+export type CsTab = 'strategy_content' | 'brand' | 'attachments' | 'template';
 
 export interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -502,11 +547,16 @@ const defaultPrefs = (): CampaignPreferences => ({
 const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   isOpen, campaignId, theme, apiBase, onClose, onSaved, onToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<CsTab>('inherit');
+  const [activeTab, setActiveTab] = useState<CsTab>('strategy_content');
   const [prefs, setPrefs]         = useState<CampaignPreferences>(defaultPrefs());
   const [loading, setLoading]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [preferenceId, setPreferenceId]   = useState<number | null>(null);
+
+  // ── Collapsible section state ────────────────────────────────
+  const [expandedSections, setExpandedSections] = useState({ strategy: false, emailContent: false });
+  const toggleSection = (key: 'strategy' | 'emailContent') =>
+    setExpandedSections(p => ({ ...p, [key]: !p[key] }));
 
   // ── Dirty-check snapshot ────────────────────────────────────
   const savedPrefs     = useRef<CampaignPreferences>(defaultPrefs());
@@ -574,9 +624,10 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [globalCta,                setGlobalCta]                = useState('');
   const [globalAdditionalNotes,    setGlobalAdditionalNotes]    = useState('');
   const [globalBcc,                setGlobalBcc]                = useState('');
+  const [globalAttachments,        setGlobalAttachments]        = useState<AttachmentOption[]>([]);
 
   // ── Brands state ────────────────────────────────────────────
-  const [brands, setBrands] = useState<{ id: number; name: string; business_name?: string; email_address?: string; is_default: number }[]>([]);
+  const [brands, setBrands] = useState<{ id: number; name: string; business_name?: string; email_address?: string; smtp_host?: string; smtp_port?: number; signature?: string; logo_data?: string | null; is_default: number }[]>([]);
 
   // ── Attachment state ─────────────────────────────────────────
   const [allAttachments,      setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -591,7 +642,8 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setActiveTab('inherit');
+      setActiveTab('strategy_content');
+      setExpandedSections({ strategy: false, emailContent: false });
       setUploadFile(null);
       setIsDragOver(false);
       setAttachSearch('');
@@ -692,22 +744,28 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const loadAttachments = async (_prefId?: number) => {
     setAttachLoading(true);
     try {
-      const attRes = await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`);
-      if (attRes.ok) {
-        const d = await attRes.json();
-        const list = d.attachments ?? [];
-        setAllAttachments(list);
-        const numericCampaignId = Number(campaignId);
-        const ids = new Set<number>(
-          list
-            .filter((a: any) =>
-              (a.linked_campaigns ?? []).some((c: any) => c.id === numericCampaignId)
-            )
-            .map((a: any) => a.id as number)
-        );
-        setLinkedAttachmentIds(ids);
-        savedLinkedIds.current = new Set(ids);
-      }
+      const numericCampaignId = Number(campaignId);
+
+      // Three parallel calls — each filtered server-side:
+      // 1. All attachments (for the picker — no filter)
+      // 2. Global-linked attachments (for the inherited read-only section)
+      // 3. Campaign-linked attachments (to know which are checked in the picker)
+      const [allRes, globalRes, campaignRes] = await Promise.all([
+        apiFetch(`${apiBase}/attachments/?page=1&page_size=200`),
+        apiFetch(`${apiBase}/attachments/?page=1&page_size=200&filter_global=true`),
+        apiFetch(`${apiBase}/attachments/?page=1&page_size=200&filter_campaigns=${numericCampaignId}`),
+      ]);
+
+      const allList      = allRes.ok      ? (await allRes.json()).attachments      ?? [] : [];
+      const globalList   = globalRes.ok   ? (await globalRes.json()).attachments   ?? [] : [];
+      const campaignList = campaignRes.ok ? (await campaignRes.json()).attachments ?? [] : [];
+
+      setAllAttachments(allList);
+      setGlobalAttachments(globalList);
+
+      const ids = new Set<number>(campaignList.map((a: any) => a.id as number));
+      setLinkedAttachmentIds(ids);
+      savedLinkedIds.current = new Set(ids);
     } catch (e) { console.error('Failed to load attachments', e); }
     finally { setAttachLoading(false); }
   };
@@ -715,26 +773,51 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const saveAttachments = async () => {
     setAttachSaving(true);
     try {
-      const allIds = allAttachments.map((a: any) => a.id as number);
-      const linked = Array.from(linkedAttachmentIds);
-      const unlinked = allIds.filter(id => !linkedAttachmentIds.has(id));
       const numericCampaignId = Number(campaignId);
 
-      if (linked.length > 0) {
-        await apiFetch(`${apiBase}/attachments/bulk-links/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attachment_ids: linked, link_global: false, campaign_ids: [numericCampaignId] }),
-        });
+      // Group attachments by their existing linked_global value so we never overwrite it
+      const linkedGlobalIds   = allAttachments.filter((a: any) => a.linked_global).map((a: any) => a.id as number);
+      const linkedGlobalSet   = new Set(linkedGlobalIds);
+
+      const toLink   = Array.from(linkedAttachmentIds);
+      const toUnlink = allAttachments.map((a: any) => a.id as number).filter(id => !linkedAttachmentIds.has(id));
+
+      if (toLink.length > 0) {
+        // Split by their global state so we preserve it exactly
+        const globalLinked    = toLink.filter(id => linkedGlobalSet.has(id));
+        const nonGlobalLinked = toLink.filter(id => !linkedGlobalSet.has(id));
+        if (globalLinked.length > 0) {
+          await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: globalLinked, link_global: true, campaign_ids: [numericCampaignId] }),
+          });
+        }
+        if (nonGlobalLinked.length > 0) {
+          await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: nonGlobalLinked, link_global: false, campaign_ids: [numericCampaignId] }),
+          });
+        }
       }
-      if (unlinked.length > 0) {
-        await apiFetch(`${apiBase}/attachments/bulk-links/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attachment_ids: unlinked, link_global: false, campaign_ids: [] }),
-        });
+      if (toUnlink.length > 0) {
+        const globalUnlinked    = toUnlink.filter(id => linkedGlobalSet.has(id));
+        const nonGlobalUnlinked = toUnlink.filter(id => !linkedGlobalSet.has(id));
+        if (globalUnlinked.length > 0) {
+          await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: globalUnlinked, link_global: true, campaign_ids: [] }),
+          });
+        }
+        if (nonGlobalUnlinked.length > 0) {
+          await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: nonGlobalUnlinked, link_global: false, campaign_ids: [] }),
+          });
+        }
       }
+
       savedLinkedIds.current = new Set(linkedAttachmentIds);
       clearDirty('attachments');
-      onToast('success', 'Attachments', 'Attachments saved to campaign');
     } catch (err) {
       onToast('error', 'Attachments', err instanceof Error ? err.message : 'Failed to save attachments');
     } finally { setAttachSaving(false); }
@@ -773,11 +856,22 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
       if (preferenceId) {
         const newLinkedArr = Array.from(newLinkedIds);
-        const linkRes = await apiFetch(`${apiBase}/attachments/bulk-links/`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attachment_ids: newLinkedArr, link_global: false, campaign_ids: [Number(campaignId)] }),
-        });
-        if (!linkRes.ok) { const e = await linkRes.json(); throw new Error(e.detail || 'Upload succeeded but linking failed'); }
+        const linkedGlobalSet = new Set(allAttachments.filter((a: any) => a.linked_global).map((a: any) => a.id as number));
+        const globalOnes    = newLinkedArr.filter(id => linkedGlobalSet.has(id));
+        const nonGlobalOnes = newLinkedArr.filter(id => !linkedGlobalSet.has(id));
+        if (globalOnes.length > 0) {
+          await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: globalOnes, link_global: true, campaign_ids: [Number(campaignId)] }),
+          });
+        }
+        if (nonGlobalOnes.length > 0) {
+          const linkRes = await apiFetch(`${apiBase}/attachments/bulk-links/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachment_ids: nonGlobalOnes, link_global: false, campaign_ids: [Number(campaignId)] }),
+          });
+          if (!linkRes.ok) { const e = await linkRes.json(); throw new Error(e.detail || 'Upload succeeded but linking failed'); }
+        }
         savedLinkedIds.current = newLinkedIds;
         clearDirty('attachments');
       }
@@ -789,13 +883,12 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       });
       setUploadFile(null);
       if (uploadFileInputRef.current) uploadFileInputRef.current.value = '';
-      onToast('success', 'Uploaded', `"${uploadData.filename}" uploaded and linked`);
     } catch (err) {
       onToast('error', 'Upload Failed', err instanceof Error ? err.message : 'Upload failed');
     } finally { setUploading(false); }
   };
 
-  const save = async (triggerTab: CsTab = 'brand') => {
+  const save = async (triggerTab: CsTab = 'strategy_content') => {
     setSaving(true);
     try {
       const fd = new FormData();
@@ -818,9 +911,8 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         attachments: prefs.inherit_global_attachments,
       };
       clearDirty(triggerTab);
-      if (triggerTab !== 'inherit') clearDirty('inherit');
+      if (triggerTab !== 'strategy_content') clearDirty('strategy_content');
 
-      onToast('success', 'Saved', 'Campaign preferences saved');
       onSaved();
     } catch (err) {
       onToast('error', 'Save Failed', err instanceof Error ? err.message : 'Failed to save');
@@ -828,11 +920,32 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   };
 
   const set = (k: keyof CampaignPreferences, v: string | number, tab?: CsTab) => {
-    setPrefs(p => ({ ...p, [k]: v }));
-    if (tab) markDirty(tab);
-    if (k === 'inherit_global_settings' || k === 'inherit_global_attachments') {
-      markDirty('inherit');
-    }
+    setPrefs(p => {
+      const next = { ...p, [k]: v };
+      // Auto-recheck: if the new state matches the saved snapshot, clear dirty for this tab
+      const saved = savedPrefs.current;
+      const savedInheritSnap = savedInherit.current;
+      if (tab) {
+        const defaultBrandId = brands.find(b => b.is_default)?.id ?? null;
+        const allMatch = (Object.keys(next) as (keyof CampaignPreferences)[]).every(field => {
+          if (field === 'inherit_global_settings') return next[field] === savedInheritSnap.settings;
+          if (field === 'inherit_global_attachments') return next[field] === savedInheritSnap.attachments;
+          if (field === 'brand_id') {
+            // null and the default brand id are visually the same selection — don't mark dirty
+            const nextVal  = next[field]  ?? defaultBrandId;
+            const savedVal = saved[field] ?? defaultBrandId;
+            return nextVal === savedVal;
+          }
+          return next[field] === saved[field];
+        });
+        setDirtyTabs(d => ({ ...d, [tab]: !allMatch }));
+      }
+      if (k === 'inherit_global_settings') {
+        const inheritMatch = next.inherit_global_settings === savedInheritSnap.settings;
+        setDirtyTabs(d => ({ ...d, strategy_content: !inheritMatch }));
+      }
+      return next;
+    });
   };
 
   const generateTemplate = async (htmlEmail: boolean) => {
@@ -851,7 +964,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       if (newSubject !== savedTemplate.current.subject || newBody !== savedTemplate.current.body) {
         markDirty('template');
       }
-      onToast('success', 'Template', 'Template generated');
     } catch (err) {
       onToast('error', 'Template', err instanceof Error ? err.message : 'Failed to generate');
     } finally { setTemplateGenerating(false); }
@@ -876,7 +988,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
       clearDirty('template');
       await loadPrefs();
-      onToast('success', 'Template', 'Template saved');
       onSaved();
     } catch (err) {
       onToast('error', 'Template', err instanceof Error ? err.message : 'Failed to save');
@@ -884,26 +995,32 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   };
 
   // ── Derived attachment lists ────────────────────────────────
-  const filteredAttachments = allAttachments.filter(a =>
+  // globalAttachments  — server-filtered (filter_global=true): shown read-only above the picker
+  // linkedAttachmentIds — server-filtered (filter_campaigns=X): which boxes are checked
+  // allAttachments     — everything: the picker pool
+  //
+  // Hide global-ONLY files from the picker (they're already shown above read-only).
+  // Files that are BOTH global AND campaign-linked stay in the picker so the user
+  // can detach the campaign link if they want.
+  const globalAttachmentIds = new Set(globalAttachments.map(a => a.id));
+  const pickerAttachments   = allAttachments.filter(a =>
     a.filename.toLowerCase().includes(attachSearch.toLowerCase())
   );
-  const attachedFiles    = filteredAttachments.filter(a =>  linkedAttachmentIds.has(a.id));
-  const notAttachedFiles = filteredAttachments.filter(a => !linkedAttachmentIds.has(a.id));
+  const filteredAttachments = pickerAttachments;
+  const attachedFiles       = pickerAttachments.filter(a =>  linkedAttachmentIds.has(a.id));
+  const notAttachedFiles    = pickerAttachments.filter(a => !linkedAttachmentIds.has(a.id));
 
   // ── Tab definitions ─────────────────────────────────────────
   const csTabs: { id: CsTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'inherit',     label: 'Inheritance',    icon: <InheritIcon /> },
-    { id: 'brand',       label: 'Brand',          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> },
-    { id: 'strategy',    label: 'Strategy',       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
-    { id: 'email',       label: 'Email Content',  icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> },
-    { id: 'template',    label: 'Template Email', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> },
-    { id: 'branding',    label: 'Branding',       icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
-    { id: 'attachments', label: 'Attachments',    icon: <PaperclipIcon /> },
+    { id: 'strategy_content', label: 'Strategy & Content', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> },
+    { id: 'brand',            label: 'Brand',              icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> },
+    { id: 'template',         label: 'Template Email',     icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> },
+    { id: 'attachments',      label: 'Attachments',        icon: <PaperclipIcon /> },
   ];
 
   const isCsDirty = Object.values(dirtyTabs).some(Boolean);
-  const viewInheritSettings    = !!savedInherit.current.settings;
-  const viewInheritAttachments = !!savedInherit.current.attachments;
+  const viewInheritSettings     = !!prefs.inherit_global_settings;
+  const viewInheritAttachments  = !!prefs.inherit_global_attachments;
 
   const handleCsClose = () => {
     if (isCsDirty) { setConfirmClose(true); return; }
@@ -914,12 +1031,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const ReadOnly = ({ value }: { value: string }) => (
     <div style={{ padding: '0.6rem 0.9rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.875rem', opacity: 0.75, minHeight: '2.5rem' }}>
       {value || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
-    </div>
-  );
-  const InheritBanner = () => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      <span style={{ fontSize: '0.75rem', color: theme.colors.primary.main, fontWeight: 600 }}>Inherited from global settings — disable inheritance to edit</span>
     </div>
   );
 
@@ -948,201 +1059,278 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                     {t.icon}
                     <CsNavLabel>{t.label}</CsNavLabel>
                     {isDirty && (
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1, flexShrink: 0, color: activeTab === t.id ? theme.colors.primary.main : '#F59E0B' }}>*</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1, flexShrink: 0, color: '#F59E0B', opacity: 0.9 }}>*</span>
                     )}
                   </CsNavBtn>
                 );
               })}
             </CsNav>
 
-            {/* ── INHERIT tab ──────────────────────────────── */}
-            {activeTab === 'inherit' && (
-              <CsTabPanel theme={theme} key="inherit">
-                <CsPanelTitle theme={theme}>Inheritance</CsPanelTitle>
+            {/* ── STRATEGY & CONTENT tab ───────────────────── */}
+            {activeTab === 'strategy_content' && (
+              <CsTabPanel theme={theme} key="strategy_content">
+                <CsPanelTitle theme={theme}>Strategy & Content</CsPanelTitle>
                 <CsPanelSubtitle theme={theme}>
-                  Control whether this campaign falls back to your global settings and attachments.
+                  Define goal, tone, writing instructions, and CTA for this campaign.
                 </CsPanelSubtitle>
 
-                <InheritRow theme={theme} onClick={() => set('inherit_global_settings', prefs.inherit_global_settings ? 0 : 1, 'inherit')}>
+                {/* Inheritance checkbox */}
+                <InheritRow theme={theme} onClick={() => set('inherit_global_settings', prefs.inherit_global_settings ? 0 : 1, 'strategy_content')} style={{ marginBottom: '1.25rem' }}>
                   <InheritCheckbox theme={theme} $on={!!prefs.inherit_global_settings}>
                     <CheckSmallIcon />
                   </InheritCheckbox>
                   <InheritText>
-                    <InheritTitle>Inherit Global Settings</InheritTitle>
-                    <InheritDesc>Use your global settings as defaults for any field not explicitly set on this campaign.</InheritDesc>
+                    <InheritTitle>Use global settings</InheritTitle>
+                    <InheritDesc>Fall back to your global strategy &amp; content defaults for any field not set here.</InheritDesc>
                   </InheritText>
                 </InheritRow>
 
-                <InheritRow theme={theme} onClick={() => set('inherit_global_attachments', prefs.inherit_global_attachments ? 0 : 1, 'inherit')}>
-                  <InheritCheckbox theme={theme} $on={!!prefs.inherit_global_attachments}>
-                    <CheckSmallIcon />
-                  </InheritCheckbox>
-                  <InheritText>
-                    <InheritTitle>Inherit Global Attachments</InheritTitle>
-                    <InheritDesc>Include files linked in your global settings for emails sent in this campaign.</InheritDesc>
-                  </InheritText>
-                </InheritRow>
+                {/* Strategy collapsible */}
+                <CsSectionHeader theme={theme} $isExpanded={expandedSections.strategy} onClick={() => toggleSection('strategy')}>
+                  <CsSectionTitle theme={theme} $isExpanded={expandedSections.strategy}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    Strategy
+                  </CsSectionTitle>
+                  <CsSectionIcon theme={theme} $isExpanded={expandedSections.strategy}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
+                  </CsSectionIcon>
+                </CsSectionHeader>
+                <CsSectionContent $isExpanded={expandedSections.strategy}>
+                  {viewInheritSettings ? (
+                    <>
+                      <SFormRow>
+                        <SFG><SLabel theme={theme}>Goal</SLabel><ReadOnly value={globalGoal} /></SFG>
+                        <SFG><SLabel theme={theme}>Tone</SLabel><ReadOnly value={globalTone} /></SFG>
+                      </SFormRow>
+                      <SFG style={{ marginBottom: 0 }}>
+                        <SLabel theme={theme}>Value Proposition</SLabel>
+                        <ReadOnly value={globalValueProp} />
+                      </SFG>
+                    </>
+                  ) : (
+                    <>
+                      <SFormRow>
+                        <SFG>
+                          <SLabel theme={theme}>Goal</SLabel>
+                          <SInput theme={theme} placeholder="Book a 15-min call" value={prefs.goal}
+                            onChange={e => set('goal', e.target.value, 'strategy_content')} />
+                        </SFG>
+                        <SFG>
+                          <SLabel theme={theme}>Tone</SLabel>
+                          <SSelect theme={theme} value={prefs.tone} onChange={e => set('tone', e.target.value, 'strategy_content')}>
+                            <option value="">— Select —</option>
+                            {VALID_TONES.map(t => <option key={t} value={t}>{t}</option>)}
+                          </SSelect>
+                        </SFG>
+                      </SFormRow>
+                      <SFG style={{ marginBottom: 0 }}>
+                        <SLabel theme={theme}>Value Proposition</SLabel>
+                        <SInput theme={theme} placeholder="We reduce churn by 30% in 90 days"
+                          value={prefs.value_prop} onChange={e => set('value_prop', e.target.value, 'strategy_content')} />
+                      </SFG>
+                    </>
+                  )}
+                </CsSectionContent>
+
+                {/* Content collapsible */}
+                <CsSectionHeader theme={theme} $isExpanded={expandedSections.emailContent} onClick={() => toggleSection('emailContent')}>
+                  <CsSectionTitle theme={theme} $isExpanded={expandedSections.emailContent}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Content
+                  </CsSectionTitle>
+                  <CsSectionIcon theme={theme} $isExpanded={expandedSections.emailContent}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
+                  </CsSectionIcon>
+                </CsSectionHeader>
+                <CsSectionContent $isExpanded={expandedSections.emailContent}>
+                  {viewInheritSettings ? (
+                    <>
+                      <SFG>
+                        <SLabel theme={theme}>Writing Guidelines</SLabel>
+                        <div style={{ padding: '0.6rem 0.9rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.875rem', opacity: 0.75, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '4rem' }}>
+                          {globalWritingGuidelines || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
+                        </div>
+                      </SFG>
+                      <SFG><SLabel theme={theme}>Call to Action</SLabel><ReadOnly value={globalCta} /></SFG>
+                      <SFG>
+                        <SLabel theme={theme}>Additional Notes</SLabel>
+                        <div style={{ padding: '0.6rem 0.9rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.875rem', opacity: 0.75, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '3rem' }}>
+                          {globalAdditionalNotes || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
+                        </div>
+                      </SFG>
+                      <SFG style={{ marginBottom: 0 }}><SLabel theme={theme}>BCC Address</SLabel><ReadOnly value={globalBcc} /></SFG>
+                    </>
+                  ) : (
+                    <>
+                      <SFG>
+                        <SLabel theme={theme}>Writing Guidelines</SLabel>
+                        <STextarea theme={theme} rows={3}
+                          placeholder="Start with a genuine compliment… never use 'I hope this finds you well'…"
+                          value={prefs.writing_guidelines} onChange={e => set('writing_guidelines', e.target.value, 'strategy_content')} />
+                      </SFG>
+                      <SFG>
+                        <SLabel theme={theme}>Call to Action</SLabel>
+                        <SInput theme={theme} placeholder="Would you be open to a quick call this week?"
+                          value={prefs.cta} onChange={e => set('cta', e.target.value, 'strategy_content')} />
+                      </SFG>
+                      <SFG>
+                        <SLabel theme={theme}>Additional Notes</SLabel>
+                        <STextarea theme={theme} rows={2} placeholder="Never mention competitors. Keep emails under 150 words."
+                          value={prefs.additional_notes} onChange={e => set('additional_notes', e.target.value, 'strategy_content')} />
+                      </SFG>
+                      <SFG style={{ marginBottom: 0 }}>
+                        <SLabel theme={theme}>BCC Address</SLabel>
+                        <SInput theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com"
+                          value={prefs.bcc} onChange={e => set('bcc', e.target.value, 'strategy_content')} />
+                      </SFG>
+                    </>
+                  )}
+                </CsSectionContent>
 
                 <SSaveRow>
-                  <SBtn theme={theme} onClick={() => save('inherit')} disabled={saving || loading}>
+                  <SBtn theme={theme} onClick={() => save('strategy_content')} disabled={saving || loading}>
                     {saving ? 'Saving…' : 'Save'}
                   </SBtn>
                 </SSaveRow>
               </CsTabPanel>
             )}
-
-            {/* ── BRAND tab ───────────────────────────────── */}
             {activeTab === 'brand' && (
               <CsTabPanel theme={theme} key="brand">
                 <CsPanelTitle theme={theme}>Brand</CsPanelTitle>
                 <CsPanelSubtitle theme={theme}>
-                  Select which brand to use for this campaign. The selected brand's SMTP credentials, logo, and signature will be used for email sending.
+                  Choose which brand sends emails for this campaign.
                 </CsPanelSubtitle>
 
                 {brands.length === 0 ? (
-                  <div style={{ padding: '1.5rem', textAlign: 'center', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.85rem', opacity: 0.6 }}>
-                    No brands configured. Go to <strong>Settings → Brands</strong> to create one.
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', padding: '2rem 1rem', background: theme.colors.base[200], border: `1px dashed ${theme.colors.base[300]}`, borderRadius: theme.radius.field, textAlign: 'center' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+                      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                    </svg>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, opacity: 0.5 }}>No brands configured</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.4 }}>Go to <strong>Settings → Brands</strong> to create one.</div>
                   </div>
-                ) : (
-                  <SFG>
-                    <SLabel theme={theme}>Selected Brand</SLabel>
-                    <SSelect theme={theme}
-                      value={prefs.brand_id ?? ''}
-                      onChange={e => set('brand_id', e.target.value ? Number(e.target.value) : (null as any), 'brand')}>
-                      <option value="">— Use default brand —</option>
-                      {brands.map(b => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}{b.is_default ? ' (default)' : ''}{b.email_address ? ` — ${b.email_address}` : ''}
-                        </option>
-                      ))}
-                    </SSelect>
-                    {prefs.brand_id && (() => {
-                      const selected = brands.find(b => b.id === prefs.brand_id);
-                      return selected ? (
-                        <div style={{ marginTop: '0.75rem', padding: '0.65rem 0.9rem', background: theme.colors.primary.main + '08', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field, fontSize: '0.8rem' }}>
-                          <div style={{ fontWeight: 600, marginBottom: '0.2rem' }}>{selected.name}</div>
-                          {selected.business_name && <div style={{ opacity: 0.7 }}>{selected.business_name}</div>}
-                          {selected.email_address && <div style={{ opacity: 0.55, fontSize: '0.75rem', fontFamily: 'monospace' }}>{selected.email_address}</div>}
+                ) : (() => {
+                  const selectedBrand = brands.find(b => b.id === prefs.brand_id) ?? brands.find(b => b.is_default) ?? brands[0];
+                  return (
+                    <>
+                      {/* Brand picker — clickable rows */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.25rem' }}>
+                        {brands.map(b => {
+                          const isSelected = prefs.brand_id === b.id || (!prefs.brand_id && !!b.is_default);
+                          return (
+                            <div
+                              key={b.id}
+                              onClick={() => set('brand_id', b.id, 'brand')}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                padding: '0.65rem 0.9rem',
+                                border: `1px solid ${isSelected ? theme.colors.primary.main + '60' : theme.colors.base[300]}`,
+                                borderRadius: theme.radius.field,
+                                background: isSelected ? theme.colors.primary.main + '0c' : theme.colors.base[400],
+                                cursor: 'pointer', transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = theme.colors.primary.main + '40'; }}
+                              onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.borderColor = theme.colors.base[300]; }}
+                            >
+                              {/* Radio dot */}
+                              <div style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base[300]}`, background: isSelected ? theme.colors.primary.main : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                                {isSelected && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                              </div>
+                              {/* Brand info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '0.875rem', color: isSelected ? theme.colors.primary.main : theme.colors.base.content }}>
+                                    {b.business_name || b.name}
+                                  </span>
+                                  {b.is_default && (
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '1px 6px', borderRadius: '999px', background: theme.colors.primary.main + '18', color: theme.colors.primary.main, border: `1px solid ${theme.colors.primary.main}30`, lineHeight: 1.6 }}>
+                                      default
+                                    </span>
+                                  )}
+                                </div>
+                                {b.email_address && (
+                                  <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', opacity: 0.5, marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {b.email_address}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Selected brand detail card */}
+                      {selectedBrand && (
+                        <div style={{ border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, overflow: 'hidden', marginBottom: '0.5rem' }}>
+                          {/* Card header */}
+                          <div style={{ padding: '0.7rem 1rem', background: theme.colors.base[200], borderBottom: `1px solid ${theme.colors.base[300]}`, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, flexShrink: 0 }}>
+                              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', opacity: 0.45 }}>Brand Details</span>
+                          </div>
+
+                          {/* Detail rows */}
+                          <div style={{ background: theme.colors.base[400] }}>
+                            {[
+                              {
+                                show: !!selectedBrand.logo_data,
+                                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+                                label: 'Logo',
+                                value: <img src={selectedBrand.logo_data!} alt="Brand logo" style={{ maxHeight: 36, maxWidth: 120, objectFit: 'contain', display: 'block', borderRadius: 4 }} />,
+                              },
+                              {
+                                show: !!selectedBrand.email_address,
+                                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+                                label: 'From address',
+                                value: <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selectedBrand.email_address}</span>,
+                              },
+                              {
+                                show: !!selectedBrand.smtp_host,
+                                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>,
+                                label: 'SMTP',
+                                value: <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selectedBrand.smtp_host}{selectedBrand.smtp_port ? `:${selectedBrand.smtp_port}` : ''}</span>,
+                              },
+                              {
+                                show: !!selectedBrand.signature,
+                                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+                                label: 'Signature',
+                                value: <span style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{selectedBrand.signature}</span>,
+                              },
+                            ].filter(r => r.show).map((row, i, arr) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0', borderBottom: i < arr.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none' }}>
+                                {/* Label column */}
+                                <div style={{ width: 110, flexShrink: 0, padding: '0.6rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem', borderRight: `1px solid ${theme.colors.base[300]}`, alignSelf: 'stretch' }}>
+                                  <span style={{ opacity: 0.4, flexShrink: 0, display: 'flex' }}>{row.icon}</span>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{row.label}</span>
+                                </div>
+                                {/* Value column */}
+                                <div style={{ flex: 1, padding: '0.6rem 0.75rem', fontSize: '0.8rem', opacity: 0.8 }}>
+                                  {row.value}
+                                </div>
+                              </div>
+                            ))}
+                            {!selectedBrand.logo_data && !selectedBrand.email_address && !selectedBrand.smtp_host && !selectedBrand.signature && (
+                              <div style={{ padding: '0.85rem 1rem', fontSize: '0.8rem', opacity: 0.4, fontStyle: 'italic' }}>
+                                No details configured — edit this brand in Settings → Brands.
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ) : null;
-                    })()}
-                  </SFG>
-                )}
+                      )}
 
-                <SSaveRow>
-                  <SBtn theme={theme} onClick={() => save('brand')} disabled={saving || loading}>
-                    {saving ? 'Saving…' : 'Save'}
-                  </SBtn>
-                </SSaveRow>
-              </CsTabPanel>
-            )}
-
-            {/* ── STRATEGY tab ─────────────────────────────── */}
-            {activeTab === 'strategy' && (
-              <CsTabPanel theme={theme} key="strategy">
-                <CsPanelTitle theme={theme}>Campaign Strategy</CsPanelTitle>
-                <CsPanelSubtitle theme={theme}>
-                  Define the goal, tone, and value proposition specific to this campaign.
-                </CsPanelSubtitle>
-
-                {viewInheritSettings ? (
-                  <>
-                    <InheritBanner />
-                    <SFormRow>
-                      <SFG><SLabel theme={theme}>Goal</SLabel><ReadOnly value={globalGoal} /></SFG>
-                      <SFG><SLabel theme={theme}>Tone</SLabel><ReadOnly value={globalTone} /></SFG>
-                    </SFormRow>
-                    <SFG style={{ marginBottom: 0 }}>
-                      <SLabel theme={theme}>Value Proposition</SLabel>
-                      <ReadOnly value={globalValueProp} />
-                    </SFG>
-                  </>
-                ) : (
-                  <>
-                    <SFormRow>
-                      <SFG>
-                        <SLabel theme={theme}>Goal</SLabel>
-                        <SInput theme={theme} placeholder="Book a 15-min call" value={prefs.goal}
-                          onChange={e => set('goal', e.target.value, 'strategy')} />
-                      </SFG>
-                      <SFG>
-                        <SLabel theme={theme}>Tone</SLabel>
-                        <SSelect theme={theme} value={prefs.tone} onChange={e => set('tone', e.target.value, 'strategy')}>
-                          <option value="">— Select —</option>
-                          {VALID_TONES.map(t => <option key={t} value={t}>{t}</option>)}
-                        </SSelect>
-                      </SFG>
-                    </SFormRow>
-                    <SFG style={{ marginBottom: 0 }}>
-                      <SLabel theme={theme}>Value Proposition</SLabel>
-                      <SInput theme={theme} placeholder="We reduce churn by 30% in 90 days"
-                        value={prefs.value_prop} onChange={e => set('value_prop', e.target.value, 'strategy')} />
-                    </SFG>
-                    <SSaveRow>
-                      <SBtn theme={theme} onClick={() => save('strategy')} disabled={saving || loading}>
-                        {saving ? 'Saving…' : 'Save'}
-                      </SBtn>
-                    </SSaveRow>
-                  </>
-                )}
-              </CsTabPanel>
-            )}
-
-            {/* ── EMAIL CONTENT tab ────────────────────────── */}
-            {activeTab === 'email' && (
-              <CsTabPanel theme={theme} key="email">
-                <CsPanelTitle theme={theme}>Email Content</CsPanelTitle>
-                <CsPanelSubtitle theme={theme}>
-                  Writing instructions, CTA, and extras specific to this campaign's emails.
-                </CsPanelSubtitle>
-
-                {viewInheritSettings ? (
-                  <>
-                    <InheritBanner />
-                    <SFG><SLabel theme={theme}>Writing Guidelines</SLabel>
-                      <div style={{ padding: '0.6rem 0.9rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.875rem', opacity: 0.75, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '4rem' }}>
-                        {globalWritingGuidelines || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
-                      </div>
-                    </SFG>
-                    <SFG><SLabel theme={theme}>Call to Action</SLabel><ReadOnly value={globalCta} /></SFG>
-                    <SFG>
-                      <SLabel theme={theme}>Additional Notes</SLabel>
-                      <div style={{ padding: '0.6rem 0.9rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.875rem', opacity: 0.75, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '3rem' }}>
-                        {globalAdditionalNotes || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
-                      </div>
-                    </SFG>
-                    <SFG style={{ marginBottom: 0 }}><SLabel theme={theme}>BCC Address</SLabel><ReadOnly value={globalBcc} /></SFG>
-                  </>
-                ) : (
-                  <>
-                    <SFG>
-                      <SLabel theme={theme}>Writing Guidelines</SLabel>
-                      <STextarea theme={theme} rows={3}
-                        placeholder="Start with a genuine compliment… never use 'I hope this finds you well'…"
-                        value={prefs.writing_guidelines} onChange={e => set('writing_guidelines', e.target.value, 'email')} />
-                    </SFG>
-                    <SFG>
-                      <SLabel theme={theme}>Call to Action</SLabel>
-                      <SInput theme={theme} placeholder="Would you be open to a quick call this week?"
-                        value={prefs.cta} onChange={e => set('cta', e.target.value, 'email')} />
-                    </SFG>
-                    <SFG>
-                      <SLabel theme={theme}>Additional Notes</SLabel>
-                      <STextarea theme={theme} rows={2} placeholder="Never mention competitors. Keep emails under 150 words."
-                        value={prefs.additional_notes} onChange={e => set('additional_notes', e.target.value, 'email')} />
-                    </SFG>
-                    <SFG style={{ marginBottom: 0 }}>
-                      <SLabel theme={theme}>BCC Address</SLabel>
-                      <SInput theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com"
-                        value={prefs.bcc} onChange={e => set('bcc', e.target.value, 'email')} />
-                    </SFG>
-                    <SSaveRow>
-                      <SBtn theme={theme} onClick={() => save('email')} disabled={saving || loading}>
-                        {saving ? 'Saving…' : 'Save'}
-                      </SBtn>
-                    </SSaveRow>
-                  </>
-                )}
+                      <SSaveRow>
+                        <SBtn theme={theme} onClick={() => save('brand')} disabled={saving || loading}>
+                          {saving ? 'Saving…' : 'Save'}
+                        </SBtn>
+                      </SSaveRow>
+                    </>
+                  );
+                })()}
               </CsTabPanel>
             )}
 
@@ -1169,7 +1357,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, { method: 'PUT', body: fd });
                         savedTemplate.current = { subject: '', body: '' };
                         clearDirty('template');
-                        onToast('success', 'Template', 'Template cleared');
                         onSaved();
                       } catch { onToast('error', 'Template', 'Failed to clear template'); }
                       finally { setTemplateSaving(false); }
@@ -1189,7 +1376,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                       } catch {
                         setTemplateSubject('A quick note for {{company_name}}');
                         setTemplateBody("Hi {{company_name}} team,\n\nI wanted to reach out and introduce ourselves. We'd love to explore how we can help you.\n\nWould you be open to a quick call this week?");
-                        onToast('warning', 'Template', 'AI generation failed — default template applied');
                       } finally {
                         setTemplateGenerating(false);
                       }
@@ -1290,51 +1476,75 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
               </CsTabPanel>
             )}
 
-            {/* ── BRANDING tab ─────────────────────────────── */}
-            {activeTab === 'branding' && (
-              <CsTabPanel theme={theme} key="branding">
-                <CsPanelTitle theme={theme}>Branding</CsPanelTitle>
-                <CsPanelSubtitle theme={theme}>
-                  Logo and signature now come from the selected brand. Use the <strong>Brand</strong> tab to change which brand is linked to this campaign, or go to <strong>Settings → Brands</strong> to manage brands.
-                </CsPanelSubtitle>
-
-                {(() => {
-                  const selectedBrand = brands.find(b => b.id === prefs.brand_id) || brands.find(b => b.is_default) || null;
-                  return selectedBrand ? (
-                    <div style={{ padding: '1rem', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field }}>
-                      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.45, marginBottom: '0.6rem' }}>
-                        {prefs.brand_id ? 'Campaign Brand' : 'Default Brand (fallback)'}
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem' }}>{selectedBrand.name}</div>
-                      {selectedBrand.email_address && <div style={{ fontSize: '0.8rem', opacity: 0.6, fontFamily: 'monospace' }}>{selectedBrand.email_address}</div>}
-                    </div>
-                  ) : (
-                    <div style={{ padding: '1.25rem', background: theme.colors.base[200], border: `1px dashed ${theme.colors.base[300]}`, borderRadius: theme.radius.field, fontSize: '0.85rem', opacity: 0.55, textAlign: 'center' }}>
-                      No brand selected — go to <strong>Settings → Brands</strong> to create one, then select it in the Brand tab.
-                    </div>
-                  );
-                })()}
-              </CsTabPanel>
-            )}
-
             {/* ── ATTACHMENTS tab ──────────────────────────── */}
             {activeTab === 'attachments' && (
               <CsTabPanel theme={theme} key="attachments">
                 <CsPanelTitle theme={theme}>Attachments</CsPanelTitle>
                 <CsPanelSubtitle theme={theme}>
-                  Files uploaded here will automatically be added to this campaign. You can also select from previously uploaded files below.
+                  Campaign attachments are always included. Enable the toggle below to also pull in your global attachments — both sets are merged when sending.
                 </CsPanelSubtitle>
 
-                {viewInheritAttachments ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.5rem 0.75rem', background: theme.colors.primary.main + '12', border: `1px solid ${theme.colors.primary.main}30`, borderRadius: theme.radius.field }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: theme.colors.primary.main, flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                      <span style={{ fontSize: '0.75rem', color: theme.colors.primary.main, fontWeight: 600 }}>Inherited from global settings — disable inheritance to edit</span>
-                    </div>
-                    <AttachEmpty theme={theme}>Global attachments are managed in Settings → Attachments.</AttachEmpty>
-                  </>
-                ) : (
-                  <>
+                {/* ── Global attachments section — always visible, dimmed when not inherited ── */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                  {/* Toggle row */}
+                  <InheritRow
+                    theme={theme}
+                    onClick={() => set('inherit_global_attachments', prefs.inherit_global_attachments ? 0 : 1, 'attachments')}
+                    style={{
+                      marginBottom: viewInheritAttachments && globalAttachments.length > 0 ? '0' : undefined,
+                      borderRadius: viewInheritAttachments && globalAttachments.length > 0
+                        ? `${theme.radius?.field ?? '8px'} ${theme.radius?.field ?? '8px'} 0 0`
+                        : undefined,
+                      borderBottom: viewInheritAttachments && globalAttachments.length > 0 ? 'none' : undefined,
+                    }}
+                  >
+                    <InheritCheckbox theme={theme} $on={!!prefs.inherit_global_attachments}>
+                      <CheckSmallIcon />
+                    </InheritCheckbox>
+                    <InheritText>
+                      <InheritTitle>Include global attachments</InheritTitle>
+                      <InheritDesc>Include files linked in your global settings for all emails in this campaign.</InheritDesc>
+                    </InheritText>
+                  </InheritRow>
+
+                  {/* Global attachments list — only when checkbox is ON */}
+                  {viewInheritAttachments && (
+                    attachLoading ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '52px', background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderTop: 'none', borderRadius: `0 0 ${theme.radius?.field ?? '8px'} ${theme.radius?.field ?? '8px'}`, fontSize: '0.8rem', opacity: 0.5, flexShrink: 0 }}>Loading…</div>
+                    ) : globalAttachments.length === 0 ? null : (
+                      <div style={{ border: `1px solid ${theme.colors.base[300]}`, borderTop: `1px solid ${theme.colors.base[300]}`, borderRadius: `0 0 ${theme.radius?.field ?? '8px'} ${theme.radius?.field ?? '8px'}`, background: (theme.colors.base[300] as string) + '60', flexShrink: 0 }}>
+                        {globalAttachments.map((att, i) => {
+                          const ext = getExt(att.filename);
+                          const sizeKb = att.file_size ? `${(att.file_size / 1024).toFixed(0)} KB` : '';
+                          const alsoInCampaign = linkedAttachmentIds.has(att.id);
+                          return (
+                            <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.75rem', fontSize: '0.8125rem', borderBottom: i < globalAttachments.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none' }}>
+                              <AttachExtBadge $ext={ext}>{ext || '?'}</AttachExtBadge>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <AttachName>{att.filename}</AttachName>
+                                {sizeKb && <div style={{ fontSize: '0.7rem', opacity: 0.45, marginTop: '1px' }}>{sizeKb}</div>}
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+                                {alsoInCampaign && <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '1px 6px', borderRadius: '999px', background: theme.colors.primary.main + '18', color: theme.colors.primary.main, border: `1px solid ${theme.colors.primary.main}30` }}>campaign</span>}
+                                <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '1px 6px', borderRadius: '999px', background: theme.colors.base[300], color: theme.colors.base.content, border: `1px solid ${theme.colors.base[300]}`, opacity: 0.8 }}>global</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
+                </div>
+
+                {/* Divider between global and campaign sections */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.1rem' }}>
+                  <div style={{ flex: 1, height: 1, background: theme.colors.base[300] }} />
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', opacity: 0.35 }}>Campaign Attachments</span>
+                  <div style={{ flex: 1, height: 1, background: theme.colors.base[300] }} />
+                </div>
+
+                {/* Campaign-specific attachments — always shown */}
+                <>
                     {/* Upload zone */}
                     <div style={{ marginBottom: '1.25rem' }}>
                       <div
@@ -1402,11 +1612,17 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
 
                     {attachLoading ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px', opacity: 0.5, fontSize: '0.875rem' }}>Loading attachments…</div>
-                    ) : allAttachments.length === 0 ? (
+                    ) : pickerAttachments.length === 0 && allAttachments.length === 0 ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '120px', gap: '0.5rem', opacity: 0.5 }}>
                         <PaperclipIcon />
                         <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>No files uploaded yet</div>
                         <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Use the upload area above to add your first file.</div>
+                      </div>
+                    ) : pickerAttachments.length === 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '120px', gap: '0.5rem', opacity: 0.5 }}>
+                        <PaperclipIcon />
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>All files are inherited from global</div>
+                        <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Upload a new file or disable global inheritance to manage campaign attachments.</div>
                       </div>
                     ) : (
                       <>
@@ -1490,18 +1706,17 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         {/* Footer */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem' }}>
                           <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>
-                            {filteredAttachments.length < allAttachments.length
-                              ? `Showing ${filteredAttachments.length} of ${allAttachments.length} files`
-                              : `${allAttachments.length} file${allAttachments.length !== 1 ? 's' : ''} total`}
+                            {filteredAttachments.length < pickerAttachments.length
+                              ? `Showing ${filteredAttachments.length} of ${pickerAttachments.length} files`
+                              : `${pickerAttachments.length} file${pickerAttachments.length !== 1 ? 's' : ''} total`}
                           </span>
-                          <SBtn theme={theme} onClick={saveAttachments} disabled={attachSaving} style={{ padding: '0.5rem 1.2rem', fontSize: '0.825rem' }}>
-                            {attachSaving ? 'Saving…' : 'Save'}
+                          <SBtn theme={theme} onClick={async () => { await save('attachments'); await saveAttachments(); }} disabled={attachSaving || saving} style={{ padding: '0.5rem 1.2rem', fontSize: '0.825rem' }}>
+                            {attachSaving || saving ? 'Saving…' : 'Save'}
                           </SBtn>
                         </div>
                       </>
                     )}
                   </>
-                )}
               </CsTabPanel>
             )}
 

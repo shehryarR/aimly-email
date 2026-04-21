@@ -1002,8 +1002,11 @@ def get_companies(
         cursor.execute(data_query, data_params)
         rows = cursor.fetchall()
 
-        # ── Fetch sender email from SMTP credentials for opt-out checks ─────
-        cursor.execute("SELECT email_address FROM user_keys WHERE user_id = %s", (user_id,))
+        # ── Fetch sender email from default brand for opt-out checks ─────────
+        cursor.execute(
+            "SELECT email_address FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+            (user_id,)
+        )
         smtp_row = cursor.fetchone()
         sender_email = smtp_row["email_address"] if smtp_row and smtp_row["email_address"] else None
 

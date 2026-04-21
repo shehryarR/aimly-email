@@ -10,12 +10,13 @@ GENERATING PERSONALIZED EMAIL (LLM mode):
   inherit_global_settings = 0 → use campaign fields, fallback to default
 
 SENDING/DRAFTING/SCHEDULING PRIMARY EMAIL:
-  Branding: resolved from brand (campaign's linked brand, or user's default brand)
-  Attachments:
-    inherit_campaign_attachments = 0 → email's own attachments only
-    inherit_campaign_attachments = 1:
-      inherit_global_attachments = 0 → campaign attachments only
-      inherit_global_attachments = 1 → global attachments only
+  Branding: always resolved from campaign's linked brand (or user's default brand).
+            No per-email or per-company branding overrides — brand is set at campaign level.
+
+  Attachments (additive/hierarchical):
+    email's own attachments
+    + if inherit_campaign_attachments = 1: campaign attachments added on top
+      + if campaign.inherit_global_attachments = 1: global attachments added on top
   New email entry is created with the final resolved branding + attachments baked in.
 
 SENDING/DRAFTING/SCHEDULING A DRAFT or SCHEDULED EMAIL:
@@ -49,12 +50,14 @@ from services.email_service import (
 )
 from .utils.email_helpers import (
     MessageResponse,
-    resolve_branding,
     resolve_attachments_for_primary,
     resolve_attachment_ids_for_primary,
     get_own_attachments,
 )
 from tools.email_sender_tool import AttachmentInfo
+
+_LLM_MODEL_COOKIE  = "llm_model_enc"
+_DEFAULT_LLM_MODEL = "gemini-2.5-flash"
 
 ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/attachments")
 
@@ -260,16 +263,14 @@ def bulk_generate_emails(
                 detail="No LLM API key configured. Please add one in Settings.",
             )
 
+        llm_model = _read_cookie_key(http_request, _LLM_MODEL_COOKIE) or _DEFAULT_LLM_MODEL
+        llm_config = {
+            "api_key": llm_api_key,
+            "model":   llm_model,
+        }
+
         with get_connection() as conn:
             cursor = conn.cursor()
-
-            # llm_model now lives in global_settings
-            cursor.execute("SELECT llm_model FROM global_settings WHERE user_id = %s", (user_id,))
-            gs_row = cursor.fetchone()
-            llm_config = {
-                "api_key": llm_api_key,
-                "model":   (gs_row["llm_model"] if gs_row else None) or "gemini-2.0-flash",
-            }
 
             cursor.execute("""
                 SELECT goal, value_prop, tone, cta,
@@ -568,11 +569,10 @@ def bulk_send_emails(
                 # ── Branding + attachment resolution ──────────────────────────
                 if status == "primary":
                     cursor.execute("""
-                        SELECT id, inherit_campaign_attachments, inherit_campaign_branding
+                        SELECT id, inherit_campaign_attachments
                         FROM campaign_company WHERE id = %s
                     """, (email["campaign_company_id"],))
                     cc_row = cursor.fetchone()
-                    inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
@@ -582,7 +582,7 @@ def bulk_send_emails(
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
-                    # Resolve brand for branding (signature + logo)
+                    # Branding always comes from the campaign's linked brand
                     brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
                     if brand_id:
                         cursor.execute(
@@ -595,10 +595,9 @@ def bulk_send_emails(
                             (user_id,)
                         )
                     brand_row = cursor.fetchone()
-
-                    signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, brand_row, inherit_campaign_branding
-                    )
+                    signature      = brand_row["signature"]      if brand_row else None
+                    logo_blob      = brand_row["logo"]           if brand_row else None
+                    logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
 
                     inherit_global_attachments = (
                         campaign_prefs["inherit_global_attachments"]
@@ -784,11 +783,10 @@ def save_as_draft_bulk(
                     campaign_id = email["campaign_id"]
 
                     cursor.execute("""
-                        SELECT id, inherit_campaign_attachments, inherit_campaign_branding
+                        SELECT id, inherit_campaign_attachments
                         FROM campaign_company WHERE id = %s
                     """, (email["campaign_company_id"],))
                     cc_row = cursor.fetchone()
-                    inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
@@ -797,7 +795,7 @@ def save_as_draft_bulk(
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
-                    # Resolve brand for branding
+                    # Branding always from campaign's linked brand
                     brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
                     if brand_id:
                         cursor.execute(
@@ -810,10 +808,9 @@ def save_as_draft_bulk(
                             (user_id,)
                         )
                     brand_row = cursor.fetchone()
-
-                    signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, brand_row, inherit_campaign_branding
-                    )
+                    signature      = brand_row["signature"]      if brand_row else None
+                    logo_blob      = brand_row["logo"]           if brand_row else None
+                    logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
 
                     inherit_global_attachments = (
                         campaign_prefs["inherit_global_attachments"]
@@ -958,11 +955,10 @@ def smart_schedule_emails(
 
                 if email["status"] == "primary":
                     cursor.execute("""
-                        SELECT id, inherit_campaign_attachments, inherit_campaign_branding
+                        SELECT id, inherit_campaign_attachments
                         FROM campaign_company WHERE id = %s
                     """, (email["campaign_company_id"],))
                     cc_row = cursor.fetchone()
-                    inherit_campaign_branding    = cc_row["inherit_campaign_branding"]    if cc_row else 1
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
@@ -971,6 +967,7 @@ def smart_schedule_emails(
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
+                    # Branding always from campaign's linked brand
                     brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
                     if brand_id:
                         cursor.execute(
@@ -983,10 +980,9 @@ def smart_schedule_emails(
                             (user_id,)
                         )
                     brand_row = cursor.fetchone()
-
-                    signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, brand_row, inherit_campaign_branding
-                    )
+                    signature      = brand_row["signature"]      if brand_row else None
+                    logo_blob      = brand_row["logo"]           if brand_row else None
+                    logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
 
                     inherit_global_attachments = (
                         campaign_prefs["inherit_global_attachments"]

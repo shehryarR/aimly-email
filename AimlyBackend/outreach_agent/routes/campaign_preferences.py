@@ -7,7 +7,7 @@ After brand migration:
   Removed: business_name, business_info, logo, logo_mime_type, signature
   Renamed: email_instruction → writing_guidelines, extras → additional_notes
   Added:   brand_id (nullable FK → brands)
-  LLM model now fetched from global_settings instead of user_keys.
+  LLM model read from cookie (llm_model_enc) — never stored in the database.
 
 THE CORRECT NULL APPROACH:
 ════════════════════════════════════════════════════════════
@@ -32,6 +32,9 @@ from core.database.connection import get_connection
 from routes.auth import get_current_user
 from routes.utils.crypto import _read_cookie_key, _LLM_COOKIE
 from services.email_service import generate_email as svc_generate_email
+
+_LLM_MODEL_COOKIE  = "llm_model_enc"
+_DEFAULT_LLM_MODEL = "gemini-2.5-flash"
 
 campaign_preferences_router = APIRouter(tags=["Campaign Preferences"])
 
@@ -293,7 +296,7 @@ def generate_template_email(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        # ── LLM credentials: key from cookie, model from global_settings ─────
+        # ── LLM credentials: both key and model from cookies ─────────────────
         llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
         if not llm_api_key:
             raise HTTPException(
@@ -301,11 +304,10 @@ def generate_template_email(
                 detail="No LLM API key configured. Please add one in Settings.",
             )
 
-        cursor.execute("SELECT llm_model FROM global_settings WHERE user_id = %s", (user_id,))
-        gs_row = cursor.fetchone()
+        llm_model = _read_cookie_key(http_request, _LLM_MODEL_COOKIE) or _DEFAULT_LLM_MODEL
         llm_config = {
             "api_key": llm_api_key,
-            "model":   (gs_row["llm_model"] if gs_row else None) or "gemini-2.0-flash",
+            "model":   llm_model,
         }
 
         # ── Campaign preferences ──────────────────────────────────────────────
