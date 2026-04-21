@@ -8,7 +8,7 @@ import { useTheme } from '../theme/styles';
 import { useNavigate, Link } from 'react-router-dom';
 
 const NavbarContainer = styled.header<{ theme: any }>`
-  background-color: ${props => props.theme.colors.base[100]}f0;
+  background-color: ${props => props.theme.colors.base[200]};
   border-bottom: 1px solid ${props => props.theme.colors.base[300]};
   color: ${props => props.theme.colors.base.content};
   padding: 0 2rem;
@@ -44,7 +44,7 @@ const LogoImage = styled.img`
 const PageTitle = styled.span<{ theme: any }>`
   font-size: 0.875rem;
   color: ${props => props.theme.colors.base.content};
-  opacity: 0.6;
+  opacity: 0.65;
   font-weight: 500;
   &::before {
     content: '•';
@@ -87,8 +87,8 @@ const ToggleThumb = styled.div<{ theme: any; isDark: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  svg { width: 14px; height: 14px; color: ${props => props.isDark ? props.theme.colors.primary.main : '#f59e0b'}; }
+  box-shadow: 0 1px 3px ${props => props.theme.colors.base[300]};
+  svg { width: 14px; height: 14px; color: ${props => props.isDark ? props.theme.colors.primary.main : props.theme.colors.warning.main}; }
 `;
 
 const UserAvatar = styled.div<{ theme: any }>`

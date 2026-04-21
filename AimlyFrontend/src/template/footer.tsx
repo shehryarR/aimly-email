@@ -8,7 +8,7 @@ import { useTheme } from '../theme/styles';
 import { Link } from 'react-router-dom';
 
 const FooterContainer = styled.footer<{ theme: any }>`
-  background-color: ${props => props.theme.colors.base[100]}f0;
+  background-color: ${props => props.theme.colors.base[200]};
   border-top: 1px solid ${props => props.theme.colors.base[300]};
   color: ${props => props.theme.colors.base.content};
   padding: 1rem 2rem;
@@ -23,7 +23,7 @@ const FooterContainer = styled.footer<{ theme: any }>`
 const CopyrightText = styled.span<{ theme: any }>`
   font-size: 0.8rem;
   color: ${props => props.theme.colors.base.content};
-  opacity: 0.45;
+  opacity: 0.65;
   font-weight: 400;
 `;
 
@@ -41,14 +41,14 @@ const FooterLink = styled(Link)<{ theme: any }>`
   cursor: pointer;
   font-size: 0.78rem;
   color: ${props => props.theme.colors.base.content};
-  opacity: 0.4;
+  opacity: 0.6;
   font-weight: 400;
   padding: 0;
   transition: opacity 0.15s;
   font-family: inherit;
 
   &:hover {
-    opacity: 0.85;
+    opacity: 1;
     color: ${props => props.theme.colors.primary.main};
   }
 `;
