@@ -75,7 +75,6 @@ class CampaignPreferencesResponse(BaseModel):
     id: int
     campaign_id: int
     brand_id: Optional[int] = None
-    bcc: Optional[str] = None
     goal: Optional[str] = None
     value_prop: Optional[str] = None
     tone: Optional[str] = None
@@ -106,7 +105,6 @@ async def update_campaign_preferences(
     campaign_id: int,
     request: Request,
     # ── Text fields ──────────────────────────────────────────────────────────
-    bcc: Optional[str] = Form(None),
     goal: Optional[str] = Form(None),
     value_prop: Optional[str] = Form(None),
     tone: Optional[str] = Form(None),
@@ -139,7 +137,6 @@ async def update_campaign_preferences(
     template_email_sent = "template_email" in _raw_form
 
     # ── Normalize text fields ─────────────────────────────────────────────────
-    bcc                = normalize_text_field(bcc)
     goal               = normalize_text_field(goal)
     value_prop         = normalize_text_field(value_prop)
     tone               = normalize_text_field(tone)
@@ -186,7 +183,6 @@ async def update_campaign_preferences(
 
                 # Text fields — frontend sends all on every save
                 for col, val in [
-                    ("bcc",                bcc),
                     ("goal",               goal),
                     ("value_prop",         value_prop),
                     ("tone",               tone),
@@ -230,14 +226,14 @@ async def update_campaign_preferences(
                 cursor.execute(
                     """
                     INSERT INTO campaign_preferences (
-                        campaign_id, brand_id, bcc, goal, value_prop, tone, cta,
+                        campaign_id, brand_id, goal, value_prop, tone, cta,
                         writing_guidelines, additional_notes,
                         template_email, template_html_email,
                         inherit_global_settings, inherit_global_attachments
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
-                        campaign_id, resolved_brand_id, bcc, goal, value_prop, tone, cta,
+                        campaign_id, resolved_brand_id, goal, value_prop, tone, cta,
                         writing_guidelines, additional_notes,
                         template_email, template_html_email,
                         inherit_global_settings, inherit_global_attachments,
@@ -511,7 +507,6 @@ def get_campaign_preferences(
         id=p["id"],
         campaign_id=p["campaign_id"],
         brand_id=p.get("brand_id"),
-        bcc=p.get("bcc"),
         goal=p.get("goal"),
         value_prop=p.get("value_prop"),
         tone=p.get("tone"),

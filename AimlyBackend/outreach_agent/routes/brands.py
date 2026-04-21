@@ -17,6 +17,7 @@ Logo is stored as LONGBLOB and returned as a base64 data URL on GET.
 
 from datetime import datetime
 import base64
+import re
 import smtplib
 import ssl
 from typing import Optional, List
@@ -32,6 +33,17 @@ brands_router = APIRouter(prefix="/brands", tags=["Brands"])
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_email_format(value: Optional[str], field_name: str) -> None:
+    """Raise HTTP 400 if value is present but not a valid email address."""
+    if value and not EMAIL_RE.match(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid email format for {field_name}: '{value}'",
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════════
@@ -184,6 +196,7 @@ class BrandResponse(BaseModel):
     email_address: Optional[str] = None
     # email_password is NEVER returned
     signature: Optional[str] = None
+    bcc: Optional[str] = None
     is_default: int
     created_at: datetime
     updated_at: datetime
@@ -218,7 +231,7 @@ def get_brands(current_user: dict = Depends(get_current_user)):
         cursor.execute("""
             SELECT id, user_id, business_name, business_info,
                    logo, logo_mime_type, smtp_host, smtp_port, email_address,
-                   signature, is_default, created_at, updated_at
+                   signature, bcc, is_default, created_at, updated_at
             FROM brands WHERE user_id = %s ORDER BY is_default DESC, created_at ASC
         """, (user_id,))
         rows = cursor.fetchall()
@@ -236,6 +249,7 @@ def get_brands(current_user: dict = Depends(get_current_user)):
             smtp_port=r["smtp_port"],
             email_address=r["email_address"],
             signature=r["signature"],
+            bcc=r.get("bcc"),
             is_default=r["is_default"] or 0,
             created_at=r["created_at"],
             updated_at=r["updated_at"],
@@ -301,6 +315,7 @@ async def create_brand(
     email_address: Optional[str] = Form(None),
     email_password: Optional[str] = Form(None),
     signature: Optional[str] = Form(None),
+    bcc: Optional[str] = Form(None),
     is_default: Optional[int] = Form(0),
     logo: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user),
@@ -313,6 +328,7 @@ async def create_brand(
     smtp_host     = normalize_text_field(smtp_host)
     email_address = normalize_text_field(email_address)
     signature     = normalize_text_field(signature)
+    bcc           = normalize_text_field(bcc)
     email_password_raw = normalize_text_field(email_password)
 
     if not business_name:
@@ -327,6 +343,9 @@ async def create_brand(
         raise HTTPException(status_code=400, detail="SMTP port is required")
     if not email_password_raw:
         raise HTTPException(status_code=400, detail="App password is required")
+
+    _validate_email_format(email_address, "email_address")
+    _validate_email_format(bcc, "bcc")
 
     logo_blob, logo_mime_type, _ = await _read_logo(logo)
 
@@ -345,12 +364,12 @@ async def create_brand(
                 INSERT INTO brands (
                     user_id, business_name, business_info,
                     logo, logo_mime_type, smtp_host, smtp_port,
-                    email_address, email_password, signature, is_default
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    email_address, email_password, signature, bcc, is_default
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 user_id, business_name, business_info,
                 logo_blob, logo_mime_type, smtp_host, smtp_port,
-                email_address, encrypted_password, signature, 1 if is_default else 0,
+                email_address, encrypted_password, signature, bcc, 1 if is_default else 0,
             ))
 
             new_id = cursor.lastrowid
@@ -377,6 +396,7 @@ async def update_brand(
     email_address: Optional[str] = Form(None),
     email_password: Optional[str] = Form(None),
     signature: Optional[str] = Form(None),
+    bcc: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user),
 ):
@@ -404,10 +424,16 @@ async def update_brand(
             ("smtp_host",     smtp_host),
             ("email_address", email_address),
             ("signature",     signature),
+            ("bcc",           bcc),
         ]:
             if raw_val is not None:
+                normalized = normalize_text_field(raw_val)
+                if col == "email_address":
+                    _validate_email_format(normalized, "email_address")
+                if col == "bcc":
+                    _validate_email_format(normalized, "bcc")
                 update_fields.append(f"{col} = %s")
-                update_values.append(normalize_text_field(raw_val))
+                update_values.append(normalized)
 
         if smtp_port is not None:
             update_fields.append("smtp_port = %s")

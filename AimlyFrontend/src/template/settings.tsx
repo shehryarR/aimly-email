@@ -524,6 +524,7 @@ interface Brand {
   smtp_host?: string;
   smtp_port?: number;
   signature?: string;
+  bcc?: string;
   logo_data?: string;
   is_default: number;
 }
@@ -537,6 +538,7 @@ interface BrandForm {
   smtp_host: string;
   smtp_port: string;
   signature: string;
+  bcc: string;
   selectedProvider: string;
   logo?: File | 'remove' | null;
   logoPreview?: string | null;
@@ -553,7 +555,6 @@ interface Statuses { llm: StatusColor; tavily: StatusColor; }
 interface Messages { llm: string; tavily: string; }
 
 interface GlobalSettings {
-  bcc: string;
   goal: string; value_prop: string; tone: string;
   cta: string; additional_notes: string; writing_guidelines: string;
 }
@@ -664,7 +665,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   });
   const [keyMsg, setKeyMsg] = useState<{ tab: Tab; type: 'success'|'error'; text: string }|null>(null);
 
-  const [global, setGlobal]               = useState<GlobalSettings>({ bcc:'', goal:'', value_prop:'', tone:'', cta:'', additional_notes:'', writing_guidelines:'' });
+  const [global, setGlobal]               = useState<GlobalSettings>({ goal:'', value_prop:'', tone:'', cta:'', additional_notes:'', writing_guidelines:'' });
   const [globalLoading,    setGlobalLoading]    = useState(false);
   const [globalLoaded,     setGlobalLoaded]     = useState(false);
   const [globalMsg,        setGlobalMsg]        = useState<{ type:'success'|'error'; text:string }|null>(null);
@@ -1078,7 +1079,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     business_name: '', business_info: '',
     email_address: '', email_password: '',
     smtp_host: 'smtp.gmail.com', smtp_port: '587',
-    signature: '', selectedProvider: 'Gmail',
+    signature: '', bcc: '', selectedProvider: 'Gmail',
     logo: null, logoPreview: null, is_default: false,
   });
 
@@ -1100,6 +1101,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       smtp_host: brand.smtp_host || 'smtp.gmail.com',
       smtp_port: brand.smtp_port ? String(brand.smtp_port) : '587',
       signature: brand.signature || '',
+      bcc: brand.bcc || '',
       selectedProvider: Object.keys(emailProviders).find(k => emailProviders[k].host === (brand.smtp_host || '')) || 'Custom',
       logo: null,
       logoPreview: brand.logo_data || null,
@@ -1113,6 +1115,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
 
   const saveBrand = async () => {
     if (!brandForm) return;
+
+    // ── Client-side email format validation ───────────────────
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (brandForm.email_address && !emailRe.test(brandForm.email_address.trim())) {
+      setBrandMsg({ type: 'error', text: 'Email Address is not a valid email format.' });
+      return;
+    }
+    if (brandForm.bcc && !emailRe.test(brandForm.bcc.trim())) {
+      setBrandMsg({ type: 'error', text: 'BCC Address is not a valid email format.' });
+      return;
+    }
+
     setBrandSaving(true); setBrandMsg(null);
     try {
       const fd = new FormData();
@@ -1123,6 +1137,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       fd.append('smtp_host', brandForm.smtp_host);
       fd.append('smtp_port', brandForm.smtp_port || '587');
       fd.append('signature', brandForm.signature);
+      fd.append('bcc', brandForm.bcc);
       if (brandForm.logo === 'remove') fd.append('logo', new File([], ''));
       else if (brandForm.logo instanceof File) fd.append('logo', brandForm.logo);
 
@@ -1254,7 +1269,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         const gsId = d.id ?? null;
         setGlobalSettingsId(gsId);
         const snap: GlobalSettings = {
-          bcc: d.bcc ?? '',
           goal: d.goal ?? '',
           value_prop: d.value_prop ?? '',
           tone: d.tone ?? '',
@@ -1275,7 +1289,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     try {
       const formData = new FormData();
       const fieldsToSave: (keyof GlobalSettings)[] = [
-        'bcc', 'goal', 'value_prop', 'tone', 'cta',
+        'goal', 'value_prop', 'tone', 'cta',
         'additional_notes', 'writing_guidelines'
       ];
       fieldsToSave.forEach(k => {
@@ -1565,8 +1579,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   Brands hold your sending identity — SMTP credentials, logo, signature, and business info. Each campaign can be linked to a specific brand. Your default brand is used when no campaign brand is set.
                 </PanelSubtitle>
 
-                {brandMsg && <Msg theme={theme} $type={brandMsg.type} style={{ marginBottom: '1rem' }}>{brandMsg.text}</Msg>}
-
                 {brandsLoading ? (
                   <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.5, fontSize: '0.875rem' }}>Loading brands…</div>
                 ) : (
@@ -1644,13 +1656,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                               </div>
                             </div>
 
-                            {/* SMTP status dot — shown after a test has been run */}
+                            {/* SMTP status dot — shown after auto-check has run */}
                             {smtpStatuses[brand.id] && !smtpStatuses[brand.id].checking && (
                               <StatusDot
                                 $status={mapSmtpCode(smtpStatuses[brand.id].status_code)}
                                 title={smtpStatuses[brand.id].status_text}
-                                onClick={e => { e.stopPropagation(); checkSmtpStatus(brand.id); }}
-                                style={{ cursor: 'pointer', flexShrink: 0 }}
+                                style={{ flexShrink: 0 }}
                               />
                             )}
                             {smtpStatuses[brand.id]?.checking && (
@@ -1817,20 +1828,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                                 </div>
                               )}
 
-                              {/* SMTP status message — shown after a test */}
-                              {smtpStatuses[brand.id] && (
-                                <Msg
-                                  theme={theme}
-                                  $type={
-                                    smtpStatuses[brand.id].checking ? 'checking' :
-                                    smtpStatuses[brand.id].status_code === 1 ? 'success' :
-                                    smtpStatuses[brand.id].status_code === 2 ? 'warning' : 'error'
-                                  }
-                                  style={{ marginBottom: '0.75rem' }}
-                                >
-                                  {smtpStatuses[brand.id].checking ? 'Testing SMTP connection…' : smtpStatuses[brand.id].status_text}
-                                </Msg>
-                              )}
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  BCC Address
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.45 }}>(optional)</span>
+                                  <HelpTooltip theme={theme} instructions="Silently BCC'd on every email sent with this brand — e.g. a HubSpot BCC address for CRM logging." />
+                                </Label>
+                                <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" autoComplete="off"
+                                  value={brandForm.bcc}
+                                  onChange={e => setBrandForm(p => p ? { ...p, bcc: e.target.value } : p)} />
+                              </FormGroup>
+
+                              {brandMsg && <Msg theme={theme} $type={brandMsg.type} style={{ marginBottom: '0.75rem' }}>{brandMsg.text}</Msg>}
 
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Btn theme={theme} $variant="danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
@@ -1838,16 +1847,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                                   Delete
                                 </Btn>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                  <Btn
-                                    theme={theme}
-                                    $variant="secondary"
-                                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
-                                    disabled={smtpStatuses[brand.id]?.checking}
-                                    onClick={() => checkSmtpStatus(brand.id)}
-                                    title="Test SMTP connection with stored credentials"
-                                  >
-                                    {smtpStatuses[brand.id]?.checking ? 'Testing…' : 'Test connection'}
-                                  </Btn>
                                   <Btn theme={theme} $variant="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                                     onClick={() => { setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); }}>Cancel</Btn>
                                   <Btn theme={theme} onClick={saveBrand} disabled={brandSaving} style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}>
@@ -1987,6 +1986,16 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                                 }
                                 e.target.value = '';
                               }} />
+                          </FormGroup>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              BCC Address
+                              <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.45 }}>(optional)</span>
+                              <HelpTooltip theme={theme} instructions="Silently BCC'd on every email sent with this brand — e.g. a HubSpot BCC address for CRM logging." />
+                            </Label>
+                            <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" autoComplete="off"
+                              value={brandForm.bcc}
+                              onChange={e => setBrandForm(p => p ? { ...p, bcc: e.target.value } : p)} />
                           </FormGroup>
                           {brandMsg && <Msg theme={theme} $type={brandMsg.type} style={{ marginBottom: '1rem' }}>{brandMsg.text}</Msg>}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
@@ -2133,11 +2142,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                     <Label theme={theme}>Additional Notes <HelpTooltip theme={theme} instructions="Additional rules for the AI. e.g. 'Never mention competitors.'" /></Label>
                     <Textarea theme={theme} rows={2} placeholder="Never mention price. Keep emails under 150 words." value={global.additional_notes}
                       onChange={e => { setGlobal(p => { const n = { ...p, additional_notes: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
-                  </FormGroup>
-                  <FormGroup>
-                    <Label theme={theme}>BCC Address <HelpTooltip theme={theme} instructions="Silently BCC'd on every email — e.g. HubSpot BCC for CRM logging." /></Label>
-                    <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" autoComplete="off" value={global.bcc}
-                      onChange={e => { setGlobal(p => { const n = { ...p, bcc: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 

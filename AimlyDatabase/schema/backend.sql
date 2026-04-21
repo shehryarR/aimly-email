@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS brands (
     email_address  VARCHAR(255),
     email_password TEXT,           -- AES encrypted with SMTP_ENCRYPTION_KEY
     signature      TEXT,
+    bcc            VARCHAR(255),   -- BCC address for all emails sent with this brand
     is_default     TINYINT(1) DEFAULT 0,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -50,7 +51,6 @@ CREATE TABLE IF NOT EXISTS brands (
 CREATE TABLE IF NOT EXISTS global_settings (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
     user_id            INT NOT NULL UNIQUE,
-    bcc                TEXT,
     goal               TEXT,
     value_prop         TEXT,
     tone               VARCHAR(100) DEFAULT 'Professional',
@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS emails (
     signature            TEXT,
     logo                 LONGBLOB,
     logo_mime_type       VARCHAR(100),
+    bcc                  VARCHAR(255),   -- baked in from brand at generation/draft time
     recipient_email      VARCHAR(255),
     status               VARCHAR(50) DEFAULT 'primary',
     timezone             VARCHAR(100) DEFAULT 'UTC',
@@ -134,7 +135,6 @@ CREATE TABLE IF NOT EXISTS campaign_preferences (
     id                         INT AUTO_INCREMENT PRIMARY KEY,
     campaign_id                INT NOT NULL UNIQUE,
     brand_id                   INT NULL,
-    bcc                        TEXT,
     goal                       TEXT,
     value_prop                 TEXT,
     tone                       VARCHAR(100) DEFAULT 'Professional',

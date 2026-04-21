@@ -58,7 +58,6 @@ class MessageResponse(BaseModel):
 class GlobalSettingsResponse(BaseModel):
     id: int
     user_id: int
-    bcc: Optional[str] = None
     goal: Optional[str] = None
     value_prop: Optional[str] = None
     tone: Optional[str] = None
@@ -74,7 +73,6 @@ class GlobalSettingsResponse(BaseModel):
 # ==================================================================================
 @global_settings_router.put("/", response_model=MessageResponse)
 async def update_global_settings(
-    bcc: Optional[str] = Form(None),
     goal: Optional[str] = Form(None),
     value_prop: Optional[str] = Form(None),
     tone: Optional[str] = Form(None),
@@ -93,7 +91,6 @@ async def update_global_settings(
     user_id = current_user["user_id"]
 
     # ── Normalize all text fields ─────────────────────────────────────────────
-    bcc                = normalize_text_field(bcc)
     goal               = normalize_text_field(goal)
     value_prop         = normalize_text_field(value_prop)
     tone               = normalize_text_field(tone)
@@ -117,7 +114,6 @@ async def update_global_settings(
         try:
             if existing:
                 text_field_map = [
-                    ("bcc",                bcc),
                     ("goal",               goal),
                     ("value_prop",         value_prop),
                     ("tone",               tone),
@@ -138,11 +134,11 @@ async def update_global_settings(
             else:
                 cursor.execute("""
                     INSERT INTO global_settings (
-                        user_id, bcc, goal, value_prop, tone, cta,
+                        user_id, goal, value_prop, tone, cta,
                         writing_guidelines, additional_notes
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
-                    user_id, bcc, goal, value_prop, tone, cta,
+                    user_id, goal, value_prop, tone, cta,
                     writing_guidelines, additional_notes,
                 ))
 
@@ -176,7 +172,6 @@ def get_global_settings(current_user: dict = Depends(get_current_user)):
     return GlobalSettingsResponse(
         id=s["id"],
         user_id=s["user_id"],
-        bcc=s["bcc"],
         goal=s["goal"],
         value_prop=s["value_prop"],
         tone=s["tone"],

@@ -133,17 +133,17 @@ def _resolve_inline_image_attachments(
 
 def _resolve_smtp_for_campaign(campaign_id: int, user_id: int, cursor) -> dict:
     """
-    Resolve SMTP credentials from the brands table for a campaign.
+    Resolve SMTP credentials and BCC from the brands table for a campaign.
 
     Resolution:
       1. campaign_preferences.brand_id → brand row
       2. Fallback: user's default brand (is_default = 1)
       3. Raises HTTP 400 if neither found.
 
-    Returns a dict with: sender_email, sender_password (decrypted), smtp_host, smtp_port.
+    Returns a dict with: sender_email, sender_password (decrypted), smtp_host, smtp_port, bcc.
     """
     cursor.execute("""
-        SELECT b.id, b.smtp_host, b.smtp_port, b.email_address, b.email_password
+        SELECT b.id, b.smtp_host, b.smtp_port, b.email_address, b.email_password, b.bcc
         FROM brands b
         JOIN campaign_preferences cp ON cp.brand_id = b.id
         WHERE cp.campaign_id = %s
@@ -153,7 +153,7 @@ def _resolve_smtp_for_campaign(campaign_id: int, user_id: int, cursor) -> dict:
     if not brand_row:
         # Fallback to user's default brand
         cursor.execute("""
-            SELECT id, smtp_host, smtp_port, email_address, email_password
+            SELECT id, smtp_host, smtp_port, email_address, email_password, bcc
             FROM brands WHERE user_id = %s AND is_default = 1
             LIMIT 1
         """, (user_id,))
@@ -178,6 +178,7 @@ def _resolve_smtp_for_campaign(campaign_id: int, user_id: int, cursor) -> dict:
         "sender_password": decrypted_pw,
         "smtp_host":       brand_row["smtp_host"] or "smtp.gmail.com",
         "smtp_port":       brand_row["smtp_port"] or 587,
+        "bcc":             brand_row["bcc"],
     }
 
 
@@ -524,16 +525,7 @@ def bulk_send_emails(
                 # ── Resolve SMTP credentials from brands ──────────────────────
                 smtp_creds = _resolve_smtp_for_campaign(campaign_id, user_id, cursor)
                 sender_email = smtp_creds["sender_email"]
-
-                # ── Resolve BCC ───────────────────────────────────────────────
-                cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
-                prefs_bcc_row = cursor.fetchone()
-                cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
-                global_bcc_row = cursor.fetchone()
-                bcc_val = (
-                    (prefs_bcc_row["bcc"] if prefs_bcc_row else None)
-                    or (global_bcc_row["bcc"] if global_bcc_row else None)
-                )
+                bcc_val = smtp_creds["bcc"]
 
                 smtp_config = {
                     "sender_email":    smtp_creds["sender_email"],
@@ -586,18 +578,19 @@ def bulk_send_emails(
                     brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
                     if brand_id:
                         cursor.execute(
-                            "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                            "SELECT signature, logo, logo_mime_type, bcc FROM brands WHERE id = %s",
                             (brand_id,)
                         )
                     else:
                         cursor.execute(
-                            "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                            "SELECT signature, logo, logo_mime_type, bcc FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
                             (user_id,)
                         )
                     brand_row = cursor.fetchone()
                     signature      = brand_row["signature"]      if brand_row else None
                     logo_blob      = brand_row["logo"]           if brand_row else None
                     logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
+                    bcc_val        = brand_row["bcc"]            if brand_row else None
 
                     inherit_global_attachments = (
                         campaign_prefs["inherit_global_attachments"]
@@ -613,9 +606,13 @@ def bulk_send_emails(
                     signature            = email["signature"]
                     logo_blob            = email["logo"]
                     logo_mime_type       = email.get("logo_mime_type")
+                    bcc_val              = email.get("bcc")
                     baked_attachment_ids = None
 
                 email_data = dict(email)
+
+                # Keep smtp_config bcc in sync — non-primary emails use their own baked bcc
+                smtp_config["bcc"] = bcc_val
 
                 # ── Schedule or send ──────────────────────────────────────────
                 if scheduled_at:
@@ -623,12 +620,12 @@ def bulk_send_emails(
                         cursor.execute("""
                             INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                                recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                               sent_at, html_email)
-                            VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s)
+                                               bcc, sent_at, html_email)
+                            VALUES (%s, %s, %s, %s, 'scheduled', 'UTC', %s, %s, %s, %s, %s, %s)
                         """, (
                             email["campaign_company_id"], email["email_subject"], email["email_content"],
                             email["recipient_email"], signature, logo_blob, logo_mime_type,
-                            scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email["html_email"],
+                            bcc_val, scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email["html_email"],
                         ))
                         new_email_id = cursor.lastrowid
                         for att_id in baked_attachment_ids:
@@ -657,11 +654,12 @@ def bulk_send_emails(
                         cursor.execute("""
                             INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                                recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                               html_email)
-                            VALUES (%s, %s, %s, %s, 'sending', 'UTC', %s, %s, %s, %s)
+                                               bcc, html_email)
+                            VALUES (%s, %s, %s, %s, 'sending', 'UTC', %s, %s, %s, %s, %s)
                         """, (
                             email["campaign_company_id"], email["email_subject"], email["email_content"],
-                            email["recipient_email"], signature, logo_blob, logo_mime_type, email["html_email"],
+                            email["recipient_email"], signature, logo_blob, logo_mime_type,
+                            bcc_val, email["html_email"],
                         ))
                         new_email_id = cursor.lastrowid
                         for att_id in baked_attachment_ids:
@@ -799,18 +797,19 @@ def save_as_draft_bulk(
                     brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
                     if brand_id:
                         cursor.execute(
-                            "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                            "SELECT signature, logo, logo_mime_type, bcc FROM brands WHERE id = %s",
                             (brand_id,)
                         )
                     else:
                         cursor.execute(
-                            "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                            "SELECT signature, logo, logo_mime_type, bcc FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
                             (user_id,)
                         )
                     brand_row = cursor.fetchone()
                     signature      = brand_row["signature"]      if brand_row else None
                     logo_blob      = brand_row["logo"]           if brand_row else None
                     logo_mime_type = brand_row["logo_mime_type"] if brand_row else None
+                    bcc_val        = brand_row["bcc"]            if brand_row else None
 
                     inherit_global_attachments = (
                         campaign_prefs["inherit_global_attachments"]
@@ -826,13 +825,14 @@ def save_as_draft_bulk(
                     signature            = email["signature"]
                     logo_blob            = email["logo"]
                     logo_mime_type       = email["logo_mime_type"]
+                    bcc_val              = email.get("bcc")
                     baked_attachment_ids = None
 
                 cursor.execute("""
                     INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                        recipient_email, status, timezone, signature, logo, logo_mime_type,
-                                       html_email)
-                    VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s)
+                                       bcc, html_email)
+                    VALUES (%s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s, %s)
                 """, (
                     email["campaign_company_id"],
                     email["email_subject"],
@@ -842,6 +842,7 @@ def save_as_draft_bulk(
                     signature,
                     logo_blob,
                     logo_mime_type,
+                    bcc_val,
                     email["html_email"],
                 ))
 

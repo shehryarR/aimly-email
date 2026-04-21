@@ -17,7 +17,6 @@ import { apiFetch } from '../../App';
 // RE-USED TYPES (import these from a shared types file if you have one)
 // ─────────────────────────────────────────────────────────────
 interface CampaignPreferences {
-  bcc: string;
   brand_id: number | null;
   goal: string;
   value_prop: string;
@@ -536,7 +535,7 @@ export interface CampaignSettingsModalProps {
 }
 
 const defaultPrefs = (): CampaignPreferences => ({
-  bcc: '', brand_id: null, goal: '',
+  brand_id: null, goal: '',
   value_prop: '', tone: '', cta: '', additional_notes: '', writing_guidelines: '',
   inherit_global_settings: 1, inherit_global_attachments: 1,
 });
@@ -623,7 +622,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   const [globalWritingGuidelines,  setGlobalWritingGuidelines]  = useState('');
   const [globalCta,                setGlobalCta]                = useState('');
   const [globalAdditionalNotes,    setGlobalAdditionalNotes]    = useState('');
-  const [globalBcc,                setGlobalBcc]                = useState('');
   const [globalAttachments,        setGlobalAttachments]        = useState<AttachmentOption[]>([]);
 
   // ── Brands state ────────────────────────────────────────────
@@ -661,7 +659,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const d = await res.json();
         setPreferenceId(d.id ?? null);
         setPrefs({
-          bcc: d.bcc ?? '',
           brand_id: d.brand_id ?? null,
           goal: d.goal ?? '',
           value_prop: d.value_prop ?? '', tone: d.tone ?? '',
@@ -691,7 +688,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
         const loadedBody = hasSubjectLine2 ? tmpl.split('\n').slice(1).join('\n').trimStart() : tmpl;
         savedTemplate.current = { subject: loadedSubj, body: loadedBody };
         savedPrefs.current = {
-          bcc: d.bcc ?? '',
           brand_id: d.brand_id ?? null,
           goal: d.goal ?? '',
           value_prop: d.value_prop ?? '', tone: d.tone ?? '',
@@ -737,7 +733,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       setGlobalWritingGuidelines(d.writing_guidelines || '');
       setGlobalCta(d.cta || '');
       setGlobalAdditionalNotes(d.additional_notes || '');
-      setGlobalBcc(d.bcc || '');
     } catch { /* silent */ }
   };
 
@@ -893,7 +888,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
     try {
       const fd = new FormData();
       const textFields: (keyof CampaignPreferences)[] = [
-        'bcc', 'goal', 'value_prop', 'tone', 'cta', 'additional_notes', 'writing_guidelines',
+        'goal', 'value_prop', 'tone', 'cta', 'additional_notes', 'writing_guidelines',
       ];
       textFields.forEach(k => fd.append(k as string, (prefs[k] as string | undefined) ?? ''));
       fd.append('brand_id', prefs.brand_id != null ? String(prefs.brand_id) : '');
@@ -1162,7 +1157,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                           {globalAdditionalNotes || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Not set</span>}
                         </div>
                       </SFG>
-                      <SFG style={{ marginBottom: 0 }}><SLabel theme={theme}>BCC Address</SLabel><ReadOnly value={globalBcc} /></SFG>
                     </>
                   ) : (
                     <>
@@ -1177,15 +1171,10 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         <SInput theme={theme} placeholder="Would you be open to a quick call this week?"
                           value={prefs.cta} onChange={e => set('cta', e.target.value, 'strategy_content')} />
                       </SFG>
-                      <SFG>
+                      <SFG style={{ marginBottom: 0 }}>
                         <SLabel theme={theme}>Additional Notes</SLabel>
                         <STextarea theme={theme} rows={2} placeholder="Never mention competitors. Keep emails under 150 words."
                           value={prefs.additional_notes} onChange={e => set('additional_notes', e.target.value, 'strategy_content')} />
-                      </SFG>
-                      <SFG style={{ marginBottom: 0 }}>
-                        <SLabel theme={theme}>BCC Address</SLabel>
-                        <SInput theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com"
-                          value={prefs.bcc} onChange={e => set('bcc', e.target.value, 'strategy_content')} />
                       </SFG>
                     </>
                   )}

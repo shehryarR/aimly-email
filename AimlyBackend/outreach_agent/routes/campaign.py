@@ -54,7 +54,6 @@ class CampaignPreferenceInline(BaseModel):
     id: Optional[int] = None
     campaign_id: Optional[int] = None
     brand_id: Optional[int] = None
-    bcc: Optional[str] = None
     goal: Optional[str] = None
     value_prop: Optional[str] = None
     tone: Optional[str] = None
@@ -224,7 +223,6 @@ def get_campaigns(
         cp.id                         AS pref_id,
         cp.campaign_id                AS pref_campaign_id,
         cp.brand_id                   AS pref_brand_id,
-        cp.bcc                        AS pref_bcc,
         cp.goal                       AS pref_goal,
         cp.value_prop                 AS pref_value_prop,
         cp.tone                       AS pref_tone,
@@ -351,7 +349,6 @@ def get_campaigns(
                     id=r.get("pref_id"),
                     campaign_id=r.get("pref_campaign_id"),
                     brand_id=r.get("pref_brand_id"),
-                    bcc=r.get("pref_bcc"),
                     goal=r.get("pref_goal"),
                     value_prop=r.get("pref_value_prop"),
                     tone=r.get("pref_tone"),
