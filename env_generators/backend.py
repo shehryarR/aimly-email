@@ -30,6 +30,7 @@ ms_base_url   = ask("Microservice Base URL (internal Docker)",             defau
 ms_public_url = ask("Microservice Public URL (browser-accessible)",        default=f"http://localhost:{ms_port}")
 internal_key  = ask_secret("Internal API Key",                             default="some-strong-random-secret")
 cookie_secret = ask_secret("Cookie Secret",                                default="f4e8373350b504674fb13e0ec97055f0e6559fdd9b61eacfe449d2ad7802188e")
+smtp_enc_key  = ask_secret("SMTP Encryption Key",                          default="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2")
 env           = ask("ENV",                                                 default="development")
 
 print()
@@ -68,6 +69,7 @@ write_section("Backend", [
     f"ATTACHMENT_STORAGE_PATH=./data/uploads/attachments",
     f"INTERNAL_API_KEY={internal_key}",
     f"COOKIE_SECRET={cookie_secret}",
+    f"SMTP_ENCRYPTION_KEY={smtp_enc_key}",
     f"ENV={env}",
     f"GOOGLE_CLIENT_ID={google_client_id}",
     f"GOOGLE_CLIENT_SECRET={google_client_secret}",

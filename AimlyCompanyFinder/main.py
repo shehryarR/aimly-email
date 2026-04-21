@@ -145,6 +145,7 @@ class CompanyFinderWorker:
             include_phone        = metadata.get("include_phone", False)
             include_address      = metadata.get("include_address", False)
             include_company_info = metadata.get("include_company_info", False)
+            llm_model            = metadata.get("llm_model", "gemini-2.5-flash")
 
             if not query:
                 print(f"User {user_id}: Empty query — resetting")
@@ -169,6 +170,7 @@ class CompanyFinderWorker:
                 server_api_key=OPENCLAW_SERVER_KEY,
                 gemini_key=gemini_key,
                 tavily_key=tavily_key,
+                llm_model=llm_model,
             )
 
             print(f"User {user_id}: {remaining} companies remaining, batch size {BATCH_SIZE}")

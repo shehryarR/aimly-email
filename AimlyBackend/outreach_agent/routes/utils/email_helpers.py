@@ -1,6 +1,21 @@
 """
 Email Shared Models & Helpers
-Pydantic models and utility functions shared between email.py and email_actions.py
+Pydantic models and utility functions shared between email.py and email_actions.py.
+
+resolve_branding UPDATED:
+  signature and logo are now sourced from the brands table, not campaign_preferences
+  or global_settings directly. Callers (email_actions.py, scheduler.py) resolve the
+  brand dict before calling this function and pass it as `brand_prefs`.
+
+  The `campaign_prefs` parameter is still used only for the inherit_global_settings
+  flag to determine which level of branding to honour.
+
+Inheritance chain for branding:
+  inherit_campaign_branding = 0 → email's own fields only
+  inherit_campaign_branding = 1:
+    inherit_global_settings = 0 → campaign's linked brand
+    inherit_global_settings = 1 → user's default brand
+  (Both cases already resolved into `brand_prefs` by the caller.)
 """
 
 import os
@@ -10,7 +25,6 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, validator
 from tools.email_sender_tool import AttachmentInfo
 
-# Get attachment storage path from environment
 ATTACHMENT_STORAGE_PATH = os.getenv("ATTACHMENT_STORAGE_PATH", "./data/uploads/attachments")
 
 
@@ -34,14 +48,13 @@ class EmailListResponse(BaseModel):
     size: int
 
 class SendEmailRequest(BaseModel):
-    time: Optional[str] = None  # ISO datetime string for scheduling
+    time: Optional[str] = None
 
     @validator("time")
     def validate_time(cls, v):
         if v:
             try:
                 dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
-                # Ensure timezone-aware for comparison
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 if dt <= datetime.now(timezone.utc):
@@ -57,10 +70,10 @@ class EmailUpdateRequest(BaseModel):
     status: Optional[str] = None
     timezone: Optional[str] = None
     signature: Optional[str] = None
-    logo_data: Optional[str] = None  # base64 data URL — only accepted when inherit_campaign_branding = 0
-    logo_clear: Optional[bool] = None  # set True to explicitly clear logo without uploading a new one
+    logo_data: Optional[str] = None
+    logo_clear: Optional[bool] = None
     time: Optional[str] = None
-    html_email: Optional[bool] = None  # set True to mark email as HTML, False for plain text
+    html_email: Optional[bool] = None
 
 class MessageResponse(BaseModel):
     message: str
@@ -91,46 +104,45 @@ class BulkUpdateResponse(BaseModel):
 
 # ==================================================================================
 # Helper: resolve branding (signature + logo) based on inherit flags
-# No fallback to defaults — returns None if not set at the chosen level.
+#
+# UPDATED: `brand_prefs` replaces the old `campaign_prefs` / `global_prefs`
+# signature/logo fields. The caller (email_actions.py / scheduler.py) is
+# responsible for resolving the correct brand row BEFORE calling this function:
+#
+#   - inherit_global_settings = 0 → fetch brand by campaign_preferences.brand_id
+#   - inherit_global_settings = 1 → fetch user's default brand (is_default = 1)
+#
+# This function only needs to know:
+#   - email_row:              the email's own stored branding (used when inherit=0)
+#   - campaign_prefs:         used ONLY for the inherit_global_settings flag
+#   - brand_prefs:            the resolved brand dict (signature, logo, logo_mime_type)
+#   - inherit_campaign_branding: top-level flag from campaign_company
 # ==================================================================================
-def resolve_branding(email_row, campaign_prefs, global_prefs, inherit_campaign_branding):
+def resolve_branding(email_row, campaign_prefs, brand_prefs, inherit_campaign_branding):
     """
     Resolve signature and logo according to the inheritance chain.
 
     inherit_campaign_branding = 0 → email's own fields only
-    inherit_campaign_branding = 1:
-        inherit_global_settings = 0 → campaign fields
-        inherit_global_settings = 1 → global fields
+    inherit_campaign_branding = 1 → use brand_prefs (already resolved by caller)
     """
     if not inherit_campaign_branding:
         return (
-            email_row["signature"] if email_row else None,
-            email_row["logo"] if email_row else None,
+            email_row["signature"]     if email_row else None,
+            email_row["logo"]          if email_row else None,
             email_row["logo_mime_type"] if email_row else None,
         )
 
-    inherit_global = (
-        campaign_prefs["inherit_global_settings"]
-        if campaign_prefs and campaign_prefs["inherit_global_settings"] is not None
-        else 1
-    )
-
-    if not inherit_global:
-        return (
-            campaign_prefs["signature"] if campaign_prefs else None,
-            campaign_prefs["logo"] if campaign_prefs else None,
-            campaign_prefs["logo_mime_type"] if campaign_prefs else None,
-        )
-
+    # Brand is pre-resolved by caller — use it directly
     return (
-        global_prefs["signature"] if global_prefs else None,
-        global_prefs["logo"] if global_prefs else None,
-        global_prefs["logo_mime_type"] if global_prefs else None,
+        brand_prefs["signature"]      if brand_prefs else None,
+        brand_prefs["logo"]           if brand_prefs else None,
+        brand_prefs["logo_mime_type"] if brand_prefs else None,
     )
 
 
 # ==================================================================================
 # Helper: resolve attachments for a PRIMARY email based on inherit flags
+# (unchanged — attachment logic is independent of the brand migration)
 # ==================================================================================
 def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
                                     inherit_campaign_attachments, inherit_global_attachments):
@@ -165,7 +177,6 @@ def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
             attachment_set[att["id"]] = create_attachment_info(att["id"], att["name"])
         return list(attachment_set.values())
 
-    # Global attachments only
     cursor.execute("""
         SELECT a.id, a.name FROM attachments a
         JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
@@ -179,22 +190,16 @@ def resolve_attachments_for_primary(email_id, campaign_id, user_id, cursor,
 
 # ==================================================================================
 # Helper: resolve attachment IDs for a PRIMARY email based on inherit flags
-# Same logic as resolve_attachments_for_primary but returns IDs only
 # ==================================================================================
 def resolve_attachment_ids_for_primary(email_id, campaign_id, user_id, cursor,
                                        inherit_campaign_attachments, inherit_global_attachments):
     """
     Resolve attachment IDs for a primary email following the inheritance chain.
-
-    inherit_campaign_attachments = 0 → email's own attachments only
-    inherit_campaign_attachments = 1:
-        inherit_global_attachments = 0 → campaign attachments only
-        inherit_global_attachments = 1 → global attachments only
     """
     if not inherit_campaign_attachments:
-        cursor.execute("""
-            SELECT attachment_id FROM email_attachments WHERE email_id = %s
-        """, (email_id,))
+        cursor.execute(
+            "SELECT attachment_id FROM email_attachments WHERE email_id = %s", (email_id,)
+        )
         return [row["attachment_id"] for row in cursor.fetchall()]
 
     if not inherit_global_attachments:
@@ -206,7 +211,6 @@ def resolve_attachment_ids_for_primary(email_id, campaign_id, user_id, cursor,
         """, (campaign_id,))
         return [row["id"] for row in cursor.fetchall()]
 
-    # Global attachments only
     cursor.execute("""
         SELECT a.id FROM attachments a
         JOIN global_settings_attachments gsa ON a.id = gsa.attachment_id
@@ -233,22 +237,8 @@ def get_own_attachments(email_id, cursor) -> List[AttachmentInfo]:
 # Helper: create AttachmentInfo object from attachment ID and filename
 # ==================================================================================
 def create_attachment_info(attachment_id: int, original_filename: str) -> AttachmentInfo:
-    """
-    Create an AttachmentInfo object for a single attachment.
-
-    Args:
-        attachment_id: Database ID of the attachment
-        original_filename: Original filename from database
-
-    Returns:
-        AttachmentInfo with file_path = {storage_path}/{id}.{extension}
-        and display_name = original_filename
-    """
+    """Create an AttachmentInfo object for a single attachment."""
     file_extension = Path(original_filename).suffix.lower()
     saved_filename = f"{attachment_id}{file_extension}"
     file_path = str(Path(ATTACHMENT_STORAGE_PATH) / saved_filename)
-
-    return AttachmentInfo(
-        file_path=file_path,
-        display_name=original_filename
-    )
+    return AttachmentInfo(file_path=file_path, display_name=original_filename)

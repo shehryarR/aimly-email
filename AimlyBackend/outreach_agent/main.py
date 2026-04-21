@@ -31,7 +31,7 @@ from routes import (
     server_router,
     auth_router,
     user_router,
-    user_keys_router,
+    brands_router,
     global_settings_router,
     company_router,
     campaign_router,
@@ -42,6 +42,7 @@ from routes import (
     stats_router,
     category_router,
     category_company_router,
+    user_keys_router,
     get_current_user
 )
 
@@ -125,7 +126,7 @@ app.add_middleware(
 app.include_router(server_router)                              # /health
 app.include_router(auth_router)                                # /auth/*
 app.include_router(user_router)                                # /user/*
-app.include_router(user_keys_router)                           # /user_keys/*
+app.include_router(brands_router)                           # /brands_router/*
 app.include_router(global_settings_router)                     # /global_setting/*
 app.include_router(company_router)                             # /company/*
 app.include_router(campaign_router)                            # /campaign/*
@@ -138,6 +139,7 @@ app.include_router(attachment_router)                          # /attachment/*
 app.include_router(attachment_manager_router)                  # /email/{id}/attachments, etc.
 app.include_router(category_router)                            # /category/*
 app.include_router(category_company_router)                    # /category/{id}/company/*
+app.include_router(user_keys_router)                           # /user_keys/*
 app.include_router(subscription_router)                        # /subscription/*
 
 

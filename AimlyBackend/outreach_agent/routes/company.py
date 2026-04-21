@@ -45,7 +45,22 @@ import json
 import pymysql
 from core.database.connection import get_connection
 from routes.auth import get_current_user
-from routes.user_keys import _read_cookie_key, _LLM_COOKIE, _TAVILY_COOKIE, _encrypt_key, _decrypt_key
+from routes.utils.crypto import _read_cookie_key, _LLM_COOKIE, _TAVILY_COOKIE, _encrypt_key, _decrypt_key
+
+_LLM_MODEL_COOKIE = "llm_model_enc"
+_DEFAULT_MODEL    = "gemini-2.5-flash"
+
+
+def _read_llm_model(request) -> str:
+    """Read llm_model from cookie. Returns default if absent or unreadable."""
+    token = request.cookies.get(_LLM_MODEL_COOKIE)
+    if not token:
+        return _DEFAULT_MODEL
+    try:
+        return _decrypt_key(token) or _DEFAULT_MODEL
+    except Exception:
+        return _DEFAULT_MODEL
+
 from services.company_service import load_companies_data, improve_discovery_prompt
 
 company_router = APIRouter(prefix="/company", tags=["Company Management"])
@@ -272,20 +287,14 @@ async def improve_prompt(
     user_id = current_user["user_id"]
 
     llm_api_key = _read_cookie_key(http_request, _LLM_COOKIE)
-
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
-        user_keys = cursor.fetchone()
+    llm_model   = _read_llm_model(http_request)
 
     if not llm_api_key:
         raise HTTPException(status_code=400, detail="LLM API key not configured. Add it in Settings.")
-    if not user_keys or not user_keys["llm_model"]:
-        raise HTTPException(status_code=400, detail="LLM model not configured. Configure it in Settings.")
 
     llm_config = {
         "api_key": llm_api_key,
-        "model":   user_keys["llm_model"],
+        "model":   llm_model,
     }
 
     try:
@@ -596,14 +605,12 @@ async def create_companies(
             # Validate API keys exist before queuing — read from cookies, not DB
             llm_api_key    = _read_cookie_key(http_request, _LLM_COOKIE)
             tavily_api_key = _read_cookie_key(http_request, _TAVILY_COOKIE)
-
-            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
-            user_keys = cursor.fetchone()
+            llm_model      = _read_llm_model(http_request)
 
             if not tavily_api_key:
                 raise HTTPException(status_code=400, detail="Tavily API key not configured.")
-            if not llm_api_key or not user_keys or not user_keys["llm_model"]:
-                raise HTTPException(status_code=400, detail="LLM configuration not complete.")
+            if not llm_api_key:
+                raise HTTPException(status_code=400, detail="LLM API key not configured.")
 
             # Build metadata — encrypt API keys so worker can use them without cookies
             metadata = json.dumps({
@@ -612,6 +619,7 @@ async def create_companies(
                 "include_phone":        ai_search_parsed.include_phone,
                 "include_address":      ai_search_parsed.include_address,
                 "include_company_info": ai_search_parsed.include_company_info,
+                "llm_model":          llm_model,
                 "llm_api_key_enc":    _encrypt_key(llm_api_key),
                 "tavily_api_key_enc": _encrypt_key(tavily_api_key),
             })

@@ -10,7 +10,7 @@ GENERATING PERSONALIZED EMAIL (LLM mode):
   inherit_global_settings = 0 → use campaign fields, fallback to default
 
 SENDING/DRAFTING/SCHEDULING PRIMARY EMAIL:
-  Branding: same resolution as reading primary email
+  Branding: resolved from brand (campaign's linked brand, or user's default brand)
   Attachments:
     inherit_campaign_attachments = 0 → email's own attachments only
     inherit_campaign_attachments = 1:
@@ -23,6 +23,13 @@ SENDING/DRAFTING/SCHEDULING A DRAFT or SCHEDULED EMAIL:
 
 DRAFTING A SENT or SCHEDULED EMAIL:
   Use the email's own stored branding and attachments only.
+
+SMTP CREDENTIAL RESOLUTION:
+  campaign_preferences.brand_id → brands table (decrypt email_password)
+  ↓ if brand_id is NULL
+  user's default brand (WHERE user_id = X AND is_default = 1)
+  ↓ if no default brand
+  raise error: "No brand configured for this campaign"
 """
 
 import asyncio
@@ -35,7 +42,7 @@ from typing import Optional, List
 from datetime import datetime
 from core.database.connection import get_connection
 from routes.auth import get_current_user
-from routes.user_keys import _read_cookie_key, _LLM_COOKIE
+from routes.utils.crypto import _read_cookie_key, _LLM_COOKIE, decrypt_smtp_password
 from services.email_service import (
     generate_email as svc_generate_email,
     send_email as svc_send_email,
@@ -65,9 +72,6 @@ def _resolve_inline_image_attachments(
     """
     Scan email_content for {{filename}} placeholders and return AttachmentInfo
     objects for any that are image files belonging to this user.
-
-    These are passed alongside regular attachments to email_sender_tool,
-    which then replaces the placeholders with inline <img> tags.
     """
     from pathlib import Path
 
@@ -79,7 +83,6 @@ def _resolve_inline_image_attachments(
     if not placeholders:
         return []
 
-    # Only look up filenames that have image extensions
     image_placeholders = [
         p.strip() for p in placeholders
         if Path(p.strip()).suffix.lower() in IMAGE_EXTENSIONS
@@ -120,17 +123,72 @@ def _resolve_inline_image_attachments(
 
 
 # =============================================================================
-# HELPERS
+# SMTP CREDENTIAL RESOLUTION HELPER
+# Resolves brand SMTP credentials for a given campaign.
+# Falls back to the user's default brand if no brand_id is set on the campaign.
+# =============================================================================
+
+def _resolve_smtp_for_campaign(campaign_id: int, user_id: int, cursor) -> dict:
+    """
+    Resolve SMTP credentials from the brands table for a campaign.
+
+    Resolution:
+      1. campaign_preferences.brand_id → brand row
+      2. Fallback: user's default brand (is_default = 1)
+      3. Raises HTTP 400 if neither found.
+
+    Returns a dict with: sender_email, sender_password (decrypted), smtp_host, smtp_port.
+    """
+    cursor.execute("""
+        SELECT b.id, b.smtp_host, b.smtp_port, b.email_address, b.email_password
+        FROM brands b
+        JOIN campaign_preferences cp ON cp.brand_id = b.id
+        WHERE cp.campaign_id = %s
+    """, (campaign_id,))
+    brand_row = cursor.fetchone()
+
+    if not brand_row:
+        # Fallback to user's default brand
+        cursor.execute("""
+            SELECT id, smtp_host, smtp_port, email_address, email_password
+            FROM brands WHERE user_id = %s AND is_default = 1
+            LIMIT 1
+        """, (user_id,))
+        brand_row = cursor.fetchone()
+
+    if not brand_row or not brand_row["email_address"] or not brand_row["email_password"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No brand configured for this campaign. Please assign a brand or set a default brand in Settings.",
+        )
+
+    try:
+        decrypted_pw = decrypt_smtp_password(brand_row["email_password"])
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to decrypt SMTP credentials. Please re-save your brand's email password.",
+        )
+
+    return {
+        "sender_email":    brand_row["email_address"],
+        "sender_password": decrypted_pw,
+        "smtp_host":       brand_row["smtp_host"] or "smtp.gmail.com",
+        "smtp_port":       brand_row["smtp_port"] or 587,
+    }
+
+
+# =============================================================================
+# OPT-OUT HELPER
 # =============================================================================
 
 def _is_opted_out(sender_email: str, receiver_email: str) -> bool:
     """
     Check the microservice opt-out list before sending.
     Returns True if the receiver has unsubscribed from this sender.
-    Returns False if opted-in, microservice not configured, or on any error.
     """
-    base_url   = os.getenv("MICROSERVICE_BASE_URL")
-    api_key    = os.getenv("MICROSERVICE_API_KEY")
+    base_url = os.getenv("MICROSERVICE_BASE_URL")
+    api_key  = os.getenv("MICROSERVICE_API_KEY")
     if not base_url or not api_key:
         return False
     try:
@@ -148,7 +206,7 @@ def _is_opted_out(sender_email: str, receiver_email: str) -> bool:
 
 
 # ==================================================================================
-# POST /email/campaign/{campaign_id}/bulk-generate - Generate emails for many companies
+# POST /email/campaign/{campaign_id}/bulk-generate
 # ==================================================================================
 
 class BulkGenerateRequest(BaseModel):
@@ -168,12 +226,7 @@ def bulk_generate_emails(
     http_request: Request,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Generate emails for multiple companies in a campaign in a single API call.
-
-    Iterates company_ids server-side, runs the same generation logic as the
-    single endpoint, skips failures with logged errors, and returns a summary.
-    """
+    """Generate emails for multiple companies in a campaign."""
     user_id = current_user["user_id"]
 
     if not request.company_ids:
@@ -185,20 +238,18 @@ def bulk_generate_emails(
     if query_type not in ("plain", "html", "template"):
         raise HTTPException(status_code=400, detail="query_type must be 'plain', 'html', or 'template'")
 
-    # ── Validate campaign ─────────────────────────────────────────────────────
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM campaigns WHERE id = %s AND user_id = %s", (campaign_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # ── Load shared config once (LLM key, model, campaign prefs, template) ───
-    llm_config         = None
-    user_instruction   = None   # built per-company for plain/html (needs company_name)
-    shared_prefs       = None
-    global_prefs       = None
-    inherit_global_settings = 1
-    template_email          = None
+    # ── Load shared config once ───────────────────────────────────────────────
+    llm_config               = None
+    shared_prefs             = None
+    global_prefs             = None
+    inherit_global_settings  = 1
+    template_email           = None
     template_html_email_flag = 0
 
     if query_type in ("plain", "html"):
@@ -206,21 +257,23 @@ def bulk_generate_emails(
         if not llm_api_key:
             raise HTTPException(
                 status_code=400,
-                detail="No LLM API key configured. Please add one in Settings → API Keys."
+                detail="No LLM API key configured. Please add one in Settings.",
             )
 
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT llm_model FROM user_keys WHERE user_id = %s", (user_id,))
-            key_row = cursor.fetchone()
+
+            # llm_model now lives in global_settings
+            cursor.execute("SELECT llm_model FROM global_settings WHERE user_id = %s", (user_id,))
+            gs_row = cursor.fetchone()
             llm_config = {
                 "api_key": llm_api_key,
-                "model":   (key_row["llm_model"] if key_row else None) or "gemini-2.0-flash",
+                "model":   (gs_row["llm_model"] if gs_row else None) or "gemini-2.0-flash",
             }
 
             cursor.execute("""
-                SELECT business_name, business_info, goal, value_prop,
-                       tone, cta, extras, email_instruction, inherit_global_settings
+                SELECT goal, value_prop, tone, cta,
+                       writing_guidelines, additional_notes, inherit_global_settings
                 FROM campaign_preferences WHERE campaign_id = %s
             """, (campaign_id,))
             shared_prefs = cursor.fetchone()
@@ -233,8 +286,7 @@ def bulk_generate_emails(
 
             if inherit_global_settings:
                 cursor.execute("""
-                    SELECT business_name, business_info, goal, value_prop,
-                           tone, cta, extras, email_instruction
+                    SELECT goal, value_prop, tone, cta, writing_guidelines, additional_notes
                     FROM global_settings WHERE user_id = %s
                 """, (user_id,))
                 global_prefs = cursor.fetchone()
@@ -250,20 +302,18 @@ def bulk_generate_emails(
             if not template_row or not template_row["template_email"]:
                 raise HTTPException(
                     status_code=400,
-                    detail="No email template found for this campaign. Please generate one first."
+                    detail="No email template found for this campaign. Please generate one first.",
                 )
             template_email           = template_row["template_email"]
             template_html_email_flag = int(template_row["template_html_email"]) if template_row["template_html_email"] is not None else 0
 
     PREF_DEFAULTS = {
-        "business_name":     "Our Company",
-        "business_info":     "A professional services company",
-        "goal":              "Generate leads and start a conversation",
-        "value_prop":        "We provide high-quality solutions tailored to your needs",
-        "cta":               "Schedule a quick call to learn more",
-        "tone":              "Professional",
-        "extras":            None,
-        "email_instruction": None,
+        "goal":               "Generate leads and start a conversation",
+        "value_prop":         "We provide high-quality solutions tailored to your needs",
+        "cta":                "Schedule a quick call to learn more",
+        "tone":               "Professional",
+        "writing_guidelines": None,
+        "additional_notes":   None,
     }
 
     def get_pref_with_default(field):
@@ -304,9 +354,7 @@ def bulk_generate_emails(
                 company_name  = company["name"]
                 company_email = company["email"]
 
-            # ── Build subject/body ────────────────────────────────────────────
             if query_type in ("plain", "html"):
-                # Check existing primary email (skip LLM if force=False and type matches)
                 if not force:
                     with get_connection() as conn:
                         cursor = conn.cursor()
@@ -318,16 +366,19 @@ def bulk_generate_emails(
                     if existing and existing["email_content"] and existing["email_content"].strip():
                         if bool(existing["html_email"]) == (query_type == "html"):
                             generated_count += 1
-                            continue  # already exists and type matches, skip
+                            continue
 
                 context_parts = []
-                for field in ("business_name", "business_info", "goal", "value_prop", "cta", "tone", "extras", "email_instruction"):
+                for field in ("goal", "value_prop", "cta", "tone", "writing_guidelines", "additional_notes"):
                     val = get_pref_with_default(field)
                     if val:
                         label = {
-                            "business_name": "Business Name", "business_info": "Business Info",
-                            "goal": "Goal", "value_prop": "Value Proposition", "cta": "Call to Action",
-                            "tone": "Tone", "extras": "Additional Context", "email_instruction": "Email Instructions",
+                            "goal":               "Goal",
+                            "value_prop":         "Value Proposition",
+                            "cta":                "Call to Action",
+                            "tone":               "Tone",
+                            "writing_guidelines": "Writing Guidelines",
+                            "additional_notes":   "Additional Context",
                         }[field]
                         context_parts.append(f"{label}: {val}")
 
@@ -368,7 +419,6 @@ def bulk_generate_emails(
                     body    = content
                 html_email_flag = template_html_email_flag
 
-            # ── Upsert primary email row ──────────────────────────────────────
             with get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -407,12 +457,12 @@ def bulk_generate_emails(
 
 
 # ==================================================================================
-# POST /email/bulk-send/ - Send or schedule multiple emails in one call
+# POST /email/bulk-send/ - Send or schedule multiple emails
 # ==================================================================================
 
 class BulkSendRequest(BaseModel):
     email_ids: List[int]
-    time: Optional[str] = None  # ISO datetime string; absent = send now
+    time: Optional[str] = None
 
 class BulkSendResponse(BaseModel):
     sent: int
@@ -424,44 +474,18 @@ def bulk_send_emails(
     request: BulkSendRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Send or schedule multiple emails in a single API call.
-
-    - time absent  → send immediately (same logic as /{email_id}/send/ with no time)
-    - time present → schedule (same logic as /{email_id}/send/ with time)
-
-    Iterates email_ids server-side, skips failures with logged errors,
-    and returns a summary of sent/scheduled count, failed count, and per-email errors.
-    """
+    """Send or schedule multiple emails. SMTP credentials resolved per-email from brands."""
     user_id = current_user["user_id"]
 
     if not request.email_ids:
         raise HTTPException(status_code=400, detail="email_ids must not be empty")
 
-    # ── Parse scheduled_at once if time is provided ───────────────────────────
     scheduled_at = None
     if request.time:
         try:
             scheduled_at = datetime.fromisoformat(request.time.replace('Z', '+00:00'))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid time format. Use ISO 8601.")
-
-    # ── Load SMTP credentials once ────────────────────────────────────────────
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT email_address, email_password, smtp_host, smtp_port
-            FROM user_keys WHERE user_id = %s
-        """, (user_id,))
-        smtp_row = cursor.fetchone()
-
-    if not smtp_row or not smtp_row["email_address"] or not smtp_row["email_password"]:
-        raise HTTPException(
-            status_code=400,
-            detail="No SMTP credentials configured. Please add them in Settings → API Keys."
-        )
-
-    sender_email = smtp_row["email_address"]
 
     sent_count = 0
     errors: List[dict] = []
@@ -496,6 +520,10 @@ def bulk_send_emails(
 
                 campaign_id = email["campaign_id"]
 
+                # ── Resolve SMTP credentials from brands ──────────────────────
+                smtp_creds = _resolve_smtp_for_campaign(campaign_id, user_id, cursor)
+                sender_email = smtp_creds["sender_email"]
+
                 # ── Resolve BCC ───────────────────────────────────────────────
                 cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
                 prefs_bcc_row = cursor.fetchone()
@@ -507,14 +535,14 @@ def bulk_send_emails(
                 )
 
                 smtp_config = {
-                    "sender_email":    smtp_row["email_address"],
-                    "sender_password": smtp_row["email_password"],
-                    "smtp_host":       smtp_row["smtp_host"] or "smtp.gmail.com",
-                    "smtp_port":       smtp_row["smtp_port"] or 587,
+                    "sender_email":    smtp_creds["sender_email"],
+                    "sender_password": smtp_creds["sender_password"],
+                    "smtp_host":       smtp_creds["smtp_host"],
+                    "smtp_port":       smtp_creds["smtp_port"],
                     "bcc":             bcc_val,
                 }
 
-                # ── Opt-out check (immediate sends only) ──────────────────────
+                # ── Opt-out check ─────────────────────────────────────────────
                 recipient_email = email["recipient_email"]
                 if not scheduled_at and _is_opted_out(sender_email, recipient_email):
                     reason = f"Recipient {recipient_email} has unsubscribed from {sender_email}"
@@ -548,18 +576,28 @@ def bulk_send_emails(
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
-                        SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                        FROM campaign_preferences WHERE campaign_id = %s
+                        SELECT cp.inherit_global_settings, cp.inherit_global_attachments,
+                               cp.brand_id
+                        FROM campaign_preferences cp WHERE cp.campaign_id = %s
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
-                    cursor.execute("""
-                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-                    """, (user_id,))
-                    global_prefs = cursor.fetchone()
+                    # Resolve brand for branding (signature + logo)
+                    brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
+                    if brand_id:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                            (brand_id,)
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                            (user_id,)
+                        )
+                    brand_row = cursor.fetchone()
 
                     signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, global_prefs, inherit_campaign_branding
+                        email, campaign_prefs, brand_row, inherit_campaign_branding
                     )
 
                     inherit_global_attachments = (
@@ -604,7 +642,7 @@ def bulk_send_emails(
                             UPDATE emails SET status = 'scheduled', sent_at = %s WHERE id = %s
                         """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
                         new_email_id = email_id
-                    else:  # scheduled
+                    else:
                         cursor.execute("""
                             UPDATE emails SET sent_at = %s WHERE id = %s
                         """, (scheduled_at.strftime('%Y-%m-%d %H:%M:%S'), email_id))
@@ -612,7 +650,7 @@ def bulk_send_emails(
 
                     conn.commit()
                     sent_count += 1
-                    continue  # no SMTP call needed for scheduling
+                    continue
 
                 else:
                     # Immediate send
@@ -632,7 +670,7 @@ def bulk_send_emails(
                                 INSERT IGNORE INTO email_attachments (email_id, attachment_id)
                                 VALUES (%s, %s)
                             """, (new_email_id, att_id))
-                    else:  # draft, scheduled, failed
+                    else:
                         cursor.execute("UPDATE emails SET status = 'sending' WHERE id = %s", (email_id,))
                         new_email_id = email_id
 
@@ -694,7 +732,7 @@ def bulk_send_emails(
 
 
 # ==================================================================================
-# POST /email/draft/ - Save one or more emails as drafts (bulk)
+# POST /email/draft/ - Save emails as drafts (bulk)
 # ==================================================================================
 
 class BulkDraftRequest(BaseModel):
@@ -711,17 +749,7 @@ def save_as_draft_bulk(
     request: BulkDraftRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Save one or more emails as drafts.
-
-    Accepts a list of email_ids. For each:
-    - If primary email: Creates a new draft copy (primary remains unchanged)
-    - If sent/scheduled/failed email: Creates a new draft copy (original remains unchanged)
-    - If already a draft: logged as error, skipped
-    - If not found or DB error: logged as error, skipped
-
-    Returns a summary of drafted count, failed count, new draft IDs, and per-email errors.
-    """
+    """Save one or more emails as drafts."""
     user_id = current_user["user_id"]
 
     if not request.email_ids:
@@ -742,8 +770,8 @@ def save_as_draft_bulk(
                     JOIN campaigns c ON cc.campaign_id = c.id
                     WHERE e.id = %s AND c.user_id = %s
                 """, (email_id, user_id))
-
                 email = cursor.fetchone()
+
                 if not email:
                     errors.append({"email_id": email_id, "reason": "Email not found"})
                     continue
@@ -752,8 +780,6 @@ def save_as_draft_bulk(
                     errors.append({"email_id": email_id, "reason": "Email is already a draft"})
                     continue
 
-                # For primary emails, resolve branding and attachments exactly as send/schedule does,
-                # so the new draft entry has the fully baked values rather than NULLs.
                 if email["status"] == "primary":
                     campaign_id = email["campaign_id"]
 
@@ -766,18 +792,27 @@ def save_as_draft_bulk(
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
-                        SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                        FROM campaign_preferences WHERE campaign_id = %s
+                        SELECT cp.inherit_global_settings, cp.inherit_global_attachments, cp.brand_id
+                        FROM campaign_preferences cp WHERE cp.campaign_id = %s
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
-                    cursor.execute("""
-                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-                    """, (user_id,))
-                    global_prefs = cursor.fetchone()
+                    # Resolve brand for branding
+                    brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
+                    if brand_id:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                            (brand_id,)
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                            (user_id,)
+                        )
+                    brand_row = cursor.fetchone()
 
                     signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, global_prefs, inherit_campaign_branding
+                        email, campaign_prefs, brand_row, inherit_campaign_branding
                     )
 
                     inherit_global_attachments = (
@@ -791,7 +826,6 @@ def save_as_draft_bulk(
                         inherit_campaign_attachments, inherit_global_attachments
                     )
                 else:
-                    # Sent, scheduled, or failed emails already have branding + attachments baked in their own row.
                     signature            = email["signature"]
                     logo_blob            = email["logo"]
                     logo_mime_type       = email["logo_mime_type"]
@@ -817,14 +851,12 @@ def save_as_draft_bulk(
                 draft_id = cursor.lastrowid
 
                 if baked_attachment_ids is not None:
-                    # Primary: bake the fully resolved attachment set into the new draft row.
                     for att_id in baked_attachment_ids:
                         cursor.execute("""
                             INSERT IGNORE INTO email_attachments (email_id, attachment_id)
                             VALUES (%s, %s)
                         """, (draft_id, att_id))
                 else:
-                    # Sent/scheduled: copy the already-baked attachment rows as-is.
                     cursor.execute("""
                         INSERT INTO email_attachments (email_id, attachment_id, created_at)
                         SELECT %s, attachment_id, created_at
@@ -846,42 +878,29 @@ def save_as_draft_bulk(
         errors=errors,
     )
 
-# =============================================================================
-# POST /email/smart-schedule — Schedule multiple emails with staggered timing
-# =============================================================================
+
+# ==================================================================================
+# POST /email/smart-schedule — Schedule with staggered timing
+# ==================================================================================
 
 class SmartScheduleRequest(BaseModel):
     email_ids: List[int]
-    start_time: str          # ISO datetime string for first batch
-    initial_companies: int   # number of emails in first batch
-    interval_minutes: int    # minutes between batches
-    increment: int           # additional emails per subsequent batch
-
+    start_time: str
+    initial_companies: int
+    interval_minutes: int
+    increment: int
 
 class SmartScheduleResponse(BaseModel):
     scheduled: int
     failed: int
     message: str
 
-
 @email_actions_router.post("/smart-schedule/", response_model=SmartScheduleResponse)
 def smart_schedule_emails(
     request: SmartScheduleRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Schedule multiple emails with staggered batched timing.
-
-    Emails are assigned to batches based on:
-      - Batch 0: initial_companies emails at start_time
-      - Batch 1: (initial_companies + increment) emails at start_time + interval_minutes
-      - Batch N: (initial_companies + N * increment) emails at start_time + N * interval_minutes
-
-    Each email is processed exactly like POST /email/{email_id}/send/ with a time param:
-      - Primary emails → new scheduled row created with branding + attachments baked in
-      - Draft emails   → updated in place to scheduled
-      - Already scheduled emails → sent_at updated
-    """
+    """Schedule multiple emails with staggered batched timing."""
     user_id = current_user["user_id"]
 
     if not request.email_ids:
@@ -898,39 +917,22 @@ def smart_schedule_emails(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid start_time format. Use ISO 8601.")
 
-    # ── Assign each email_id to a batch slot and compute its scheduled_at ────
-    # Build list of (email_id, scheduled_at) pairs
+    # ── Assign each email_id to a batch slot ─────────────────────────────────
+    from datetime import timedelta
     assignments: List[tuple] = []
     remaining = list(request.email_ids)
     batch_num = 0
-    from datetime import timedelta
 
     while remaining:
-        batch_size = request.initial_companies + batch_num * request.increment
-        batch_size = max(1, batch_size)
-        batch_ids  = remaining[:batch_size]
-        remaining  = remaining[batch_size:]
+        batch_size   = max(1, request.initial_companies + batch_num * request.increment)
+        batch_ids    = remaining[:batch_size]
+        remaining    = remaining[batch_size:]
         scheduled_at = start_dt + timedelta(minutes=batch_num * request.interval_minutes)
         for eid in batch_ids:
             assignments.append((eid, scheduled_at))
         batch_num += 1
 
-    # ── Fetch SMTP credentials once ───────────────────────────────────────────
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT email_address, email_password, smtp_host, smtp_port
-            FROM user_keys WHERE user_id = %s
-        """, (user_id,))
-        smtp_row = cursor.fetchone()
-
-    if not smtp_row or not smtp_row["email_address"] or not smtp_row["email_password"]:
-        raise HTTPException(
-            status_code=400,
-            detail="No SMTP credentials configured. Please add them in Settings → API Keys."
-        )
-
-    # ── Process each email exactly as /send/ does ─────────────────────────────
+    # ── Process each email ────────────────────────────────────────────────────
     scheduled_count = 0
     failed_count    = 0
 
@@ -948,23 +950,12 @@ def smart_schedule_emails(
                 """, (email_id, user_id))
                 email = cursor.fetchone()
 
-                if not email:
-                    failed_count += 1
-                    continue
-
-                if email["status"] not in ("primary", "draft", "scheduled", "failed"):
+                if not email or email["status"] not in ("primary", "draft", "scheduled", "failed"):
                     failed_count += 1
                     continue
 
                 campaign_id = email["campaign_id"]
 
-                # ── Resolve BCC ───────────────────────────────────────────────
-                cursor.execute("SELECT bcc FROM campaign_preferences WHERE campaign_id = %s", (campaign_id,))
-                prefs_bcc_row = cursor.fetchone()
-                cursor.execute("SELECT bcc FROM global_settings WHERE user_id = %s", (user_id,))
-                global_bcc_row = cursor.fetchone()
-
-                # ── Branding + attachment resolution (primary only) ───────────
                 if email["status"] == "primary":
                     cursor.execute("""
                         SELECT id, inherit_campaign_attachments, inherit_campaign_branding
@@ -975,18 +966,26 @@ def smart_schedule_emails(
                     inherit_campaign_attachments = cc_row["inherit_campaign_attachments"] if cc_row else 1
 
                     cursor.execute("""
-                        SELECT signature, logo, logo_mime_type, inherit_global_settings, inherit_global_attachments
-                        FROM campaign_preferences WHERE campaign_id = %s
+                        SELECT cp.inherit_global_settings, cp.inherit_global_attachments, cp.brand_id
+                        FROM campaign_preferences cp WHERE cp.campaign_id = %s
                     """, (campaign_id,))
                     campaign_prefs = cursor.fetchone()
 
-                    cursor.execute("""
-                        SELECT signature, logo, logo_mime_type FROM global_settings WHERE user_id = %s
-                    """, (user_id,))
-                    global_prefs = cursor.fetchone()
+                    brand_id = campaign_prefs["brand_id"] if campaign_prefs else None
+                    if brand_id:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE id = %s",
+                            (brand_id,)
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT signature, logo, logo_mime_type FROM brands WHERE user_id = %s AND is_default = 1 LIMIT 1",
+                            (user_id,)
+                        )
+                    brand_row = cursor.fetchone()
 
                     signature, logo_blob, logo_mime_type = resolve_branding(
-                        email, campaign_prefs, global_prefs, inherit_campaign_branding
+                        email, campaign_prefs, brand_row, inherit_campaign_branding
                     )
 
                     inherit_global_attachments = (
@@ -1000,7 +999,6 @@ def smart_schedule_emails(
                         inherit_campaign_attachments, inherit_global_attachments
                     )
 
-                    # Create new scheduled row with branding baked in
                     cursor.execute("""
                         INSERT INTO emails (campaign_company_id, email_subject, email_content,
                                            recipient_email, status, timezone, signature, logo, logo_mime_type,

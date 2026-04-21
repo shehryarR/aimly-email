@@ -123,7 +123,7 @@ const ModalBody = styled.div`
 // ── Left tab nav ───────────────────────────────────────────────────────────────
 
 const TabNav = styled.nav<{ theme: any }>`
-  width: 190px; flex-shrink: 0;
+  width: 220px; flex-shrink: 0;
   background: ${p => p.theme.colors.base[200]};
   border-right: 1px solid ${p => p.theme.colors.base[300]};
   padding: 0.75rem 0.5rem;
@@ -500,7 +500,7 @@ const AccountIcon = () => (
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'llm' | 'email' | 'tavily' | 'global' | 'account' | 'attachments';
+type Tab = 'llm' | 'brands' | 'tavily' | 'global' | 'account' | 'attachments';
 type StatusColor = 'green' | 'orange' | 'red' | 'gray' | 'checking';
 
 interface SettingsProps {
@@ -513,19 +513,43 @@ interface SettingsProps {
 
 interface KeySettings {
   llmModel: string; llmApiKey: string;
-  emailAddress: string; emailPassword: string;
-  smtpHost: string; smtpPort: string; selectedProvider: string;
   tavilyApiKey: string;
 }
 
-interface Statuses { llm: StatusColor; email: StatusColor; tavily: StatusColor; }
-interface Messages { llm: string; email: string; tavily: string; }
+interface Brand {
+  id: number;
+  business_name?: string;
+  business_info?: string;
+  email_address?: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  signature?: string;
+  logo_data?: string;
+  is_default: number;
+}
+
+interface BrandForm {
+  id?: number;
+  business_name: string;
+  business_info: string;
+  email_address: string;
+  email_password: string;
+  smtp_host: string;
+  smtp_port: string;
+  signature: string;
+  selectedProvider: string;
+  logo?: File | 'remove' | null;
+  logoPreview?: string | null;
+  is_default: boolean;
+}
+
+interface Statuses { llm: StatusColor; tavily: StatusColor; }
+interface Messages { llm: string; tavily: string; }
 
 interface GlobalSettings {
-  bcc: string; business_name: string; business_info: string;
+  bcc: string;
   goal: string; value_prop: string; tone: string;
-  cta: string; extras: string; email_instruction: string;
-  signature: string; logo_data?: string;
+  cta: string; additional_notes: string; writing_guidelines: string;
 }
 
 interface AccountForm { username: string; email: string; password: string; }
@@ -613,13 +637,11 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [activeTab, setActiveTab] = useState<Tab>('llm');
 
   const [showLlmKey,      setShowLlmKey]      = useState(false);
-  const [showEmailPwd,    setShowEmailPwd]    = useState(false);
   const [showTavilyKey,   setShowTavilyKey]   = useState(false);
   const [showAccPwd,      setShowAccPwd]      = useState(false);
   const [llmMasked,       setLlmMasked]       = useState(false);
-  const llmWasMasked    = React.useRef(false);   // tracks if key was configured when settings opened
-  const tavilyWasMasked = React.useRef(false);   // tracks if key was configured when settings opened
-  const [emailPwdMasked,  setEmailPwdMasked]  = useState(false);
+  const llmWasMasked    = React.useRef(false);
+  const tavilyWasMasked = React.useRef(false);
   const [tavilyMasked,    setTavilyMasked]    = useState(false);
 
   const [keysLoading,   setKeysLoading]   = useState(false);
@@ -627,24 +649,32 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
 
   const [keys, setKeys] = useState<KeySettings>({
     llmModel: 'gemini-2.5-flash', llmApiKey: '',
-    emailAddress: '', emailPassword: '',
-    smtpHost: 'smtp.gmail.com', smtpPort: '587', selectedProvider: 'Gmail',
     tavilyApiKey: '',
   });
 
-  const [statuses, setStatuses] = useState<Statuses>({ llm:'checking', email:'checking', tavily:'checking' });
+  const [statuses, setStatuses] = useState<Statuses>({ llm:'checking', tavily:'checking' });
   const [messages, setMessages] = useState<Messages>({
-    llm:'Checking status…', email:'Checking status…', tavily:'Checking status…',
+    llm:'Checking status…', tavily:'Checking status…',
   });
   const [keyMsg, setKeyMsg] = useState<{ tab: Tab; type: 'success'|'error'; text: string }|null>(null);
 
-  const [global, setGlobal]               = useState<GlobalSettings>({ bcc:'', business_name:'', business_info:'', goal:'', value_prop:'', tone:'', cta:'', extras:'', email_instruction:'', signature:'', logo_data:undefined });
+  const [global, setGlobal]               = useState<GlobalSettings>({ bcc:'', goal:'', value_prop:'', tone:'', cta:'', additional_notes:'', writing_guidelines:'' });
   const [globalLoading,    setGlobalLoading]    = useState(false);
   const [globalLoaded,     setGlobalLoaded]     = useState(false);
   const [globalMsg,        setGlobalMsg]        = useState<{ type:'success'|'error'; text:string }|null>(null);
   const [globalSettingsId, setGlobalSettingsId] = useState<number | null>(null);
   const [pendingLogo,      setPendingLogo]      = useState<File | 'remove' | null>(null);
   const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
+
+  // ── Brands state ──────────────────────────────────────────
+  const [brands,          setBrands]          = useState<Brand[]>([]);
+  const [brandsLoading,   setBrandsLoading]   = useState(false);
+  const [brandForm,       setBrandForm]       = useState<BrandForm | null>(null);
+  const [brandSaving,     setBrandSaving]     = useState(false);
+  const [brandMsg,        setBrandMsg]        = useState<{ type:'success'|'error'; text:string }|null>(null);
+  const [showBrandPwd,    setShowBrandPwd]    = useState(false);
+  const [brandPwdMasked,  setBrandPwdMasked]  = useState(false);
+  const [expandedBrandId, setExpandedBrandId] = useState<number | 'new' | null>(null);
 
   // ── Attachment state ──────────────────────────────────────────
   const [allAttachments,      setAllAttachments]      = useState<AttachmentOption[]>([]);
@@ -682,8 +712,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     const saved = savedGlobal.current;
     if (!saved) return;
     const same = (Object.keys(next) as (keyof typeof next)[]).every(k => next[k] === saved[k]);
-    const logoSame = pendingLogo === null; // pending logo change always means dirty
-    setDirtyTabs(p => ({ ...p, global: !(same && logoSame) }));
+    setDirtyTabs(p => ({ ...p, global: !same }));
   };
   const recheckAttachments = (next: Set<number>) => {
     const saved = savedLinkedIds.current;
@@ -741,8 +770,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     profile: true,
     password: false,
     danger: false,
-    company: true,
-    strategy: false,
+    company: false,
+    strategy: true,
     emailContent: false,
     branding: false,
     attachments: false,
@@ -906,32 +935,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   };
 
   // ── Logo handling ───────────────────────────────────────────────
-  const handleLogoFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setGlobalMsg({ type: 'error', text: 'Please select a valid image file' });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setGlobalMsg({ type: 'error', text: 'File size must be less than 5MB' });
-      return;
-    }
-    // Store file locally and show preview — API call deferred to saveGlobal
-    setPendingLogo(file);
-    const reader = new FileReader();
-    reader.onload = e => setPendingLogoPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
-    setDirtyTabs(p => ({ ...p, global: true }));
-    setGlobalMsg(null);
-  };
-
-  const handleLogoRemove = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Mark removal locally — API call deferred to saveGlobal
-    setPendingLogo('remove');
-    setPendingLogoPreview(null);
-    setDirtyTabs(p => ({ ...p, global: true }));
-    setGlobalMsg(null);
-  };
 
   // ── Initial status ──────────────────────────────────────────
   useEffect(() => {
@@ -943,7 +946,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
           if (res.ok) {
             const d = await res.json();
             err = mapCode(d.llm?.status_code) !== 'green'
-               || mapCode(d.email?.status_code) !== 'green'
                || mapCode(d.tavily?.status_code) !== 'green';
           }
           if (onSettingsStatus) onSettingsStatus(err);
@@ -960,10 +962,10 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       loadKeys();
       loadGlobal();
     } else {
-      setShowLlmKey(false); setShowEmailPwd(false);
+      setShowLlmKey(false);
       setShowTavilyKey(false); setShowAccPwd(false);
       setShowCurrPwd(false); setShowNewPwd(false); setShowConfPwd(false);
-      setLlmMasked(false); setEmailPwdMasked(false); setTavilyMasked(false);
+      setLlmMasked(false); setTavilyMasked(false);
       llmWasMasked.current = false; tavilyWasMasked.current = false;
       setDelConfirm(false); setAccMsg(null); setGlobalMsg(null); setKeyMsg(null);
       setAttachMsg(null); setAttachSearch('');
@@ -980,41 +982,34 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       setDirtyTabs({}); setConfirmClose(false);
       setPendingLogo(null); setPendingLogoPreview(null);
       savedKeys.current = null; savedGlobal.current = null;
+      setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); setShowBrandPwd(false); setBrandPwdMasked(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (activeTab === 'llm' || activeTab === 'email' || activeTab === 'tavily') loadKeys();
+    if (activeTab === 'llm' || activeTab === 'tavily') loadKeys();
+    if (activeTab === 'brands') loadBrands();
     if (activeTab === 'global' && !globalLoaded) loadGlobal();
     if (activeTab === 'attachments' && !globalLoaded) loadGlobal();
     setKeyMsg(null);
   }, [activeTab]);
 
-  // ── API: load user_keys ────────────────────────────────────────
+  // ── API: load user_keys (LLM + Tavily cookie keys only) ──────────────────────
   const loadKeys = async () => {
     try {
       const res = await apiFetch(`${API_BASE}/user_keys/`, { headers: {} });
       if (res.ok) {
         const d = await res.json();
-        const smtpHost = d.smtp_host || 'smtp.gmail.com';
-        // Show * placeholder of length 32 when key is configured so user knows
-        // a key is set. Empty means not configured. Never send these back to backend.
         const llmConfigured    = !!d.llm_api_key_masked;
         const tavilyConfigured = !!d.tavily_api_key_masked;
         const snap = {
           llmModel: d.llm_model || 'gemini-2.5-flash',
           llmApiKey: llmConfigured ? '•'.repeat(32) : '',
-          emailAddress: d.email_address || '',
-          emailPassword: d.email_password_masked || '',
-          smtpHost,
-          smtpPort: d.smtp_port ? String(d.smtp_port) : '587',
-          selectedProvider: Object.keys(emailProviders).find(k => emailProviders[k].host === smtpHost) || 'Custom',
           tavilyApiKey: tavilyConfigured ? '•'.repeat(32) : '',
         };
         setKeys(snap);
         savedKeys.current = snap;
         setLlmMasked(!!d.llm_api_key_masked);
-        setEmailPwdMasked(!!d.email_password_masked);
         setTavilyMasked(!!d.tavily_api_key_masked);
         llmWasMasked.current    = !!d.llm_api_key_masked;
         tavilyWasMasked.current = !!d.tavily_api_key_masked;
@@ -1023,24 +1018,134 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     } catch (e) { console.error(e); }
   };
 
-  const refreshStatuses = async (autoTab = false) => {
-    setStatuses({ llm:'checking', email:'checking', tavily:'checking' });
-    setMessages({ llm:'Checking status…', email:'Checking status…', tavily:'Checking status…' });
+  // ── API: load brands ───────────────────────────────────────────────────────────
+  const loadBrands = async () => {
+    setBrandsLoading(true);
     try {
-      let ls: StatusColor='gray', es: StatusColor='gray', ts: StatusColor='gray';
-      let lm='No API key configured', em='Email credentials not configured', tm='No API key configured';
+      const res = await apiFetch(`${API_BASE}/brands/`, { headers: {} });
+      if (res.ok) { const d = await res.json(); setBrands(d.brands ?? d ?? []); }
+    } catch (e) { console.error(e); }
+    finally { setBrandsLoading(false); }
+  };
+
+  const defaultBrandForm = (): BrandForm => ({
+    business_name: '', business_info: '',
+    email_address: '', email_password: '',
+    smtp_host: 'smtp.gmail.com', smtp_port: '587',
+    signature: '', selectedProvider: 'Gmail',
+    logo: null, logoPreview: null, is_default: false,
+  });
+
+  const openNewBrand = () => {
+    setBrandForm(defaultBrandForm());
+    setExpandedBrandId('new');
+    setBrandMsg(null);
+    setShowBrandPwd(false);
+    setBrandPwdMasked(false);
+  };
+
+  const openEditBrand = async (brand: Brand) => {
+    setBrandForm({
+      id: brand.id,
+      business_name: brand.business_name || '',
+      business_info: brand.business_info || '',
+      email_address: brand.email_address || '',
+      email_password: '',
+      smtp_host: brand.smtp_host || 'smtp.gmail.com',
+      smtp_port: brand.smtp_port ? String(brand.smtp_port) : '587',
+      signature: brand.signature || '',
+      selectedProvider: Object.keys(emailProviders).find(k => emailProviders[k].host === (brand.smtp_host || '')) || 'Custom',
+      logo: null,
+      logoPreview: brand.logo_data || null,
+      is_default: !!brand.is_default,
+    });
+    setExpandedBrandId(brand.id);
+    setBrandMsg(null);
+    setShowBrandPwd(false);
+    setBrandPwdMasked(true);
+  };
+
+  const saveBrand = async () => {
+    if (!brandForm) return;
+    setBrandSaving(true); setBrandMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('business_name', brandForm.business_name);
+      fd.append('business_info', brandForm.business_info);
+      fd.append('email_address', brandForm.email_address);
+      if (brandForm.email_password) fd.append('email_password', brandForm.email_password);
+      fd.append('smtp_host', brandForm.smtp_host);
+      fd.append('smtp_port', brandForm.smtp_port || '587');
+      fd.append('signature', brandForm.signature);
+      if (brandForm.logo === 'remove') fd.append('logo', new File([], ''));
+      else if (brandForm.logo instanceof File) fd.append('logo', brandForm.logo);
+
+      let res: Response;
+      if (brandForm.id) {
+        fd.append('brand_id', String(brandForm.id));
+        res = await apiFetch(`${API_BASE}/brands/`, { method: 'PUT', body: fd });
+      } else {
+        res = await apiFetch(`${API_BASE}/brands/`, { method: 'POST', body: fd });
+      }
+
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save brand'); }
+
+      // Auto-default: if only one brand exists after save, or is_default explicitly set
+      const brandData = await res.json();
+      const savedBrandId = brandForm.id || brandData?.brand_id;
+      const willBeOnlyBrand = !brandForm.id && brands.length === 0;
+      if (brandForm.is_default || willBeOnlyBrand) {
+        if (savedBrandId) {
+          await apiFetch(`${API_BASE}/brands/default/`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brand_id: savedBrandId }),
+          });
+        }
+      }
+
+      setBrandMsg({ type: 'success', text: brandForm.id ? 'Brand updated' : 'Brand created' });
+      await loadBrands();
+      setExpandedBrandId(null);
+      setBrandForm(null);
+    } catch (err) {
+      setBrandMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save brand' });
+    } finally { setBrandSaving(false); }
+  };
+
+  const deleteBrand = async (id: number) => {
+    try {
+      await apiFetch(`${API_BASE}/brands/?ids=${id}`, { method: 'DELETE' });
+      await loadBrands();
+    } catch (e) { console.error(e); }
+  };
+
+  const setDefaultBrand = async (id: number) => {
+    try {
+      await apiFetch(`${API_BASE}/brands/default/`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: id }),
+      });
+      await loadBrands();
+    } catch (e) { console.error(e); }
+  };
+
+
+  const refreshStatuses = async (autoTab = false) => {
+    setStatuses({ llm:'checking', tavily:'checking' });
+    setMessages({ llm:'Checking status…', tavily:'Checking status…' });
+    try {
+      let ls: StatusColor='gray', ts: StatusColor='gray';
+      let lm='No API key configured', tm='No API key configured';
       const res = await apiFetch(`${API_BASE}/user_keys/status/`, { headers: {} });
       if (res.ok) {
         const d = await res.json();
         ls = mapCode(d.llm?.status_code??0);    lm = d.llm?.status_text   || lm;
-        es = mapCode(d.email?.status_code??0);  em = d.email?.status_text  || em;
         ts = mapCode(d.tavily?.status_code??0); tm = d.tavily?.status_text || tm;
       }
-      setStatuses({ llm:ls, email:es, tavily:ts });
-      setMessages({ llm:lm, email:em, tavily:tm });
-      if (onSettingsStatus) onSettingsStatus(ls!=='green'||es!=='green'||ts!=='green');
+      setStatuses({ llm:ls, tavily:ts });
+      setMessages({ llm:lm, tavily:tm });
+      if (onSettingsStatus) onSettingsStatus(ls!=='green'||ts!=='green');
       if (autoTab && ls!=='green') setActiveTab('llm');
-      else if (autoTab && es!=='green') setActiveTab('email');
     } catch (e) { console.error(e); }
   };
 
@@ -1067,21 +1172,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     finally { setKeysLoading(false); }
   };
 
-  const saveEmail = async () => {
-    setKeysLoading(true); setKeyMsg(null);
-    try {
-      const res = await apiFetch(`${API_BASE}/user_keys/`, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email_address: keys.emailAddress, email_password: keys.emailPassword, smtp_host: keys.smtpHost, smtp_port: keys.smtpPort ? parseInt(keys.smtpPort,10) : 587 }) });
-      if (!res.ok) {
-        const e = await res.json();
-        const msg = Array.isArray(e?.detail) ? e.detail[0]?.msg : (e?.detail || 'Failed to save email settings');
-        throw new Error(msg);
-      }
-      await refreshStatuses(false);
-      setKeyMsg({ tab:'email', type:'success', text:'Email settings saved' });
-      savedKeys.current = { ...keys }; clearDirty('email');
-    } catch (err) { setKeyMsg({ tab:'email', type:'error', text: err instanceof Error ? err.message : 'Failed to save email settings' }); }
-    finally { setKeysLoading(false); }
-  };
 
   const saveTavily = async () => {
     setKeysLoading(true); setKeyMsg(null);
@@ -1119,16 +1209,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         setGlobalSettingsId(gsId);
         const snap: GlobalSettings = {
           bcc: d.bcc ?? '',
-          business_name: d.business_name ?? '',
-          business_info: d.business_info ?? '',
           goal: d.goal ?? '',
           value_prop: d.value_prop ?? '',
           tone: d.tone ?? '',
           cta: d.cta ?? '',
-          extras: d.extras ?? '',
-          email_instruction: d.email_instruction ?? '',
-          signature: d.signature ?? '',
-          logo_data: d.logo_data ?? undefined,
+          additional_notes: d.additional_notes ?? '',
+          writing_guidelines: d.writing_guidelines ?? '',
         };
         setGlobal(snap);
         savedGlobal.current = snap;
@@ -1143,24 +1229,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     try {
       const formData = new FormData();
       const fieldsToSave: (keyof GlobalSettings)[] = [
-        'bcc', 'business_name', 'business_info', 'goal',
-        'value_prop', 'tone', 'cta', 'extras',
-        'email_instruction', 'signature'
+        'bcc', 'goal', 'value_prop', 'tone', 'cta',
+        'additional_notes', 'writing_guidelines'
       ];
-      // Always send every field — empty string signals backend to clear (set NULL).
-      // We intentionally do NOT skip empty fields; the backend relies on receiving
-      // them to know the user cleared the value.
       fieldsToSave.forEach(k => {
         const raw = global[k] as string | undefined;
         const value = (raw ?? '').trim();
-        formData.append(k, value);  // "" sent → FastAPI gets None → stored as NULL
+        formData.append(k, value);
       });
-      // Include pending logo change
-      if (pendingLogo === 'remove') {
-        formData.append('logo', new File([], ''));
-      } else if (pendingLogo instanceof File) {
-        formData.append('logo', pendingLogo);
-      }
       const res = await apiFetch(`${API_BASE}/global_setting/`, {
         method:'PUT',
         body: formData
@@ -1171,12 +1247,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
       }
       const result = await res.json();
       if (result.id) setGlobalSettingsId(result.id);
-      // Clear pending logo state and reload to get fresh logo_data from server
-      if (pendingLogo) {
-        setPendingLogo(null);
-        setPendingLogoPreview(null);
-        await loadGlobal();
-      }
       setGlobalMsg({ type:'success', text: result.message || 'Global settings saved' });
       savedGlobal.current = { ...global }; clearDirty('global'); clearDirty('attachments');
     } catch (err) {
@@ -1251,10 +1321,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     } finally { setAccLoading(false); }
   };
 
-  const handleProviderChange = (provider: string) => {
-    const cfg = emailProviders[provider];
-    setKeys(p => ({ ...p, selectedProvider: provider, ...(provider !== 'Custom' && cfg ? { smtpHost: cfg.host, smtpPort: cfg.port } : {}) }));
-  };
 
   const validatePassword = (password: string) => {
     if (!password) {
@@ -1311,7 +1377,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
         newState.danger = false;
         newState[sectionKey as keyof typeof newState] = !prev[sectionKey as keyof typeof prev];
       } else if (tabType === 'global') {
-        newState.company = false;
         newState.strategy = false;
         newState.emailContent = false;
         newState.branding = false;
@@ -1330,13 +1395,18 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const notAttachedFiles = filteredAttachments.filter(a => !linkedAttachmentIds.has(a.id));
 
   // ── Tab definitions ────────────────────────────────────────────
+  const BrandsTabIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+    </svg>
+  );
   const tabs: { id: Tab; label: string; icon: React.ReactNode; status?: StatusColor }[] = [
-    { id:'llm',         label:'LLM',            icon:<RobotIcon />,       status: statuses.llm   },
-    { id:'email',       label:'Email',          icon:<EmailIcon />,       status: statuses.email },
-    { id:'tavily',      label:'Tavily Search',  icon:<SearchIcon />,      status: statuses.tavily },
-    { id:'global',      label:'Global Settings',icon:<GlobalIcon />       },
-    { id:'attachments', label:'Attachments',    icon:<PaperclipTabIcon /> },
-    { id:'account',     label:'Account',        icon:<AccountIcon />      },
+    { id:'llm',         label:'AI Settings',    icon:<RobotIcon />,       status: statuses.llm    },
+    { id:'tavily',      label:'Web Search',     icon:<SearchIcon />,      status: statuses.tavily },
+    { id:'brands',      label:'Brands',         icon:<BrandsTabIcon />                            },
+    { id:'global',      label:'Strategy & Content',icon:<GlobalIcon />                            },
+    { id:'attachments', label:'Attachments',    icon:<PaperclipTabIcon />                         },
+    { id:'account',     label:'Account',        icon:<AccountIcon />                              },
   ];
 
   // ── Render ─────────────────────────────────────────────────────
@@ -1368,8 +1438,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
             <TabNav theme={theme}>
               <NavGroup>
                 <NavGroupLabel theme={theme}>Integrations</NavGroupLabel>
-                {tabs.filter(t => ['llm','email','tavily'].includes(t.id)).map(t => (
-                  <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+                {tabs.filter(t => ['llm','tavily'].includes(t.id)).map(t => (
+                  <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id as Tab)}>
                     {t.icon}
                     <TabLabel>{t.label}</TabLabel>
                     {dirtyTabs[t.id] && <DirtyAsterisk theme={theme} $active={activeTab === t.id} title="Unsaved changes">*</DirtyAsterisk>}
@@ -1379,11 +1449,12 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
               </NavGroup>
               <NavGroup>
                 <NavGroupLabel theme={theme}>Configuration</NavGroupLabel>
-                {tabs.filter(t => ['global','attachments','account'].includes(t.id)).map(t => (
-                  <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+                {tabs.filter(t => ['brands','global','attachments','account'].includes(t.id)).map(t => (
+                  <TabButton key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id as Tab)}>
                     {t.icon}
                     <TabLabel>{t.label}</TabLabel>
                     {dirtyTabs[t.id] && <DirtyAsterisk theme={theme} $active={activeTab === t.id} title="Unsaved changes">*</DirtyAsterisk>}
+                    {t.status && <StatusDot $status={t.status} title={statusLabel(t.status)} />}
                   </TabButton>
                 ))}
               </NavGroup>
@@ -1392,7 +1463,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
             {/* ── LLM tab ─────────────────────────────────── */}
             {activeTab === 'llm' && (
               <TabPanel theme={theme} key="llm">
-                <PanelTitle theme={theme}>LLM Configuration</PanelTitle>
+                <PanelTitle theme={theme}>AI Settings</PanelTitle>
                 <PanelSubtitle theme={theme}>The AI model that reads company data and writes personalised emails. Requires a Google Gemini API key.</PanelSubtitle>
 
                 <FormGroup>
@@ -1433,83 +1504,441 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                 )}
                 {keyMsg?.tab === 'llm' && <Msg theme={theme} $type={keyMsg.type}>{keyMsg.text}</Msg>}
                 <SaveRow>
-                  <Btn theme={theme} onClick={saveLlm} disabled={keysLoading || llmMasked}>
+                  <Btn theme={theme} onClick={saveLlm} disabled={keysLoading || (llmMasked && !dirtyTabs['llm'])}>
                     {keysLoading ? 'Saving…' : 'Save'}
                   </Btn>
                 </SaveRow>
               </TabPanel>
             )}
 
-            {/* ── Email tab ────────────────────────────────── */}
-            {activeTab === 'email' && (
-              <TabPanel theme={theme} key="email">
-                <PanelTitle theme={theme}>Email Configuration</PanelTitle>
-                <PanelSubtitle theme={theme}>Connect your email account so the app can send personalised outreach directly from your inbox.</PanelSubtitle>
+            {/* ── Brands tab ──────────────────────────────── */}
+            {activeTab === 'brands' && (
+              <TabPanel theme={theme} key="brands">
+                <PanelTitle theme={theme}>Brands</PanelTitle>
+                <PanelSubtitle theme={theme}>
+                  Brands hold your sending identity — SMTP credentials, logo, signature, and business info. Each campaign can be linked to a specific brand. Your default brand is used when no campaign brand is set.
+                </PanelSubtitle>
 
-                <FormGroup>
-                  <Label theme={theme}>Email Provider <RequiredStar>*</RequiredStar></Label>
-                  <Select theme={theme} value={keys.selectedProvider} onChange={e => { handleProviderChange(e.target.value); setDirtyTabs(p => ({ ...p, email: true })); }}>
-                    {Object.keys(emailProviders).map(p => <option key={p} value={p}>{p}</option>)}
-                  </Select>
-                </FormGroup>
+                {brandMsg && <Msg theme={theme} $type={brandMsg.type} style={{ marginBottom: '1rem' }}>{brandMsg.text}</Msg>}
 
-                <FormGroup>
-                  <Label theme={theme}>Email Address <RequiredStar>*</RequiredStar></Label>
-                  <Input theme={theme} type="email" placeholder="you@example.com" autoComplete="off" value={keys.emailAddress}
-                    onChange={e => { setKeys(p => { const n = { ...p, emailAddress: e.target.value }; recheckKeys(n, 'email'); return n; }); }} />
-                </FormGroup>
+                {brandsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.5, fontSize: '0.875rem' }}>Loading brands…</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
 
-                <FormGroup>
-                  <Label theme={theme}>App Password <RequiredStar>*</RequiredStar>
-                    <HelpTooltip theme={theme} instructions="Use an app-specific password, not your regular login password. Gmail: Google Account → Security → App passwords." />
-                  </Label>
-                  <PasswordWrapper>
-                    <PasswordInput theme={theme}
-                      type={emailPwdMasked ? 'text' : (showEmailPwd ? 'text' : 'password')}
-                      placeholder="App-specific password"
-                      value={keys.emailPassword}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        if (emailPwdMasked) { setEmailPwdMasked(false); setShowEmailPwd(false); setKeys(p => { const n = { ...p, emailPassword:'' }; recheckKeys(n, 'email'); return n; }); }
-                        else setKeys(p => { const n = { ...p, emailPassword: e.target.value }; recheckKeys(n, 'email'); return n; });
+                    {/* Empty state */}
+                    {brands.length === 0 && expandedBrandId !== 'new' && (
+                      <div style={{
+                        textAlign: 'center', padding: '2rem 1rem',
+                        border: `1px dashed ${theme.colors.base[300]}`,
+                        borderRadius: theme.radius.field,
+                        background: theme.colors.base[200],
+                      }}>
+                        <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>📭</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.2rem' }}>No brands yet</div>
+                        <div style={{ fontSize: '0.8rem', opacity: 0.5 }}>Add a brand to configure your email sending identity.</div>
+                      </div>
+                    )}
+
+                    {/* Existing brand entries */}
+                    {brands.map(brand => {
+                      const isExpanded = expandedBrandId === brand.id;
+                      return (
+                        <div key={brand.id} style={{
+                          border: `1px solid ${brand.is_default ? theme.colors.primary.main + '60' : isExpanded ? theme.colors.primary.main + '40' : theme.colors.base[300]}`,
+                          borderRadius: theme.radius.field,
+                          background: theme.colors.base[400],
+                          overflow: 'hidden',
+                          transition: 'border-color 0.2s',
+                        }}>
+                          {/* Header row — always visible */}
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: '0.75rem',
+                            padding: '0.75rem 1rem', cursor: 'pointer',
+                            background: brand.is_default ? theme.colors.primary.main + '06' : 'transparent',
+                          }}
+                            onClick={() => {
+                              if (isExpanded) {
+                                setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null);
+                              } else {
+                                openEditBrand(brand);
+                              }
+                            }}
+                          >
+                            {/* Logo avatar */}
+                            <div style={{
+                              width: 32, height: 32, borderRadius: 6, flexShrink: 0, overflow: 'hidden',
+                              background: theme.colors.base[300],
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {brand.logo_data
+                                ? <img src={brand.logo_data} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+                                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                                  </svg>
+                              }
+                            </div>
+
+                            {/* Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ fontWeight: 600, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {brand.business_name || brand.email_address || 'Unnamed Brand'}
+                                </span>
+                                {!!brand.is_default && (
+                                  <span style={{
+                                    fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.05em',
+                                    background: theme.colors.primary.main, color: theme.colors.primary.content,
+                                    borderRadius: 999, padding: '2px 7px', flexShrink: 0,
+                                  }}>DEFAULT</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', opacity: 0.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {brand.email_address || 'No email set'}{brand.smtp_host ? ` · ${brand.smtp_host}` : ''}
+                              </div>
+                            </div>
+
+                            {/* Chevron */}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                              style={{ flexShrink: 0, opacity: 0.4, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          </div>
+
+                          {/* Inline form */}
+                          {isExpanded && brandForm && (
+                            <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${theme.colors.base[300]}` }}>
+                              <div style={{ height: '1rem' }} />
+
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+                                <span style={{ fontSize: '0.72rem', opacity: 0.4 }}><RequiredStar>*</RequiredStar> Required</span>
+                              </div>
+
+                              <FormRow style={{ marginBottom: '1rem' }}>
+                                <FormGroup>
+                                  <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Business Name <RequiredStar>*</RequiredStar></Label>
+                                  <Input theme={theme} type="text" placeholder="Acme Corp" autoComplete="off"
+                                    value={brandForm.business_name}
+                                    onChange={e => setBrandForm(p => p ? { ...p, business_name: e.target.value } : p)} />
+                                </FormGroup>
+                                <FormGroup>
+                                  <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Address <RequiredStar>*</RequiredStar></Label>
+                                  <Input theme={theme} type="email" placeholder="you@example.com" autoComplete="off"
+                                    value={brandForm.email_address}
+                                    onChange={e => setBrandForm(p => p ? { ...p, email_address: e.target.value } : p)} />
+                                </FormGroup>
+                              </FormRow>
+
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Business Info <RequiredStar>*</RequiredStar></Label>
+                                <Textarea theme={theme} rows={2} placeholder="Brief description of your business…"
+                                  value={brandForm.business_info}
+                                  onChange={e => setBrandForm(p => p ? { ...p, business_info: e.target.value } : p)} />
+                              </FormGroup>
+
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  App Password <RequiredStar>*</RequiredStar>
+                                  <HelpTooltip theme={theme} instructions="Use an app-specific password. Gmail: Google Account → Security → App passwords." />
+                                  {brandForm.id && <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.45 }}>(leave blank to keep existing)</span>}
+                                </Label>
+                                <PasswordWrapper>
+                                  <PasswordInput theme={theme}
+                                    type={brandPwdMasked ? 'text' : (showBrandPwd ? 'text' : 'password')}
+                                    placeholder={brandForm.id ? '••••••••' : 'App-specific password'}
+                                    value={brandPwdMasked ? '••••••••••••' : (brandForm.email_password || '')}
+                                    onChange={e => {
+                                      if (brandPwdMasked) { setBrandPwdMasked(false); setShowBrandPwd(false); setBrandForm(p => p ? { ...p, email_password: '' } : p); }
+                                      else setBrandForm(p => p ? { ...p, email_password: e.target.value } : p);
+                                    }}
+                                    autoComplete="new-password" readOnly onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                                  {!brandPwdMasked && <EyeButton theme={theme} type="button" onClick={() => setShowBrandPwd(v => !v)}>{showBrandPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>}
+                                </PasswordWrapper>
+                              </FormGroup>
+
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Provider</Label>
+                                <Select theme={theme} value={brandForm.selectedProvider || 'Custom'}
+                                  onChange={e => {
+                                    const provider = e.target.value;
+                                    const cfg = emailProviders[provider];
+                                    setBrandForm(p => p ? { ...p, selectedProvider: provider, ...(provider !== 'Custom' && cfg ? { smtp_host: cfg.host, smtp_port: cfg.port } : {}) } : p);
+                                  }}>
+                                  {Object.keys(emailProviders).map(p => <option key={p} value={p}>{p}</option>)}
+                                </Select>
+                              </FormGroup>
+
+                              <FormRow style={{ marginBottom: '1rem' }}>
+                                <FormGroup>
+                                  <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    SMTP Host <RequiredStar>*</RequiredStar>
+                                    <HelpTooltip theme={theme} instructions="Gmail: smtp.gmail.com · Outlook: smtp.office365.com" />
+                                  </Label>
+                                  <Input theme={theme} type="text" placeholder="smtp.gmail.com" autoComplete="off"
+                                    value={brandForm.smtp_host}
+                                    onChange={e => setBrandForm(p => p ? { ...p, smtp_host: e.target.value } : p)}
+                                    disabled={brandForm.selectedProvider !== 'Custom'} />
+                                </FormGroup>
+                                <FormGroup>
+                                  <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    SMTP Port <RequiredStar>*</RequiredStar>
+                                    <HelpTooltip theme={theme} instructions="587 for TLS (recommended) · 465 for SSL" />
+                                  </Label>
+                                  <Input theme={theme} type="text" placeholder="587" autoComplete="off"
+                                    value={brandForm.smtp_port}
+                                    onChange={e => setBrandForm(p => p ? { ...p, smtp_port: e.target.value } : p)}
+                                    disabled={brandForm.selectedProvider !== 'Custom'} />
+                                </FormGroup>
+                              </FormRow>
+
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Signature</Label>
+                                <Textarea theme={theme} rows={3} placeholder={'Best,\nJohn Smith\nAcme Corp'}
+                                  value={brandForm.signature}
+                                  onChange={e => setBrandForm(p => p ? { ...p, signature: e.target.value } : p)} />
+                              </FormGroup>
+
+                              <FormGroup style={{ marginBottom: '1rem' }}>
+                                <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  Logo <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.45 }}>PNG, JPG, GIF or WebP · max 5 MB</span>
+                                </Label>
+                                <LogoArea theme={theme} $hasLogo={!!brandForm.logoPreview}
+                                  onClick={() => (document.getElementById(`brand-logo-${brand.id}`) as HTMLInputElement)?.click()}
+                                  onDragOver={e => e.preventDefault()}
+                                  onDrop={e => {
+                                    e.preventDefault();
+                                    const f = e.dataTransfer.files[0];
+                                    if (f && f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024) {
+                                      setBrandForm(p => p ? { ...p, logo: f } : p);
+                                      const reader = new FileReader();
+                                      reader.onload = ev => setBrandForm(pp => pp ? { ...pp, logoPreview: ev.target?.result as string } : pp);
+                                      reader.readAsDataURL(f);
+                                    }
+                                  }}
+                                >
+                                  {brandForm.logoPreview ? (
+                                    <><LogoImg src={brandForm.logoPreview} alt="Brand logo" />
+                                    <LogoRemove theme={theme} type="button" onClick={e => { e.stopPropagation(); setBrandForm(p => p ? { ...p, logo: 'remove', logoPreview: null } : p); }}>✕</LogoRemove></>
+                                  ) : (
+                                    <LogoPlaceholder>
+                                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                      </svg>
+                                      <span>Click or drag to upload</span>
+                                    </LogoPlaceholder>
+                                  )}
+                                </LogoArea>
+                                <input id={`brand-logo-${brand.id}`} type="file" accept="image/*" style={{ display: 'none' }}
+                                  onChange={e => {
+                                    const f = e.target.files?.[0];
+                                    if (f && f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024) {
+                                      setBrandForm(p => p ? { ...p, logo: f } : p);
+                                      const reader = new FileReader();
+                                      reader.onload = ev => setBrandForm(pp => pp ? { ...pp, logoPreview: ev.target?.result as string } : pp);
+                                      reader.readAsDataURL(f);
+                                    }
+                                    e.target.value = '';
+                                  }} />
+                              </FormGroup>
+
+                              {/* Default toggle */}
+                              {brands.length > 1 && (
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                  padding: '0.65rem 0.875rem', marginBottom: '1rem',
+                                  border: `1px solid ${theme.colors.base[300]}`,
+                                  borderRadius: theme.radius.field,
+                                  background: theme.colors.base[300],
+                                  cursor: 'pointer', userSelect: 'none',
+                                }} onClick={() => setBrandForm(p => p ? { ...p, is_default: !p.is_default } : p)}>
+                                  <div style={{ width: 32, height: 18, borderRadius: 999, flexShrink: 0, background: brandForm.is_default ? theme.colors.primary.main : theme.colors.base[400], position: 'relative', transition: 'background 0.2s' }}>
+                                    <div style={{ position: 'absolute', top: 2, left: brandForm.is_default ? 15 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
+                                  </div>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Set as default brand</span>
+                                </div>
+                              )}
+
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Btn theme={theme} $variant="danger" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                                  onClick={() => { deleteBrand(brand.id); setExpandedBrandId(null); setBrandForm(null); }}>
+                                  Delete
+                                </Btn>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <Btn theme={theme} $variant="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                                    onClick={() => { setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); }}>Cancel</Btn>
+                                  <Btn theme={theme} onClick={saveBrand} disabled={brandSaving} style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}>
+                                    {brandSaving ? 'Saving…' : 'Save'}
+                                  </Btn>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* New brand form */}
+                    {expandedBrandId === 'new' && brandForm && (
+                      <div style={{
+                        border: `1px solid ${theme.colors.primary.main + '40'}`,
+                        borderRadius: theme.radius.field,
+                        background: theme.colors.base[400],
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '0.75rem 1rem', borderBottom: `1px solid ${theme.colors.base[300]}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>New Brand</span>
+                          <span style={{ fontSize: '0.72rem', opacity: 0.4 }}><RequiredStar>*</RequiredStar> Required</span>
+                        </div>
+                        <div style={{ padding: '1rem' }}>
+                          <FormRow style={{ marginBottom: '1rem' }}>
+                            <FormGroup>
+                              <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Business Name <RequiredStar>*</RequiredStar></Label>
+                              <Input theme={theme} type="text" placeholder="Acme Corp" autoComplete="off"
+                                value={brandForm.business_name}
+                                onChange={e => setBrandForm(p => p ? { ...p, business_name: e.target.value } : p)} />
+                            </FormGroup>
+                            <FormGroup>
+                              <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Address <RequiredStar>*</RequiredStar></Label>
+                              <Input theme={theme} type="email" placeholder="you@example.com" autoComplete="off"
+                                value={brandForm.email_address}
+                                onChange={e => setBrandForm(p => p ? { ...p, email_address: e.target.value } : p)} />
+                            </FormGroup>
+                          </FormRow>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Business Info <RequiredStar>*</RequiredStar></Label>
+                            <Textarea theme={theme} rows={2} placeholder="Brief description of your business…"
+                              value={brandForm.business_info}
+                              onChange={e => setBrandForm(p => p ? { ...p, business_info: e.target.value } : p)} />
+                          </FormGroup>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              App Password <RequiredStar>*</RequiredStar>
+                              <HelpTooltip theme={theme} instructions="Use an app-specific password. Gmail: Google Account → Security → App passwords." />
+                            </Label>
+                            <PasswordWrapper>
+                              <PasswordInput theme={theme} type={showBrandPwd ? 'text' : 'password'} placeholder="App-specific password"
+                                value={brandForm.email_password || ''}
+                                onChange={e => setBrandForm(p => p ? { ...p, email_password: e.target.value } : p)}
+                                autoComplete="new-password" readOnly onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
+                              <EyeButton theme={theme} type="button" onClick={() => setShowBrandPwd(v => !v)}>{showBrandPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>
+                            </PasswordWrapper>
+                          </FormGroup>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Provider</Label>
+                            <Select theme={theme} value={brandForm.selectedProvider || 'Custom'}
+                              onChange={e => {
+                                const provider = e.target.value;
+                                const cfg = emailProviders[provider];
+                                setBrandForm(p => p ? { ...p, selectedProvider: provider, ...(provider !== 'Custom' && cfg ? { smtp_host: cfg.host, smtp_port: cfg.port } : {}) } : p);
+                              }}>
+                              {Object.keys(emailProviders).map(p => <option key={p} value={p}>{p}</option>)}
+                            </Select>
+                          </FormGroup>
+                          <FormRow style={{ marginBottom: '1rem' }}>
+                            <FormGroup>
+                              <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                SMTP Host <RequiredStar>*</RequiredStar>
+                                <HelpTooltip theme={theme} instructions="Gmail: smtp.gmail.com · Outlook: smtp.office365.com" />
+                              </Label>
+                              <Input theme={theme} type="text" placeholder="smtp.gmail.com" autoComplete="off"
+                                value={brandForm.smtp_host}
+                                onChange={e => setBrandForm(p => p ? { ...p, smtp_host: e.target.value } : p)}
+                                disabled={brandForm.selectedProvider !== 'Custom'} />
+                            </FormGroup>
+                            <FormGroup>
+                              <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                SMTP Port <RequiredStar>*</RequiredStar>
+                                <HelpTooltip theme={theme} instructions="587 for TLS (recommended) · 465 for SSL" />
+                              </Label>
+                              <Input theme={theme} type="text" placeholder="587" autoComplete="off"
+                                value={brandForm.smtp_port}
+                                onChange={e => setBrandForm(p => p ? { ...p, smtp_port: e.target.value } : p)}
+                                disabled={brandForm.selectedProvider !== 'Custom'} />
+                            </FormGroup>
+                          </FormRow>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem' }}>Email Signature</Label>
+                            <Textarea theme={theme} rows={3} placeholder={'Best,\nJohn Smith\nAcme Corp'}
+                              value={brandForm.signature}
+                              onChange={e => setBrandForm(p => p ? { ...p, signature: e.target.value } : p)} />
+                          </FormGroup>
+                          <FormGroup style={{ marginBottom: '1rem' }}>
+                            <Label theme={theme} style={{ marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              Logo <span style={{ fontSize: '0.72rem', fontWeight: 400, opacity: 0.45 }}>PNG, JPG, GIF or WebP · max 5 MB</span>
+                            </Label>
+                            <LogoArea theme={theme} $hasLogo={!!brandForm.logoPreview}
+                              onClick={() => (document.getElementById('brand-logo-new') as HTMLInputElement)?.click()}
+                              onDragOver={e => e.preventDefault()}
+                              onDrop={e => {
+                                e.preventDefault();
+                                const f = e.dataTransfer.files[0];
+                                if (f && f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024) {
+                                  setBrandForm(p => p ? { ...p, logo: f } : p);
+                                  const reader = new FileReader();
+                                  reader.onload = ev => setBrandForm(pp => pp ? { ...pp, logoPreview: ev.target?.result as string } : pp);
+                                  reader.readAsDataURL(f);
+                                }
+                              }}
+                            >
+                              {brandForm.logoPreview ? (
+                                <><LogoImg src={brandForm.logoPreview} alt="Brand logo" />
+                                <LogoRemove theme={theme} type="button" onClick={e => { e.stopPropagation(); setBrandForm(p => p ? { ...p, logo: 'remove', logoPreview: null } : p); }}>✕</LogoRemove></>
+                              ) : (
+                                <LogoPlaceholder>
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                  </svg>
+                                  <span>Click or drag to upload</span>
+                                </LogoPlaceholder>
+                              )}
+                            </LogoArea>
+                            <input id="brand-logo-new" type="file" accept="image/*" style={{ display: 'none' }}
+                              onChange={e => {
+                                const f = e.target.files?.[0];
+                                if (f && f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024) {
+                                  setBrandForm(p => p ? { ...p, logo: f } : p);
+                                  const reader = new FileReader();
+                                  reader.onload = ev => setBrandForm(pp => pp ? { ...pp, logoPreview: ev.target?.result as string } : pp);
+                                  reader.readAsDataURL(f);
+                                }
+                                e.target.value = '';
+                              }} />
+                          </FormGroup>
+                          {brandMsg && <Msg theme={theme} $type={brandMsg.type} style={{ marginBottom: '1rem' }}>{brandMsg.text}</Msg>}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                            <Btn theme={theme} $variant="secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                              onClick={() => { setExpandedBrandId(null); setBrandForm(null); setBrandMsg(null); }}>Cancel</Btn>
+                            <Btn theme={theme} onClick={saveBrand} disabled={brandSaving} style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}>
+                              {brandSaving ? 'Saving…' : 'Save Brand'}
+                            </Btn>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add brand button */}
+                    {expandedBrandId !== 'new' && (
+                      <button onClick={openNewBrand} style={{
+                        width: '100%', padding: '0.6rem',
+                        border: `1px dashed ${theme.colors.base[300]}`,
+                        borderRadius: theme.radius.field,
+                        background: 'transparent', color: theme.colors.base.content,
+                        cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500,
+                        opacity: 0.5, transition: 'opacity 0.15s, border-color 0.15s',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
                       }}
-                    
-                        autoComplete="new-password"
-                        readOnly
-                        onFocus={e => e.currentTarget.removeAttribute('readOnly')} />
-                    {!emailPwdMasked && <EyeButton theme={theme} type="button" onClick={() => setShowEmailPwd(p=>!p)}>{showEmailPwd ? <EyeOffIcon /> : <EyeIcon />}</EyeButton>}
-                  </PasswordWrapper>
-                </FormGroup>
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.borderColor = theme.colors.primary.main; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.5'; (e.currentTarget as HTMLButtonElement).style.borderColor = theme.colors.base[300]; }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Brand
+                      </button>
+                    )}
 
-                <FormRow>
-                  <FormGroup>
-                    <Label theme={theme}>SMTP Host <RequiredStar>*</RequiredStar>
-                      <HelpTooltip theme={theme} instructions="Gmail: smtp.gmail.com · Outlook: smtp.office365.com" />
-                    </Label>
-                    <Input theme={theme} type="text" placeholder="smtp.gmail.com" autoComplete="off" value={keys.smtpHost}
-                      onChange={e => { setKeys(p => { const n = { ...p, smtpHost: e.target.value }; recheckKeys(n, 'email'); return n; }); }}
-                      disabled={keys.selectedProvider !== 'Custom'} />
-                  </FormGroup>
-                  <FormGroup>
-                    <Label theme={theme}>SMTP Port <RequiredStar>*</RequiredStar>
-                      <HelpTooltip theme={theme} instructions="587 for TLS (recommended) · 465 for SSL" />
-                    </Label>
-                    <Input theme={theme} type="text" placeholder="587" autoComplete="off" value={keys.smtpPort}
-                      onChange={e => { setKeys(p => { const n = { ...p, smtpPort: e.target.value }; recheckKeys(n, 'email'); return n; }); }}
-                      disabled={keys.selectedProvider !== 'Custom'} />
-                  </FormGroup>
-                </FormRow>
-
-                {statuses.email !== 'checking' && statuses.email !== 'gray' && !keyMsg && (
-                  <Msg theme={theme} $type={statuses.email === 'green' ? 'success' : statuses.email === 'orange' ? 'warning' : 'error'}>
-                    {messages.email}
-                  </Msg>
+                  </div>
                 )}
-                {keyMsg?.tab === 'email' && <Msg theme={theme} $type={keyMsg.type}>{keyMsg.text}</Msg>}
-                <SaveRow>
-                  <Btn theme={theme} onClick={saveEmail} disabled={keysLoading || emailPwdMasked}>
-                    {keysLoading ? 'Saving…' : 'Save'}
-                  </Btn>
-                </SaveRow>
               </TabPanel>
             )}
 
@@ -1557,64 +1986,17 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
             {/* ── Global Settings tab ──────────────────────── */}
             {activeTab === 'global' && (
               <TabPanel theme={theme} key="global">
-                <PanelTitle theme={theme}>Global Settings</PanelTitle>
+                <PanelTitle theme={theme}>Strategy & Content Defaults</PanelTitle>
                 <PanelSubtitle theme={theme}>Default values used across all campaigns. Individual campaigns can override any of these.</PanelSubtitle>
 
-                {/* Inheritance notice */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.6rem',
-                  padding: '0.65rem 0.9rem',
-                  marginBottom: '1.25rem',
-                  borderRadius: theme.radius.field,
-                  background: theme.colors.info.main + '12',
-                  border: `1px solid ${theme.colors.info.main}40`,
-                  fontSize: '0.8rem',
-                  color: theme.colors.info.main,
-                  lineHeight: 1.55,
-                }}>
-                  <svg style={{ flexShrink: 0, marginTop: '1px' }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
-                  <span>
-                    <strong style={{ fontWeight: 700 }}>Inheritance: </strong>
-                    All settings configured here are automatically inherited by every campaign. A campaign can override any individual setting, or stop inheriting entirely — in which case only its own values apply.
-                  </span>
-                </div>
 
-                {/* 1. Brand Identity */}
-                <SectionHeader theme={theme} $isExpanded={expandedSections.company} onClick={() => toggleSection('company', 'global')}>
-                  <SectionTitle theme={theme} $isExpanded={expandedSections.company}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-                    </svg>
-                    Brand Identity
-                  </SectionTitle>
-                  <SectionIcon theme={theme} $isExpanded={expandedSections.company}><ChevronDownIcon /></SectionIcon>
-                </SectionHeader>
-                <SectionContent $isExpanded={expandedSections.company}>
-                  <FormGroup>
-                    <Label theme={theme}>Business Name</Label>
-                    <Input theme={theme} type="text" placeholder="Acme Corp" autoComplete="off" value={global.business_name}
-                      onChange={e => { setGlobal(p => { const n = { ...p, business_name: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
-                  </FormGroup>
-                  <FormGroup>
-                    <Label theme={theme}>Business Info <HelpTooltip theme={theme} instructions="Brief description of your business. The AI uses this to tailor every email." /></Label>
-                    <Textarea theme={theme} rows={3}
-                      placeholder="We help B2B SaaS companies grow their pipeline through hyper-personalized outreach…"
-                      value={global.business_info}
-                      onChange={e => { setGlobal(p => { const n = { ...p, business_info: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
-                  </FormGroup>
-                </SectionContent>
-
-                {/* 2. Campaign Strategy */}
+                {/* 1. Strategy */}
                 <SectionHeader theme={theme} $isExpanded={expandedSections.strategy} onClick={() => toggleSection('strategy', 'global')}>
                   <SectionTitle theme={theme} $isExpanded={expandedSections.strategy}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                     </svg>
-                    Campaign Strategy
+                    Strategy
                   </SectionTitle>
                   <SectionIcon theme={theme} $isExpanded={expandedSections.strategy}><ChevronDownIcon /></SectionIcon>
                 </SectionHeader>
@@ -1640,23 +2022,23 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                   </FormGroup>
                 </SectionContent>
 
-                {/* 3. Email Content */}
+                {/* 2. Content */}
                 <SectionHeader theme={theme} $isExpanded={expandedSections.emailContent} onClick={() => toggleSection('emailContent', 'global')}>
                   <SectionTitle theme={theme} $isExpanded={expandedSections.emailContent}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
                     </svg>
-                    Email Content
+                    Content
                   </SectionTitle>
                   <SectionIcon theme={theme} $isExpanded={expandedSections.emailContent}><ChevronDownIcon /></SectionIcon>
                 </SectionHeader>
                 <SectionContent $isExpanded={expandedSections.emailContent}>
                   <FormGroup>
-                    <Label theme={theme}>Email Writing Instructions <HelpTooltip theme={theme} instructions="Tell the AI exactly how to structure and write each email." /></Label>
+                    <Label theme={theme}>Writing Guidelines <HelpTooltip theme={theme} instructions="Tell the AI exactly how to structure and write each email." /></Label>
                     <Textarea theme={theme} rows={3}
                       placeholder="Start with a genuine compliment about the company. Use short paragraphs. Never use 'I hope this email finds you well'…"
-                      value={global.email_instruction}
-                      onChange={e => { setGlobal(p => { const n = { ...p, email_instruction: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
+                      value={global.writing_guidelines}
+                      onChange={e => { setGlobal(p => { const n = { ...p, writing_guidelines: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>Call to Action <HelpTooltip theme={theme} instructions="The closing ask for every email." /></Label>
@@ -1664,67 +2046,14 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                       onChange={e => { setGlobal(p => { const n = { ...p, cta: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
-                    <Label theme={theme}>Extra Instructions <HelpTooltip theme={theme} instructions="Additional rules for the AI. e.g. 'Never mention competitors.'" /></Label>
-                    <Textarea theme={theme} rows={2} placeholder="Never mention price. Keep emails under 150 words." value={global.extras}
-                      onChange={e => { setGlobal(p => { const n = { ...p, extras: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
+                    <Label theme={theme}>Additional Notes <HelpTooltip theme={theme} instructions="Additional rules for the AI. e.g. 'Never mention competitors.'" /></Label>
+                    <Textarea theme={theme} rows={2} placeholder="Never mention price. Keep emails under 150 words." value={global.additional_notes}
+                      onChange={e => { setGlobal(p => { const n = { ...p, additional_notes: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                   <FormGroup>
                     <Label theme={theme}>BCC Address <HelpTooltip theme={theme} instructions="Silently BCC'd on every email — e.g. HubSpot BCC for CRM logging." /></Label>
                     <Input theme={theme} type="email" placeholder="hubspot@bcc.hubspot.com" autoComplete="off" value={global.bcc}
                       onChange={e => { setGlobal(p => { const n = { ...p, bcc: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
-                  </FormGroup>
-                </SectionContent>
-
-                {/* 4. Branding */}
-                <SectionHeader theme={theme} $isExpanded={expandedSections.branding} onClick={() => toggleSection('branding', 'global')}>
-                  <SectionTitle theme={theme} $isExpanded={expandedSections.branding}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                    </svg>
-                    Branding
-                  </SectionTitle>
-                  <SectionIcon theme={theme} $isExpanded={expandedSections.branding}><ChevronDownIcon /></SectionIcon>
-                </SectionHeader>
-                <SectionContent $isExpanded={expandedSections.branding}>
-                  <FormGroup>
-                    <Label theme={theme}>Logo <HelpTooltip theme={theme} instructions="PNG, JPG, GIF, or WebP. Max 5MB. Saved when you click Save Settings." /></Label>
-                    <LogoArea theme={theme} $hasLogo={!!(pendingLogoPreview || (pendingLogo !== 'remove' && global.logo_data))}
-                      onClick={() => !globalLoading && (document.getElementById('logo-upload') as HTMLInputElement)?.click()}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => { e.preventDefault(); if (!globalLoading) { const f = e.dataTransfer.files[0]; if (f) handleLogoFile(f); } }}
-                      style={{ cursor: globalLoading ? 'not-allowed' : 'pointer', opacity: globalLoading ? 0.6 : 1 }}
-                    >
-                      {pendingLogoPreview ? (
-                        <>
-                          <LogoImg src={pendingLogoPreview} alt="Logo preview" />
-                          <LogoRemove theme={theme} type="button" onClick={handleLogoRemove}
-                            disabled={globalLoading} title="Remove logo">✕</LogoRemove>
-                          <div style={{ position:'absolute', bottom:4, left:0, right:0, textAlign:'center', fontSize:'0.65rem', opacity:0.6 }}>Unsaved — click Save Settings</div>
-                        </>
-                      ) : pendingLogo !== 'remove' && global.logo_data ? (
-                        <>
-                          <LogoImg src={global.logo_data} alt="Logo" />
-                          <LogoRemove theme={theme} type="button" onClick={handleLogoRemove}
-                            disabled={globalLoading} title="Remove logo">✕</LogoRemove>
-                        </>
-                      ) : (
-                        <LogoPlaceholder>
-                          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                          </svg>
-                          <span>{globalLoading ? 'Loading...' : pendingLogo === 'remove' ? 'Logo removed — click Save Settings' : 'Click or drag to upload'}</span>
-                        </LogoPlaceholder>
-                      )}
-                    </LogoArea>
-                    <input id="logo-upload" type="file" accept="image/*" style={{ display: 'none' }}
-                      onChange={e => { const f = e.target.files?.[0]; if (f && !globalLoading) handleLogoFile(f); e.target.value = ''; }}
-                      disabled={globalLoading} />
-                  </FormGroup>
-                  <FormGroup>
-                    <Label theme={theme}>Email Signature</Label>
-                    <Textarea theme={theme} rows={4} placeholder={'Best,\nJohn Smith\nHead of Sales | Acme Corp\n+1 (555) 000-0000'}
-                      value={global.signature}
-                      onChange={e => { setGlobal(p => { const n = { ...p, signature: e.target.value }; recheckGlobal(n); return n; }); clearSuccessMessage('global'); }} />
                   </FormGroup>
                 </SectionContent>
 

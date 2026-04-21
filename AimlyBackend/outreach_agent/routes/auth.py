@@ -362,7 +362,6 @@ async def register(request: RegisterRequest):
                 VALUES (%s, %s, %s)
             """, (request.username, password_hash, request.email))
             user_id = cursor.lastrowid
-            cursor.execute("INSERT INTO user_keys (user_id) VALUES (%s)", (user_id,))
             cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
             cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', 0)", (user_id,))
             conn.commit()
@@ -723,7 +722,6 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
                     VALUES (%s, NULL, %s, %s)
                 """, (username, email, google_id))
                 user_id = cursor.lastrowid
-                cursor.execute("INSERT INTO user_keys (user_id) VALUES (%s)", (user_id,))
                 cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
                 cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', 0)", (user_id,))
                 conn.commit()

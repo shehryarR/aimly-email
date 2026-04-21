@@ -20,16 +20,23 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------
--- User Keys
+-- Brands
+-- Replaces user_keys SMTP fields + global/campaign identity fields
+-- (business_name, business_info, logo, signature) into one reusable entity.
 -- ------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS user_keys (
+CREATE TABLE IF NOT EXISTS brands (
     id             INT AUTO_INCREMENT PRIMARY KEY,
-    user_id        INT NOT NULL UNIQUE,
-    llm_model      VARCHAR(255),
+    user_id        INT NOT NULL,
+    business_name  VARCHAR(255),
+    business_info  TEXT,
+    logo           LONGBLOB,
+    logo_mime_type VARCHAR(100),
     smtp_host      VARCHAR(255),
     smtp_port      INT,
     email_address  VARCHAR(255),
-    email_password TEXT,
+    email_password TEXT,           -- AES encrypted with SMTP_ENCRYPTION_KEY
+    signature      TEXT,
+    is_default     TINYINT(1) DEFAULT 0,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -37,22 +44,20 @@ CREATE TABLE IF NOT EXISTS user_keys (
 
 -- ------------------------------------------------------------------
 -- Global Settings
+-- Removed: business_name, business_info, logo, logo_mime_type, signature
+-- Renamed: email_instruction → writing_guidelines, extras → additional_notes
+-- Added:   llm_model
 -- ------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS global_settings (
     id                 INT AUTO_INCREMENT PRIMARY KEY,
     user_id            INT NOT NULL UNIQUE,
     bcc                TEXT,
-    business_name      VARCHAR(255),
-    business_info      TEXT,
     goal               TEXT,
     value_prop         TEXT,
     tone               VARCHAR(100) DEFAULT 'Professional',
     cta                TEXT,
-    extras             TEXT,
-    email_instruction  TEXT,
-    signature          TEXT,
-    logo               LONGBLOB,
-    logo_mime_type     VARCHAR(100),
+    writing_guidelines TEXT,
+    additional_notes   TEXT,
     created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -96,8 +101,8 @@ CREATE TABLE IF NOT EXISTS campaign_company (
     inherit_campaign_branding    INT DEFAULT 1,
     created_at                   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_company_campaign (company_id, campaign_id),
-    FOREIGN KEY (company_id)  REFERENCES companies (id)  ON DELETE CASCADE,
-    FOREIGN KEY (campaign_id) REFERENCES campaigns (id)  ON DELETE CASCADE
+    FOREIGN KEY (company_id)  REFERENCES companies (id) ON DELETE CASCADE,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------
@@ -123,29 +128,29 @@ CREATE TABLE IF NOT EXISTS emails (
 
 -- ------------------------------------------------------------------
 -- Campaign Preferences
+-- Removed: business_name, business_info, logo, logo_mime_type, signature
+-- Renamed: email_instruction → writing_guidelines, extras → additional_notes
+-- Added:   brand_id (FK → brands, nullable, ON DELETE SET NULL)
 -- ------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS campaign_preferences (
     id                         INT AUTO_INCREMENT PRIMARY KEY,
     campaign_id                INT NOT NULL UNIQUE,
+    brand_id                   INT NULL,
     bcc                        TEXT,
-    business_name              VARCHAR(255),
-    business_info              TEXT,
     goal                       TEXT,
     value_prop                 TEXT,
     tone                       VARCHAR(100) DEFAULT 'Professional',
     cta                        TEXT,
-    extras                     TEXT,
-    email_instruction          TEXT,
-    signature                  TEXT,
-    logo                       LONGBLOB,
-    logo_mime_type             VARCHAR(100),
+    writing_guidelines         TEXT,
+    additional_notes           TEXT,
     template_email             TEXT,
     template_html_email        INT DEFAULT 0,
     inherit_global_settings    INT DEFAULT 1,
     inherit_global_attachments INT DEFAULT 1,
     created_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE
+    FOREIGN KEY (campaign_id) REFERENCES campaigns (id) ON DELETE CASCADE,
+    FOREIGN KEY (brand_id)    REFERENCES brands    (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ------------------------------------------------------------------
@@ -236,6 +241,7 @@ CREATE TABLE IF NOT EXISTS category_company (
     FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE,
     FOREIGN KEY (company_id)  REFERENCES companies  (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ------------------------------------------------------------------
 -- Subscriptions
 -- ------------------------------------------------------------------
