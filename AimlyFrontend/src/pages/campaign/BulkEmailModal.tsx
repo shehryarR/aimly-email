@@ -43,8 +43,8 @@ interface BulkEmailEntry {
   uploadMsg: { type: 'success' | 'error'; text: string } | null;
   isDragOver: boolean;
   inheritCampaignAttachments: number;
-  inheritedAttachIds: number[];
-  brandSignature: string;
+  inheritedAttachments: AttachmentEntry[];  // [{id, name, sources}] — always present
+  brandSignature: string | null;
   brandLogoData: string | null;
 }
 
@@ -746,7 +746,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const [bulkHtmlEmail, setBulkHtmlEmail] = useState(false);
 
   // bulk settings — attachment inheritance
-  const [bulkAttachInherit, setBulkAttachInherit] = useState<true|false|'mixed'|null>(null);
+  const [bulkAttachInherit, setBulkAttachInherit] = useState<boolean | null>(null);
   const [bulkAttachSaving,  setBulkAttachSaving]  = useState(false);
   const [bulkUploadFile,    setBulkUploadFile]    = useState<File|null>(null);
   const [bulkUploading,     setBulkUploading]     = useState(false);
@@ -757,9 +757,9 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   // Single combined message for inheritance toggles
   const [bulkInheritMsg, setBulkInheritMsg] = useState<{ok: boolean; text: string} | null>(null);
 
-  // Confirmation gate — user must agree before bulk attachment inheritance is applied
-  const [attachConfirmed, setAttachConfirmed] = useState(false);
-  const [attachIndividualChanged, setAttachIndividualChanged] = useState(false);
+  // Warning gate — must confirm before bulk operations; resets on any individual change
+  const [bulkAttachConfirmed,       setBulkAttachConfirmed]       = useState(false);
+  const [bulkAttachIndivChanged,    setBulkAttachIndivChanged]    = useState(false);
 
 
 
@@ -799,8 +799,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     setShowSmartSched(false); setSmartStartTime(''); setSmartInitial('5'); setSmartInterval('30'); setSmartIntervalUnit('minutes'); setSmartIncrement('2'); setSchedDropOpen(false);
     setBulkAttachInherit(null);
     setBulkInheritMsg(null); setBulkUploadFile(null); setBulkUploadMsg(null); setBulkAttachSearch('');
-    setAttachConfirmed(false);
-    setAttachIndividualChanged(false);
+    setBulkAttachConfirmed(false); setBulkAttachIndivChanged(false);
     setBulkHtmlEmail(initialQueryType === 'html');
     setIsDirty(false); setConfirmClose(false);
     const init: BulkEmailEntry[] = companies.map(c => ({
@@ -808,7 +807,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       allAttachments:[], linkedEmailAttachIds:new Set(), attachSearch:'',
       attachLoading:false,
       uploadFile:null, uploading:false, uploadMsg:null, isDragOver:false,
-      inheritCampaignAttachments:1, inheritedAttachIds:[],
+      inheritCampaignAttachments:1, inheritedAttachments:[],
       brandSignature:'', brandLogoData:null,
     }));
     setEntries(init);
@@ -821,8 +820,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     const ready = entries.filter(e => e.phase==='ready');
     if (!ready.length) return;
     const aOn = ready.every(e => e.inheritCampaignAttachments===1);
-    const aOff= ready.every(e => e.inheritCampaignAttachments===0);
-    setBulkAttachInherit(aOn ? true : aOff ? false : 'mixed');
+    setBulkAttachInherit(aOn ? true : false);
   }, [entries]);
 
   // close schedule dropdown on outside click
@@ -881,7 +879,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       }
       const inherit = inheritRes[company.id] ?? {};
       const iA = inherit.inherit_campaign_attachments ?? primary.inherit_campaign_attachments ?? 1;
-      const linked = new Set<number>(primary.linked_attachment_ids ?? []);
+      const linked = new Set<number>((primary.own_attachments ?? []).map((a: any) => a.id));
 
       setEntries(p => p.map((e, i) => i === idx ? {
         ...e,
@@ -891,7 +889,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         htmlEmail: !!(primary.html_email),
         brandSignature: primary.signature || '',
         brandLogoData: primary.logo_data || null,
-        inheritedAttachIds: primary.attachment_ids ?? [],
+        inheritedAttachments: primary.inherited_attachments ?? [],
         phase: 'ready',
         allAttachments,
         linkedEmailAttachIds: linked,
@@ -934,7 +932,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       htmlEmail: !!(d.html_email),
       brandSignature: d.signature || '',
       brandLogoData: d.logo_data || null,
-      inheritedAttachIds: d.attachment_ids ?? [], phase: 'ready',
+      inheritedAttachments: d.inherited_attachments ?? [], phase: 'ready',
       allAttachments: all, linkedEmailAttachIds: linked,
       inheritCampaignAttachments: iA,
     } : e));
@@ -1138,7 +1136,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         const byCompany = new Map(pd.primaries.map((p: any) => [p.company_id, p]));
         entries.forEach((e, i) => {
           const p = byCompany.get(e.company.id) as any;
-          if (p) upd(i, { inheritedAttachIds: p.attachment_ids ?? [] });
+          if (p) upd(i, { inheritedAttachments: p.inherited_attachments ?? [] });
         });
       }
       setBulkInheritMsg(d.failed === 0
@@ -1202,8 +1200,8 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
       const ar=await apiFetch(`${apiBase}/attachments/?page=1&page_size=200`,{});
       const all=ar.ok?(await ar.json()).attachments??[]:e.allAttachments;
       upd(idx,{uploading:false,uploadFile:null,linkedEmailAttachIds:new Set(ids),allAttachments:all,uploadMsg:{type:'success',text:`"${ud.filename}" uploaded and attached`}});
+      setBulkAttachConfirmed(false); setBulkAttachIndivChanged(true);
       if(uploadRefs.current[idx]) uploadRefs.current[idx]!.value='';
-      if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
     } catch(err){upd(idx,{uploading:false,uploadMsg:{type:'error',text:err instanceof Error?err.message:'Upload failed'}});}
   };
   const toggleAttach = async (idx: number, id: number) => {
@@ -1211,6 +1209,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     const next = new Set(e.linkedEmailAttachIds);
     next.has(id) ? next.delete(id) : next.add(id);
     upd(idx, { linkedEmailAttachIds: next });
+    setBulkAttachConfirmed(false); setBulkAttachIndivChanged(true);
     if (e.emailId) {
       try {
         await apiFetch(`${apiBase}/email/bulk-attachments/`, {
@@ -1219,7 +1218,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         });
       } catch { /* silent */ }
     }
-    if (attachConfirmed) { setAttachConfirmed(false); setAttachIndividualChanged(true); }
   };
   const saveInherit=async(idx:number,aV:number)=>{
     const e=entries[idx];
@@ -1428,16 +1426,41 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     <div ref={previewContainerRef} style={{flex:1,minHeight:0,display:'flex',overflow:'hidden'}}>
                       {/* Editor column */}
                       <Scroll style={{flex:1,minWidth:0}}>
-                        <div><FieldLbl theme={theme}>Subject</FieldLbl><SubjectIn theme={theme} value={entry.subject} onChange={e=>{upd(activeIdx,{subject:e.target.value});markDirty();}} placeholder="Email subject…"/></div>
-                        <div style={{flex:1,display:'flex',flexDirection:'column'}}><FieldLbl theme={theme}>Body</FieldLbl><BodyTA theme={theme} value={entry.body} onChange={e=>{upd(activeIdx,{body:e.target.value});markDirty();}} placeholder="Email body…" style={{resize:'none',flex:1}}/></div>
-                        {/* HTML Email toggle */}
-                        <div onClick={()=>saveHtmlEmailFlag(activeIdx,!entry.htmlEmail)}
-                          style={{display:'inline-flex',alignItems:'center',gap:'0.6rem',cursor:'pointer',userSelect:'none' as const,width:'fit-content'}}>
-                          <div style={{width:36,height:20,borderRadius:999,flexShrink:0,background:entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300],position:'relative',transition:'background 0.2s',border:`1px solid ${entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300]}`}}>
-                            <div style={{position:'absolute',top:2,left:entry.htmlEmail?17:2,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                        <div>
+                          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0.3rem'}}>
+                            <FieldLbl theme={theme} style={{margin:0}}>Subject</FieldLbl>
+                            {/* HTML toggle — inline with Subject label */}
+                            <div onClick={()=>saveHtmlEmailFlag(activeIdx,!entry.htmlEmail)}
+                              style={{display:'inline-flex',alignItems:'center',gap:'0.45rem',cursor:'pointer',userSelect:'none' as const}}>
+                              <span style={{fontSize:'0.72rem',fontWeight:600,opacity:0.5,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>HTML</span>
+                              <div style={{width:32,height:18,borderRadius:999,flexShrink:0,background:entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300],position:'relative',transition:'background 0.2s',border:`1px solid ${entry.htmlEmail?theme.colors.primary.main:theme.colors.base[300]}`}}>
+                                <div style={{position:'absolute',top:2,left:entry.htmlEmail?14:2,width:12,height:12,borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}/>
+                              </div>
+                            </div>
                           </div>
-                          <span style={{fontSize:'0.8rem',fontWeight:600,opacity:0.75}}>HTML Email</span>
+                          <SubjectIn theme={theme} value={entry.subject} onChange={e=>{upd(activeIdx,{subject:e.target.value});markDirty();}} placeholder="Email subject…"/>
                         </div>
+                        <div style={{flex:1,display:'flex',flexDirection:'column'}}><FieldLbl theme={theme}>Body</FieldLbl><BodyTA theme={theme} value={entry.body} onChange={e=>{upd(activeIdx,{body:e.target.value});markDirty();}} placeholder="Email body…" style={{resize:'none',flex:1}}/></div>
+
+                        {/* Signature (read-only) */}
+                        {entry.brandSignature&&(
+                          <div>
+                            <FieldLbl theme={theme}>Signature</FieldLbl>
+                            <div style={{padding:'0.65rem 0.9rem',border:`1px solid ${theme.colors.base[300]}`,borderRadius:theme.radius.field,background:theme.colors.base[400],fontSize:'0.875rem',lineHeight:1.6,whiteSpace:'pre-wrap' as const,opacity:0.8}}>
+                              {entry.brandSignature}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Logo (read-only) */}
+                        {entry.brandLogoData&&(
+                          <div>
+                            <FieldLbl theme={theme}>Logo</FieldLbl>
+                            <div style={{padding:'0.65rem 0.9rem',border:`1px solid ${theme.colors.base[300]}`,borderRadius:theme.radius.field,background:theme.colors.base[400]}}>
+                              <img src={entry.brandLogoData} alt="Logo" style={{maxHeight:48,maxWidth:180,objectFit:'contain',display:'block'}}/>
+                            </div>
+                          </div>
+                        )}
                       </Scroll>
                       {/* Drag divider + live preview — only when HTML Email is on */}
                       {entry.htmlEmail && (
@@ -1484,76 +1507,106 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     const filtered=entry.allAttachments.filter(a=>a.filename.toLowerCase().includes(entry.attachSearch.toLowerCase()));
                     const attached=filtered.filter(a=>entry.linkedEmailAttachIds.has(a.id));
                     const notAtt=filtered.filter(a=>!entry.linkedEmailAttachIds.has(a.id));
-                    const inherited=entry.allAttachments.filter(a=>entry.inheritedAttachIds.includes(a.id));
                     return (
                       <ScrollFlush>
-                        <InheritRow theme={theme} onClick={()=>{
-                          const v=entry.inheritCampaignAttachments?0:1;
-                          upd(activeIdx,{inheritCampaignAttachments:v});
-                          saveInherit(activeIdx,v);
-                          // Reset bulk attachments confirmation gate
-                          setAttachConfirmed(false);
-                          setAttachIndividualChanged(true);
-                        }}>
+                        <InheritRow theme={theme}
+                          onClick={()=>{
+                            const v=entry.inheritCampaignAttachments?0:1;
+                            upd(activeIdx,{inheritCampaignAttachments:v});
+                            saveInherit(activeIdx,v);
+                            setBulkAttachConfirmed(false); setBulkAttachIndivChanged(true);
+                            setAttachConfirmed(false);
+                            setAttachIndividualChanged(true);
+                          }}
+                          style={{
+                            marginBottom: entry.inheritCampaignAttachments?'0':undefined,
+                            borderRadius: entry.inheritCampaignAttachments?`${theme.radius?.field??'8px'} ${theme.radius?.field??'8px'} 0 0`:undefined,
+                          }}
+                        >
                           <InheritCheck theme={theme} $on={!!entry.inheritCampaignAttachments}><IcoCheck/></InheritCheck>
-                          <InheritText><InheritLabel>Use campaign attachments</InheritLabel><InheritSub>Include attachments from campaign preferences when this email is sent</InheritSub></InheritText>
+                          <InheritText><InheritLabel>Include campaign attachments</InheritLabel><InheritSub>Include attachments from campaign preferences when this email is sent</InheritSub></InheritText>
                         </InheritRow>
-                        {entry.inheritCampaignAttachments?(
-                          <div style={{display:'flex',flexDirection:'column',gap:'0.6rem'}}>
-                            <div style={{fontSize:'0.72rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.06em',color:theme.colors.primary.main,opacity:0.8}}>Inherited ({inherited.length})</div>
+                        {/* Inherited section — shown when toggle ON */}
+                        {!!entry.inheritCampaignAttachments&&(
+                          <div style={{marginBottom:'1.25rem'}}>
+                            {entry.inheritedAttachments.length===0?(
+                              <div style={{border:`1px solid ${theme.colors.base[300]}`,borderTop:`1px solid ${theme.colors.base[300]}`,borderRadius:`0 0 ${theme.radius?.field??'8px'} ${theme.radius?.field??'8px'}`,padding:'0.85rem 0.75rem',fontSize:'0.8125rem',opacity:0.5,background:theme.colors.base[200],flexShrink:0}}>
+                                No campaign attachments configured
+                              </div>
+                            ):(
+                              <div style={{border:`1px solid ${theme.colors.base[300]}`,borderTop:`1px solid ${theme.colors.base[300]}`,borderRadius:`0 0 ${theme.radius?.field??'8px'} ${theme.radius?.field??'8px'}`,background:(theme.colors.base[300] as string)+'60',flexShrink:0}}>
+                                {entry.inheritedAttachments.map((att,i)=>{
+                                  const ext=getExt(att.name);
+                                  return(
+                                    <div key={att.id} style={{display:'flex',alignItems:'center',gap:'0.6rem',padding:'0.55rem 0.75rem',fontSize:'0.8125rem',borderBottom:i<entry.inheritedAttachments.length-1?`1px solid ${theme.colors.base[300]}`:'none'}}>
+                                      <ExtBadge $ext={ext}>{ext||'?'}</ExtBadge>
+                                      <AttachName>{att.name}</AttachName>
+                                      <div style={{display:'flex',gap:'0.3rem',flexShrink:0}}>
+                                        {(att.sources??[]).includes('campaign')&&<span style={{fontSize:'0.68rem',fontWeight:600,padding:'1px 6px',borderRadius:'999px',background:theme.colors.primary.main+'18',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}30`}}>campaign</span>}
+                                        {(att.sources??[]).includes('global')&&<span style={{fontSize:'0.68rem',fontWeight:600,padding:'1px 6px',borderRadius:'999px',background:theme.colors.base[300],color:theme.colors.base.content,border:`1px solid ${theme.colors.base[300]}`,opacity:0.8}}>global</span>}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Divider */}
+                        <div style={{display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'1.1rem'}}>
+                          <div style={{flex:1,height:1,background:theme.colors.base[300]}}/>
+                          <span style={{fontSize:'0.68rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.07em',opacity:0.35}}>Email Attachments</span>
+                          <div style={{flex:1,height:1,background:theme.colors.base[300]}}/>
+                        </div>
+
+                        {/* Upload + picker — always shown */}
+                        <>
+                          <div style={{marginBottom:'1rem'}}>
+                            <div onDragOver={e=>{e.preventDefault();upd(activeIdx,{isDragOver:true});}} onDragLeave={()=>upd(activeIdx,{isDragOver:false})}
+                              onDrop={e=>{e.preventDefault();upd(activeIdx,{isDragOver:false});const f=e.dataTransfer.files[0];if(f&&!entry.uploading)pickFile(activeIdx,f);}}
+                              onClick={()=>!entry.uploading&&uploadRefs.current[activeIdx]?.click()}
+                              style={{border:`2px dashed ${entry.isDragOver?theme.colors.primary.main:entry.uploadFile?theme.colors.primary.main+'80':theme.colors.base[300]}`,borderRadius:theme.radius.field,background:entry.isDragOver?theme.colors.primary.main+'08':theme.colors.base[200],padding:'0.85rem 1rem',cursor:entry.uploading?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'0.75rem',opacity:entry.uploading?0.65:1}}>
+                              <div style={{width:34,height:34,borderRadius:7,flexShrink:0,background:entry.uploadFile?theme.colors.primary.main+'15':theme.colors.base[300],display:'flex',alignItems:'center',justifyContent:'center',color:entry.uploadFile?theme.colors.primary.main:theme.colors.base.content,opacity:entry.uploadFile?1:0.4}}><IcoUpload/></div>
+                              <div style={{flex:1,minWidth:0}}>
+                                {entry.uploadFile?<><div style={{fontSize:'0.84rem',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.uploadFile.name}</div><div style={{fontSize:'0.73rem',opacity:0.5}}>{(entry.uploadFile.size/1024).toFixed(0)} KB</div></>
+                                  :<><div style={{fontSize:'0.84rem',fontWeight:600,opacity:0.65}}>Click or drag to upload</div><div style={{fontSize:'0.73rem',opacity:0.4,marginTop:'1px'}}>PDF, DOC, DOCX, TXT, CSV · Max 5 MB</div></>}
+                              </div>
+                              <input ref={el=>{uploadRefs.current[activeIdx]=el;}} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)pickFile(activeIdx,f);e.target.value='';}} disabled={entry.uploading}/>
+                            </div>
+                            {entry.uploadFile&&<div style={{marginTop:'0.5rem'}}><SaveBtn theme={theme} onClick={()=>uploadFile(activeIdx)} disabled={entry.uploading} style={{padding:'0.45rem 0.9rem',fontSize:'0.8rem'}}>{entry.uploading?'Uploading…':'Upload & Attach'}</SaveBtn></div>}
+                            {entry.uploadMsg&&<InlineBanner theme={theme} $t={entry.uploadMsg.type}>{entry.uploadMsg.text}</InlineBanner>}
+                          </div>
+                          <div style={{height:1,background:theme.colors.base[300],marginBottom:'0.9rem'}}/>
+                          <div style={{position:'relative',marginBottom:'0.75rem'}}>
+                            <span style={{position:'absolute',left:'0.6rem',top:'50%',transform:'translateY(-50%)',opacity:0.4,display:'flex',pointerEvents:'none'}}><IcoSearch/></span>
+                            <AttachSearch theme={theme} placeholder="Search files…" value={entry.attachSearch} onChange={e=>upd(activeIdx,{attachSearch:e.target.value})}
+                              style={{paddingLeft:'2rem'}}/>
+                          </div>
+                          <div style={{marginBottom:'0.75rem'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.45rem',marginBottom:'0.3rem'}}>
+                              <span style={{fontSize:'0.7rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.06em',color:theme.colors.primary.main}}>Attached to Email</span>
+                              <span style={{fontSize:'0.66rem',fontWeight:600,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 5px'}}>{attached.length}</span>
+                            </div>
                             <AttachList theme={theme}>
-                              {inherited.length===0?<AttachEmpty theme={theme}>No attachments inherited from campaign</AttachEmpty>
-                                :inherited.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked={false} style={{cursor:'default'}} onClick={()=>{}}><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName></AttachRow>);})}
+                              {attached.length===0?<AttachEmpty theme={theme}>No files attached — check items below to attach them</AttachEmpty>
+                                :attached.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked onClick={()=>toggleAttach(activeIdx,a.id)}><AttachBox theme={theme} $checked><IcoCheck/></AttachBox><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{fontSize:'0.68rem',opacity:0.35}}>click to detach</span></AttachRow>);})}
                             </AttachList>
                           </div>
-                        ):(
-                          <>
-                            <div style={{marginBottom:'1rem'}}>
-                              <div onDragOver={e=>{e.preventDefault();upd(activeIdx,{isDragOver:true});}} onDragLeave={()=>upd(activeIdx,{isDragOver:false})}
-                                onDrop={e=>{e.preventDefault();upd(activeIdx,{isDragOver:false});const f=e.dataTransfer.files[0];if(f&&!entry.uploading)pickFile(activeIdx,f);}}
-                                onClick={()=>!entry.uploading&&uploadRefs.current[activeIdx]?.click()}
-                                style={{border:`2px dashed ${entry.isDragOver?theme.colors.primary.main:entry.uploadFile?theme.colors.primary.main+'80':theme.colors.base[300]}`,borderRadius:theme.radius.field,background:entry.isDragOver?theme.colors.primary.main+'08':theme.colors.base[200],padding:'0.85rem 1rem',cursor:entry.uploading?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:'0.75rem',opacity:entry.uploading?0.65:1}}>
-                                <div style={{width:34,height:34,borderRadius:7,flexShrink:0,background:entry.uploadFile?theme.colors.primary.main+'15':theme.colors.base[300],display:'flex',alignItems:'center',justifyContent:'center',color:entry.uploadFile?theme.colors.primary.main:theme.colors.base.content,opacity:entry.uploadFile?1:0.4}}><IcoUpload/></div>
-                                <div style={{flex:1,minWidth:0}}>
-                                  {entry.uploadFile?<><div style={{fontSize:'0.84rem',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.uploadFile.name}</div><div style={{fontSize:'0.73rem',opacity:0.5}}>{(entry.uploadFile.size/1024).toFixed(0)} KB</div></>
-                                    :<><div style={{fontSize:'0.84rem',fontWeight:600,opacity:0.65}}>Click or drag to upload</div><div style={{fontSize:'0.73rem',opacity:0.4,marginTop:'1px'}}>PDF, DOC, DOCX, TXT, CSV · Max 5 MB</div></>}
-                                </div>
-                                <input ref={el=>{uploadRefs.current[activeIdx]=el;}} type="file" accept=".pdf,.doc,.docx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)pickFile(activeIdx,f);e.target.value='';}} disabled={entry.uploading}/>
-                              </div>
-                              {entry.uploadFile&&<div style={{marginTop:'0.5rem'}}><SaveBtn theme={theme} onClick={()=>uploadFile(activeIdx)} disabled={entry.uploading} style={{padding:'0.45rem 0.9rem',fontSize:'0.8rem'}}>{entry.uploading?'Uploading…':'Upload & Attach'}</SaveBtn></div>}
-                              {entry.uploadMsg&&<InlineBanner theme={theme} $t={entry.uploadMsg.type}>{entry.uploadMsg.text}</InlineBanner>}
+                          <div style={{marginBottom:'0.75rem'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'0.45rem',marginBottom:'0.3rem'}}>
+                              <span style={{fontSize:'0.7rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.06em',opacity:0.45}}>Not Attached</span>
+                              <span style={{fontSize:'0.66rem',fontWeight:600,background:theme.colors.base[300],borderRadius:'999px',padding:'1px 5px',opacity:0.55}}>{notAtt.length}</span>
                             </div>
-                            <div style={{height:1,background:theme.colors.base[300],marginBottom:'0.9rem'}}/>
-                            <div style={{position:'relative',marginBottom:'0.75rem'}}>
-                              <span style={{position:'absolute',left:'0.6rem',top:'50%',transform:'translateY(-50%)',opacity:0.4,display:'flex',pointerEvents:'none'}}><IcoSearch/></span>
-                              <AttachSearch theme={theme} placeholder="Search files…" value={entry.attachSearch} onChange={e=>upd(activeIdx,{attachSearch:e.target.value})}
-                                style={{paddingLeft:'2rem'}}/>
-                            </div>
-                            <div style={{marginBottom:'0.75rem'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'0.45rem',marginBottom:'0.3rem'}}>
-                                <span style={{fontSize:'0.7rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.06em',color:theme.colors.primary.main}}>Attached</span>
-                                <span style={{fontSize:'0.66rem',fontWeight:600,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 5px'}}>{attached.length}</span>
-                              </div>
-                              <AttachList theme={theme}>
-                                {attached.length===0?<AttachEmpty theme={theme}>No files attached</AttachEmpty>
-                                  :attached.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked onClick={()=>toggleAttach(activeIdx,a.id)}><AttachBox theme={theme} $checked><IcoCheck/></AttachBox><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{fontSize:'0.68rem',opacity:0.35}}>detach</span></AttachRow>);})}
-                              </AttachList>
-                            </div>
-                            <div style={{marginBottom:'0.75rem'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:'0.45rem',marginBottom:'0.3rem'}}>
-                                <span style={{fontSize:'0.7rem',fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.06em',opacity:0.45}}>Not Attached</span>
-                                <span style={{fontSize:'0.66rem',fontWeight:600,background:theme.colors.base[300],borderRadius:'999px',padding:'1px 5px',opacity:0.55}}>{notAtt.length}</span>
-                              </div>
-                              <AttachList theme={theme}>
-                                {notAtt.length===0?<AttachEmpty theme={theme}>All files are attached</AttachEmpty>
-                                  :notAtt.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked={false} onClick={()=>toggleAttach(activeIdx,a.id)}><AttachBox theme={theme} $checked={false}/><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{fontSize:'0.68rem',opacity:0.35}}>attach</span></AttachRow>);})}
-                              </AttachList>
-                            </div>
-                            <div style={{display:'flex',alignItems:'center',paddingTop:'0.25rem'}}>
-                              <span style={{fontSize:'0.78rem',opacity:0.45}}>{entry.allAttachments.length} file{entry.allAttachments.length!==1?'s':''} total</span>
-                            </div>
-                          </>
-                        )}
+                            <AttachList theme={theme}>
+                              {notAtt.length===0?<AttachEmpty theme={theme}>All files are attached</AttachEmpty>
+                                :notAtt.map(a=>{const ext=getExt(a.filename);return(<AttachRow key={a.id} theme={theme} $checked={false} onClick={()=>toggleAttach(activeIdx,a.id)}><AttachBox theme={theme} $checked={false}/><ExtBadge $ext={ext}>{ext||'?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{fontSize:'0.68rem',opacity:0.35}}>click to attach</span></AttachRow>);})}
+                            </AttachList>
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',paddingTop:'0.25rem'}}>
+                            <span style={{fontSize:'0.78rem',opacity:0.45}}>{entry.allAttachments.length} file{entry.allAttachments.length!==1?'s':''} total</span>
+                          </div>
+                        </>
                       </ScrollFlush>
                     );
                   })()}
@@ -1615,36 +1668,34 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         )}
 
         {/* ════ BULK ATTACHMENTS TAB ════ */}
-        {topTab === 'bulk-attachments' && !attachConfirmed && (
+        {topTab === 'bulk-attachments' && !bulkAttachConfirmed && (
           <BulkPane>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: 520 }}>
               <PanelTitle theme={theme}>Bulk Attachments</PanelTitle>
-              {attachIndividualChanged ? (
-                <>
-                  <PanelSubtitle theme={theme} style={{ marginBottom: 0 }}>
-                    You've made individual attachment changes to one or more companies since the last bulk operation.
-                    Proceeding will overwrite those individual changes across all {entries.length} companies.
-                  </PanelSubtitle>
-                </>
+              {bulkAttachIndivChanged ? (
+                <PanelSubtitle theme={theme} style={{ marginBottom: 0 }}>
+                  You've made individual attachment changes since the last bulk operation.
+                  Proceeding will overwrite those individual changes across all {entries.length} companies.
+                </PanelSubtitle>
               ) : (
-                <>
-                  <PanelSubtitle theme={theme} style={{ marginBottom: 0 }}>
-                    This lets you set the same attachment inheritance and files across all {entries.length} companies at once.
-                    Each company's current attachment setting will be overwritten.
-                  </PanelSubtitle>
-                </>
+                <PanelSubtitle theme={theme} style={{ marginBottom: 0 }}>
+                  Manage attachment inheritance and per-email attachments across all {entries.length} companies at once.
+                </PanelSubtitle>
               )}
               <AlertBox theme={theme} $variant="warn">
                 <IcoWarn />
-                <div><strong>All per-company attachments will be detached.</strong> Every company will lose their individually attached files. You can re-attach them after.</div>
+                <div><strong>Bulk changes will overwrite individual email attachments.</strong> Any files attached to individual emails will be replaced. You can re-attach them after.</div>
               </AlertBox>
               <div style={{ display: 'flex', gap: '0.6rem' }}>
                 <Btn theme={theme} $v="primary" onClick={async () => {
-                  setAttachConfirmed(true);
-                  setAttachIndividualChanged(false);
-                  // Clear all attachments and turn off inheritance for every company
+                  setBulkAttachConfirmed(true);
+                  setBulkAttachIndivChanged(false);
+                  // Clear all email attachments + enable inherit for all companies
                   const readyEntries = entries.filter(e => e.phase === 'ready' && e.emailId);
-                  readyEntries.forEach((_, i) => upd(i, { linkedEmailAttachIds: new Set(), inheritCampaignAttachments: 0 }));
+                  setEntries(prev => prev.map(e =>
+                    e.phase === 'ready' ? { ...e, linkedEmailAttachIds: new Set(), inheritCampaignAttachments: 1 } : e
+                  ));
+                  setBulkAttachInherit(true);
                   try {
                     await Promise.all([
                       apiFetch(`${apiBase}/email/bulk-attachments/`, {
@@ -1653,20 +1704,19 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                       }),
                       apiFetch(`${apiBase}/campaign/${campaignId}/company/inherit/bulk/`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ updates: readyEntries.map(e => ({ company_id: e.company.id, inherit_campaign_attachments: 0 })) }),
+                        body: JSON.stringify({ updates: readyEntries.map(e => ({ company_id: e.company.id, inherit_campaign_attachments: 1 })) }),
                       }),
                     ]);
                   } catch { /* silent */ }
-                  setBulkAttachInherit(false);
                 }}>
-                  {attachIndividualChanged ? 'Yes, overwrite individual changes' : 'Yes, manage bulk attachments'}
+                  {bulkAttachIndivChanged ? 'Yes, overwrite individual changes' : 'Yes, manage bulk attachments'}
                 </Btn>
                 <Btn theme={theme} onClick={() => setTopTab('companies')}>Cancel</Btn>
               </div>
             </div>
           </BulkPane>
         )}
-        {topTab === 'bulk-attachments' && attachConfirmed && (
+        {topTab === 'bulk-attachments' && bulkAttachConfirmed && (
           <ScrollFlush>
             {bulkInheritMsg && (
               <Msg theme={theme} $type={bulkInheritMsg.ok ? 'success' : 'error'} style={{ marginBottom: '1rem' }}>
@@ -1677,76 +1727,78 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
             {/* Inherit toggle row */}
             <InheritRow theme={theme} onClick={() => !bulkAttachSaving && handleBulkAttachInherit(bulkAttachInherit !== true)}
               style={{ cursor: bulkAttachSaving ? 'not-allowed' : 'pointer', opacity: bulkAttachSaving ? 0.6 : 1 }}>
-              <InheritCheck theme={theme} $on={bulkAttachInherit === true} $mixed={bulkAttachInherit === 'mixed'}>
+              <InheritCheck theme={theme} $on={bulkAttachInherit === true}>
                 {bulkAttachInherit === true && <IcoCheck />}
-                {bulkAttachInherit === 'mixed' && <span style={{ color: theme.colors.warning?.main || '#f59e0b', fontSize: '0.75rem', lineHeight: 1 }}>—</span>}
               </InheritCheck>
               <InheritText>
-                <InheritLabel>
-                  Inherit Campaign Attachments
-                  {bulkAttachInherit === 'mixed' && <MixedBadgeStyle theme={theme}>Mixed</MixedBadgeStyle>}
-                </InheritLabel>
+                <InheritLabel>Include Campaign Attachments</InheritLabel>
                 <InheritSub>
-                  {bulkAttachInherit === true && 'Enabled — all companies inherit from campaign preferences'}
-                  {bulkAttachInherit === false && 'Disabled — companies use their own attachment lists'}
-                  {bulkAttachInherit === 'mixed' && 'Mixed — click to sync for all companies'}
-                  {bulkAttachInherit === null && 'Loading…'}
+                  {bulkAttachInherit === true ? 'Enabled — all companies inherit from campaign preferences' : bulkAttachInherit === false ? 'Disabled — companies use their own attachment lists' : 'Loading…'}
                 </InheritSub>
               </InheritText>
               {bulkAttachSaving && <MiniSpinner />}
             </InheritRow>
 
-            {/* Inherit ON: show inherited files */}
+            {/* Inherit ON: show inherited files above the picker */}
             {bulkAttachInherit === true && (() => {
               const firstReady = entries.find(e => e.phase === 'ready');
-              const inherited = firstReady ? firstReady.allAttachments.filter(a => firstReady.inheritedAttachIds.includes(a.id)) : [];
+              const inherited: AttachmentEntry[] = firstReady?.inheritedAttachments ?? [];
               return (
-                <>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: theme.colors.primary.main, opacity: 0.8, marginBottom: '0.4rem' }}>
-                    Inherited from Campaign ({inherited.length})
-                  </div>
-                  <AttachList theme={theme}>
-                    {inherited.length === 0
-                      ? <AttachEmpty theme={theme}>No attachments set in campaign preferences</AttachEmpty>
-                      : inherited.map(a => { const ext = getExt(a.filename); return (
-                          <AttachRow key={a.id} theme={theme} $checked={false} style={{ cursor: 'default' }} onClick={() => {}}>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  {inherited.length === 0 ? (
+                    <div style={{ border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, padding: '0.85rem 0.75rem', fontSize: '0.8125rem', opacity: 0.5, background: theme.colors.base[200], flexShrink: 0 }}>
+                      No campaign attachments configured
+                    </div>
+                  ) : (
+                    <div style={{ border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: (theme.colors.base[300] as string) + '60', flexShrink: 0 }}>
+                      {inherited.map((att, i) => {
+                        const ext = getExt(att.name);
+                        return (
+                          <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.75rem', fontSize: '0.8125rem', borderBottom: i < inherited.length - 1 ? `1px solid ${theme.colors.base[300]}` : 'none' }}>
                             <ExtBadge $ext={ext}>{ext || '?'}</ExtBadge>
-                            <AttachName>{a.filename}</AttachName>
-                          </AttachRow>
-                        ); })}
-                  </AttachList>
-                </>
+                            <AttachName>{att.name}</AttachName>
+                            <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+                              {(att.sources ?? []).includes('campaign') && <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '1px 6px', borderRadius: '999px', background: theme.colors.primary.main + '18', color: theme.colors.primary.main, border: `1px solid ${theme.colors.primary.main}30` }}>campaign</span>}
+                              {(att.sources ?? []).includes('global') && <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '1px 6px', borderRadius: '999px', background: theme.colors.base[300], color: theme.colors.base.content, border: `1px solid ${theme.colors.base[300]}`, opacity: 0.8 }}>global</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })()}
 
-            {/* Inherit OFF: upload + attached/not-attached lists */}
-            {bulkAttachInherit === false && (() => {
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.1rem' }}>
+              <div style={{ flex: 1, height: 1, background: theme.colors.base[300] }} />
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', opacity: 0.35 }}>Email Attachments</span>
+              <div style={{ flex: 1, height: 1, background: theme.colors.base[300] }} />
+            </div>
+
+            {/* Upload + picker — always shown */}
+            {(() => {
               const allFiles = entries.find(e => e.phase === 'ready')?.allAttachments ?? [];
               const readyEntries = entries.filter(e => e.phase === 'ready' && e.emailId);
               const filteredFiles = allFiles.filter(a => a.filename.toLowerCase().includes(bulkAttachSearch.toLowerCase()));
               const attachedToAll = filteredFiles.filter(a => readyEntries.length > 0 && readyEntries.every(e => e.linkedEmailAttachIds.has(a.id)));
               const notAttachedToAll = filteredFiles.filter(a => !readyEntries.every(e => e.linkedEmailAttachIds.has(a.id)));
-              const toggleBulkAttach = (id: number, attach: boolean) => {
-                setEntries(prev => prev.map(e => {
+              const toggleBulkAttach = async (id: number, attach: boolean) => {
+                const updatedEntries = entries.map(e => {
                   if (e.phase !== 'ready') return e;
                   const s = new Set(e.linkedEmailAttachIds);
                   attach ? s.add(id) : s.delete(id);
                   return { ...e, linkedEmailAttachIds: s };
-                }));
-              };
-              const saveBulkAttachments = async () => {
-                setBulkAttachSaving(true);
+                });
+                setEntries(updatedEntries);
+                // Save immediately
+                const updates = updatedEntries
+                  .filter(e => e.phase === 'ready' && e.emailId)
+                  .map(e => ({ email_id: e.emailId as number, attachment_ids: [...e.linkedEmailAttachIds] }));
                 try {
-                  const updates = readyEntries.filter(e => e.emailId).map(e => ({ email_id: e.emailId as number, attachment_ids: [...e.linkedEmailAttachIds] }));
-                  const r = await apiFetch(`${apiBase}/email/bulk-attachments/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
-                  const d = await r.json();
-                  setBulkInheritMsg(d.failed === 0
-                    ? { ok: true, text: `Attachments saved for ${d.updated} email${d.updated !== 1 ? 's' : ''}` }
-                    : { ok: false, text: `${d.failed} failed to save` });
-                } catch {
-                  setBulkInheritMsg({ ok: false, text: 'Failed to save attachments' });
-                }
-                setBulkAttachSaving(false);
+                  await apiFetch(`${apiBase}/email/bulk-attachments/`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
+                } catch { /* silent */ }
               };
               return (
                 <>
@@ -1776,29 +1828,28 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   </div>
                   <div style={{ marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.3rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: theme.colors.primary.main }}>Attached to All</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: theme.colors.primary.main }}>Attached</span>
                       <span style={{ fontSize: '0.66rem', fontWeight: 600, background: theme.colors.primary.main + '20', color: theme.colors.primary.main, border: `1px solid ${theme.colors.primary.main}40`, borderRadius: '999px', padding: '1px 5px' }}>{attachedToAll.length}</span>
                     </div>
                     <AttachList theme={theme}>
                       {attachedToAll.length === 0
-                        ? <AttachEmpty theme={theme}>No files attached to all emails</AttachEmpty>
-                        : attachedToAll.map(a => { const ext = getExt(a.filename); return (<AttachRow key={a.id} theme={theme} $checked onClick={() => toggleBulkAttach(a.id, false)}><AttachBox theme={theme} $checked><IcoCheck /></AttachBox><ExtBadge $ext={ext}>{ext || '?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{ fontSize: '0.68rem', opacity: 0.35 }}>detach all</span></AttachRow>); })}
+                        ? <AttachEmpty theme={theme}>No files attached</AttachEmpty>
+                        : attachedToAll.map(a => { const ext = getExt(a.filename); return (<AttachRow key={a.id} theme={theme} $checked onClick={() => toggleBulkAttach(a.id, false)}><AttachBox theme={theme} $checked><IcoCheck /></AttachBox><ExtBadge $ext={ext}>{ext || '?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{ fontSize: '0.68rem', opacity: 0.35 }}>click to detach</span></AttachRow>); })}
                     </AttachList>
                   </div>
                   <div style={{ marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.3rem' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', opacity: 0.45 }}>Not Attached to All</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', opacity: 0.45 }}>Not Attached</span>
                       <span style={{ fontSize: '0.66rem', fontWeight: 600, background: theme.colors.base[300], borderRadius: '999px', padding: '1px 5px', opacity: 0.55 }}>{notAttachedToAll.length}</span>
                     </div>
                     <AttachList theme={theme}>
                       {notAttachedToAll.length === 0
-                        ? <AttachEmpty theme={theme}>All files attached to all emails</AttachEmpty>
-                        : notAttachedToAll.map(a => { const ext = getExt(a.filename); return (<AttachRow key={a.id} theme={theme} $checked={false} onClick={() => toggleBulkAttach(a.id, true)}><AttachBox theme={theme} $checked={false} /><ExtBadge $ext={ext}>{ext || '?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{ fontSize: '0.68rem', opacity: 0.35 }}>attach all</span></AttachRow>); })}
+                        ? <AttachEmpty theme={theme}>All files attached</AttachEmpty>
+                        : notAttachedToAll.map(a => { const ext = getExt(a.filename); return (<AttachRow key={a.id} theme={theme} $checked={false} onClick={() => toggleBulkAttach(a.id, true)}><AttachBox theme={theme} $checked={false} /><ExtBadge $ext={ext}>{ext || '?'}</ExtBadge><AttachName>{a.filename}</AttachName><span style={{ fontSize: '0.68rem', opacity: 0.35 }}>click to attach</span></AttachRow>); })}
                     </AttachList>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.25rem' }}>
+                  <div style={{ paddingTop: '0.25rem' }}>
                     <span style={{ fontSize: '0.78rem', opacity: 0.45 }}>{allFiles.length} file{allFiles.length !== 1 ? 's' : ''} total</span>
-                    <SaveBtn theme={theme} onClick={saveBulkAttachments} disabled={bulkAttachSaving} style={{ padding: '0.45rem 1rem', fontSize: '0.8rem' }}>{bulkAttachSaving ? 'Saving…' : 'Save All'}</SaveBtn>
                   </div>
                 </>
               );

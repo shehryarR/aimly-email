@@ -52,6 +52,8 @@ interface EmailData {
   html_email?: number;
   inherit_campaign_attachments?: number;
   inherit_global_attachments?: number;
+  signature?: string | null;
+  logo_data?: string | null;  // base64 data URL: "data:image/png;base64,..."
 }
 
 export interface EmailModalProps {
@@ -499,6 +501,8 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [inheritCampaignAttachments, setInheritCampaignAttachments] = useState(1);
   const [inheritSaving,              setInheritSaving]              = useState(false);
   const [inheritedAttachments,       setInheritedAttachments]       = useState<AttachmentEntry[]>([]);
+  const [brandSignature,             setBrandSignature]             = useState<string | null>(null);
+  const [brandLogoData,              setBrandLogoData]              = useState<string | null>(null);
 
   // ── Reset + load on open ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -554,6 +558,8 @@ const EmailModal: React.FC<EmailModalProps> = ({
     // inherited_attachments: always an array — [] if nothing configured
     setInheritedAttachments(d.inherited_attachments ?? []);
     setInheritCampaignAttachments(d.inherit_campaign_attachments ?? 1);
+    setBrandSignature(d.signature ?? null);
+    setBrandLogoData(d.logo_data ?? null);
     setPhase('ready');
   };
 
@@ -797,7 +803,29 @@ const EmailModal: React.FC<EmailModalProps> = ({
                 {/* Editor column */}
                 <EScroll style={{ flex: 1, minWidth: 0 }}>
                   <div>
-                    <EFieldLabel theme={theme}>Subject</EFieldLabel>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                      <EFieldLabel theme={theme} style={{ margin: 0 }}>Subject</EFieldLabel>
+                      {/* HTML toggle — inline with Subject label */}
+                      <div
+                        onClick={() => {
+                          const next = !htmlEmail;
+                          setHtmlEmail(next);
+                          htmlEmailRef.current = next;
+                          if (email) {
+                            apiFetch(`${apiBase}/email/bulk-update/`, {
+                              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ updates: [{ email_id: email.id, html_email: next }] }),
+                            }).catch(() => {});
+                          }
+                        }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>HTML</span>
+                        <div style={{ width: 32, height: 18, borderRadius: 999, flexShrink: 0, background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300], position: 'relative', transition: 'background 0.2s', border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}` }}>
+                          <div style={{ position: 'absolute', top: 2, left: htmlEmail ? 14 : 2, width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                      </div>
+                    </div>
                     <ESubjectInput theme={theme} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Email subject…" />
                   </div>
                   <div>
@@ -805,26 +833,37 @@ const EmailModal: React.FC<EmailModalProps> = ({
                     <EBodyTextarea theme={theme} value={body} onChange={e => setBody(e.target.value)} placeholder="Email body…" />
                   </div>
 
-                  {/* HTML toggle */}
-                  <div
-                    onClick={() => {
-                      const next = !htmlEmail;
-                      setHtmlEmail(next);
-                      htmlEmailRef.current = next;
-                      if (email) {
-                        apiFetch(`${apiBase}/email/bulk-update/`, {
-                          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ updates: [{ email_id: email.id, html_email: next }] }),
-                        }).catch(() => {});
-                      }
-                    }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none', width: 'fit-content' }}
-                  >
-                    <div style={{ width: 36, height: 20, borderRadius: 999, flexShrink: 0, background: htmlEmail ? theme.colors.primary.main : theme.colors.base[300], position: 'relative', transition: 'background 0.2s', border: `1px solid ${htmlEmail ? theme.colors.primary.main : theme.colors.base[300]}` }}>
-                      <div style={{ position: 'absolute', top: 2, left: htmlEmail ? 17 : 2, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  {/* ── Signature (read-only) ── */}
+                  {brandSignature && (
+                    <div>
+                      <EFieldLabel theme={theme}>Signature</EFieldLabel>
+                      <div style={{
+                        padding: '0.65rem 0.9rem',
+                        border: `1px solid ${theme.colors.base[300]}`,
+                        borderRadius: theme.radius.field,
+                        background: theme.colors.base[400],
+                        fontSize: '0.875rem', lineHeight: 1.6,
+                        whiteSpace: 'pre-wrap', opacity: 0.8,
+                      }}>
+                        {brandSignature}
+                      </div>
                     </div>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>HTML Email</span>
-                  </div>
+                  )}
+
+                  {/* ── Logo (read-only) ── */}
+                  {brandLogoData && (
+                    <div>
+                      <EFieldLabel theme={theme}>Logo</EFieldLabel>
+                      <div style={{
+                        padding: '0.65rem 0.9rem',
+                        border: `1px solid ${theme.colors.base[300]}`,
+                        borderRadius: theme.radius.field,
+                        background: theme.colors.base[400],
+                      }}>
+                        <img src={brandLogoData} alt="Logo" style={{ maxHeight: 48, maxWidth: 180, objectFit: 'contain', display: 'block' }} />
+                      </div>
+                    </div>
+                  )}
                 </EScroll>
 
                 {/* Drag divider + preview */}
