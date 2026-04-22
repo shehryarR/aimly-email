@@ -54,8 +54,15 @@ print("  ── Paddle Billing ────────────────�
 print("  ℹ️   Get client token from Paddle Dashboard →")
 print("      Developer Tools → Authentication → Client-side tokens")
 print("      Sandbox tokens start with 'test_'")
-paddle_client_token  = ask("Paddle Client-Side Token")
-paddle_price_id      = ask("Paddle Price ID (starts with pri_)")
+paddle_client_token = ask("Paddle Client-Side Token")
+
+print()
+print("  ℹ️   Enter the price_id for each plan (starts with pri_)")
+print("      Find these in Paddle Dashboard → Catalog → Prices")
+paddle_price_id_solo   = ask("Paddle Price ID — Solo   ($29/mo)")
+paddle_price_id_studio = ask("Paddle Price ID — Studio ($79/mo)")
+paddle_price_id_agency = ask("Paddle Price ID — Agency ($199/mo)")
+
 paddle_sandbox_input = input("  Use Paddle Sandbox? (true/false) [true]: ").strip()
 paddle_sandbox       = paddle_sandbox_input if paddle_sandbox_input else "true"
 paddle_enabled_input = input("  Enable Paddle payments? (true/false) [false]: ").strip()
@@ -64,7 +71,9 @@ paddle_enabled       = paddle_enabled_input if paddle_enabled_input else "false"
 write_section("Paddle Frontend", [
     "# ── Paddle Billing (Frontend) ────────────────────────",
     f"VITE_PADDLE_CLIENT_TOKEN={paddle_client_token}",
-    f"VITE_PADDLE_PRICE_ID={paddle_price_id}",
+    f"VITE_PADDLE_PRICE_ID_SOLO={paddle_price_id_solo}",
+    f"VITE_PADDLE_PRICE_ID_STUDIO={paddle_price_id_studio}",
+    f"VITE_PADDLE_PRICE_ID_AGENCY={paddle_price_id_agency}",
     f"VITE_PADDLE_SANDBOX={paddle_sandbox}",
     f"VITE_PADDLE_ENABLED={paddle_enabled}",
 ])

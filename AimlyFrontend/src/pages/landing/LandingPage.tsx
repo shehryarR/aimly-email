@@ -468,7 +468,7 @@ const ComingSoonBanner = styled.div<{ theme: any }>`
   font-size: 0.8rem;
   font-weight: 500;
   text-align: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -478,68 +478,101 @@ const ComingSoonBanner = styled.div<{ theme: any }>`
 const PricingWrap = styled.div`
   display: flex;
   justify-content: center;
+  gap: 1.25rem;
   margin-top: 3.5rem;
+  flex-wrap: wrap;
 `;
 
-const PricingCard = styled.div<{ theme: any }>`
+const PricingCard = styled.div<{ theme: any; $highlighted: boolean }>`
   background: ${p => p.theme.colors.base[200]};
-  border: 1px solid ${p => p.theme.colors.accent.main}50;
+  border: 1px solid ${p => p.$highlighted
+    ? p.theme.colors.accent.main + '60'
+    : p.theme.colors.base[300]};
   border-radius: ${p => p.theme.radius.box};
-  padding: 2.5rem;
-  max-width: 440px;
-  width: 100%;
+  padding: 2rem 1.75rem;
+  width: 280px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 60px ${p => p.theme.colors.accent.main}12, 0 20px 40px rgba(0,0,0,0.15);
+  box-shadow: ${p => p.$highlighted
+    ? `0 0 60px ${p.theme.colors.accent.main}12, 0 20px 40px rgba(0,0,0,0.15)`
+    : '0 4px 16px rgba(0,0,0,0.06)'};
   animation: ${fadeUp} 0.6s 0.2s ease both;
   &::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    background: linear-gradient(90deg,
-      ${p => p.theme.colors.primary.main},
-      ${p => p.theme.colors.accent.main},
-      ${p => p.theme.colors.info.main}
-    );
+    background: ${p => p.$highlighted
+      ? `linear-gradient(90deg, ${p.theme.colors.primary.main}, ${p.theme.colors.accent.main}, ${p.theme.colors.info.main})`
+      : p.theme.colors.base[300]};
   }
+`;
+
+const PricingPopularBadge = styled.div<{ theme: any }>`
+  position: absolute;
+  top: 12px; right: 12px;
+  background: ${p => p.theme.colors.accent.main};
+  color: ${p => p.theme.colors.accent.content};
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
 `;
 
 const PricingBadge = styled.div<{ theme: any }>`
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.875rem;
+  padding: 0.25rem 0.75rem;
   border-radius: 999px;
   background: ${p => p.theme.colors.accent.main}15;
   border: 1px solid ${p => p.theme.colors.accent.main}50;
   color: ${p => p.theme.colors.accent.main};
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.1rem;
+`;
+
+const PricingPlanName = styled.div<{ theme: any }>`
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin-bottom: 0.15rem;
+  color: ${p => p.theme.colors.base.content};
+`;
+
+const PricingIdealFor = styled.div<{ theme: any }>`
+  font-size: 0.72rem;
+  opacity: 0.4;
+  margin-bottom: 0.9rem;
+  color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingAmount = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
+  gap: 0.2rem;
+  margin-bottom: 0.25rem;
 `;
 
 const PricingCurrency = styled.span<{ theme: any }>`
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  opacity: 0.75;
+  opacity: 0.7;
   align-self: flex-start;
-  margin-top: 0.5rem;
+  margin-top: 0.4rem;
   color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingNumber = styled.span<{ theme: any }>`
   font-family: 'DM Serif Display', serif;
-  font-size: 3.5rem;
+  font-size: 3rem;
   font-weight: 400;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -547,38 +580,46 @@ const PricingNumber = styled.span<{ theme: any }>`
 `;
 
 const PricingPer = styled.span<{ theme: any }>`
-  font-size: 0.875rem;
-  opacity: 0.65;
+  font-size: 0.8125rem;
+  opacity: 0.55;
   color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingSub = styled.p<{ theme: any }>`
-  font-size: 0.8125rem;
-  opacity: 0.65;
-  margin: 0 0 1.75rem 0;
+  font-size: 0.75rem;
+  opacity: 0.55;
+  margin: 0 0 1rem 0;
   color: ${p => p.theme.colors.base.content};
+`;
+
+
+
+const PricingHr = styled.div<{ theme: any }>`
+  height: 1px;
+  background: ${p => p.theme.colors.base[300]};
+  margin-bottom: 1rem;
 `;
 
 const PricingFeatures = styled.ul`
   list-style: none;
   padding: 0;
-  margin: 0 0 2rem 0;
+  margin: 0 0 1.5rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.55rem;
 `;
 
 const PricingFeature = styled.li<{ theme: any }>`
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  font-size: 0.9rem;
-  opacity: 0.9;
+  gap: 0.6rem;
+  font-size: 0.8125rem;
+  opacity: 0.85;
   color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingCheck = styled.span<{ theme: any }>`
-  width: 18px; height: 18px; min-width: 18px;
+  width: 15px; height: 15px; min-width: 15px;
   border-radius: 50%;
   background: ${p => p.theme.colors.accent.main}20;
   border: 1px solid ${p => p.theme.colors.accent.main}50;
@@ -586,40 +627,58 @@ const PricingCheck = styled.span<{ theme: any }>`
   align-items: center;
   justify-content: center;
   color: ${p => p.theme.colors.accent.main};
-  svg { width: 9px; height: 9px; }
+  svg { width: 8px; height: 8px; }
 `;
 
-const PricingCta = styled(Link)<{ theme: any }>`
+const PricingCta = styled(Link)<{ theme: any; $primary: boolean }>`
   width: 100%;
-  padding: 0.9rem 1.5rem;
+  padding: 0.75rem 1.25rem;
   border-radius: ${p => p.theme.radius.field};
-  border: none;
-  background: ${p => p.theme.colors.primary.main};
-  color: ${p => p.theme.colors.primary.content};
+  border: ${p => p.$primary ? 'none' : `1px solid ${p.theme.colors.base[300]}`};
+  background: ${p => p.$primary ? p.theme.colors.primary.main : 'transparent'};
+  color: ${p => p.$primary ? p.theme.colors.primary.content : p.theme.colors.base.content};
   font-family: 'DM Sans', sans-serif;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  opacity: ${p => p.$primary ? 1 : 0.7};
+  text-decoration: none;
   &:hover {
-    background: ${p => p.theme.colors.accent.main};
-    color: ${p => p.theme.colors.accent.content};
-    transform: translateY(-2px);
-    box-shadow: 0 8px 28px ${p => p.theme.colors.accent.main}40;
+    background: ${p => p.$primary ? p.theme.colors.accent.main : p.theme.colors.base[300]};
+    color: ${p => p.$primary ? p.theme.colors.accent.content : p.theme.colors.base.content};
+    transform: translateY(-1px);
+    opacity: 1;
+    box-shadow: ${p => p.$primary ? `0 6px 20px ${p.theme.colors.accent.main}40` : 'none'};
   }
 `;
 
 const PricingDisclaimer = styled.p<{ theme: any }>`
-  font-size: 0.72rem;
-  opacity: 0.6;
+  font-size: 0.7rem;
+  opacity: 0.5;
   text-align: center;
-  margin: 1rem 0 0 0;
+  margin: 2rem auto 0;
   line-height: 1.5;
   color: ${p => p.theme.colors.base.content};
+  max-width: 400px;
+`;
+
+const ViewAllLink = styled(Link)<{ theme: any }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: ${p => p.theme.colors.accent.main};
+  text-decoration: none;
+  font-weight: 500;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+  &:hover { opacity: 1; }
 `;
 
 // ── Features & Pricing data ───────────────────────────────
@@ -656,14 +715,25 @@ const FEATURES = (theme: any) => [
   },
 ];
 
-const PRICING_FEATURES = [
-  'Unlimited AI-powered email campaigns',
-  'Bulk email generation & scheduling',
-  'Smart company discovery & management',
-  'HTML & template email support',
-  'Attachment management',
-  'Email open tracking & analytics',
-  'Smart scheduling with stagger control',
+const LANDING_PLANS = [
+  {
+    slug: 'solo', name: 'Solo', price: 29, idealFor: 'Solopreneurs',
+    dailyCap: '500 emails / day', maxBrands: '1 brand profile', support: 'Email (48h)',
+    highlighted: false,
+    features: ['1 branding profile', '500 emails per day', 'AI email generation', 'Bulk scheduling', 'Open tracking'],
+  },
+  {
+    slug: 'studio', name: 'Studio', price: 79, idealFor: 'Growing Teams',
+    dailyCap: '2,500 emails / day', maxBrands: 'Up to 5 brand profiles', support: 'Priority Email (24h)',
+    highlighted: true,
+    features: ['5 branding profiles', '2,500 emails per day', 'AI email generation', 'Bulk scheduling', 'Open tracking'],
+  },
+  {
+    slug: 'agency', name: 'Agency', price: 199, idealFor: 'Client Agencies',
+    dailyCap: '7,500 emails / day', maxBrands: 'Unlimited brand profiles', support: 'Slack / Discord',
+    highlighted: false,
+    features: ['Unlimited brand profiles', '7,500 emails per day', 'AI email generation', 'Bulk scheduling', 'Open tracking'],
+  },
 ];
 
 // ── Component ─────────────────────────────────────────────
@@ -826,52 +896,61 @@ const LandingPage: React.FC = () => {
             <SectionLabel theme={theme}>Pricing</SectionLabel>
             <SectionTitle theme={theme}>Simple, transparent pricing</SectionTitle>
             <SectionSub theme={theme} style={{ margin: '0 auto' }}>
-              One plan. Everything included. Start free, cancel anytime.
+              Three plans to fit every stage. Start free, cancel anytime.
             </SectionSub>
           </div>
 
+          {!PADDLE_ENABLED && (
+            <ComingSoonBanner theme={theme} style={{ maxWidth: '960px', margin: '0 auto 1.5rem' }}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              Payments not yet active — access is currently free
+            </ComingSoonBanner>
+          )}
           <PricingWrap>
-            <PricingCard theme={theme}>
-              {!PADDLE_ENABLED && (
-                <ComingSoonBanner theme={theme}>
-                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
-                  Payments not yet active — access is currently free
-                </ComingSoonBanner>
-              )}
-              <PricingBadge theme={theme}>
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                {PADDLE_ENABLED ? '15-day free trial' : 'Early Access'}
-              </PricingBadge>
-
-              <PricingAmount>
-                <PricingCurrency theme={theme}>$</PricingCurrency>
-                <PricingNumber theme={theme}>29</PricingNumber>
-                <PricingPer theme={theme}>/month</PricingPer>
-              </PricingAmount>
-              <PricingSub theme={theme}>Billed monthly · Cancel anytime</PricingSub>
-
-              <PricingFeatures>
-                {PRICING_FEATURES.map(f => (
-                  <PricingFeature key={f} theme={theme}>
-                    <PricingCheck theme={theme}>
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </PricingCheck>
-                    {f}
-                  </PricingFeature>
-                ))}
-              </PricingFeatures>
-
-              <PricingCta theme={theme} to="/auth?tab=register">
-                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                Get Started
-              </PricingCta>
-              <PricingDisclaimer theme={theme}>
-                Card required. No charge for 15 days.
-              </PricingDisclaimer>
-            </PricingCard>
+            {LANDING_PLANS.map((plan, i) => (
+              <PricingCard key={plan.slug} theme={theme} $highlighted={plan.highlighted} style={{ animationDelay: `${i * 0.1}s` }}>
+                {plan.highlighted && <PricingPopularBadge theme={theme}>Most Popular</PricingPopularBadge>}
+                <PricingBadge theme={theme}>
+                  <svg width="7" height="7" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  {PADDLE_ENABLED ? '15-day trial' : 'Early Access'}
+                </PricingBadge>
+                <PricingPlanName theme={theme}>{plan.name}</PricingPlanName>
+                <PricingIdealFor theme={theme}>{plan.idealFor}</PricingIdealFor>
+                <PricingAmount>
+                  <PricingCurrency theme={theme}>$</PricingCurrency>
+                  <PricingNumber theme={theme}>{plan.price}</PricingNumber>
+                  <PricingPer theme={theme}>/mo</PricingPer>
+                </PricingAmount>
+                <PricingSub theme={theme}>Billed monthly · Cancel anytime</PricingSub>
+                <PricingHr theme={theme} />
+                <PricingFeatures>
+                  {plan.features.map(f => (
+                    <PricingFeature key={f} theme={theme}>
+                      <PricingCheck theme={theme}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      </PricingCheck>
+                      {f}
+                    </PricingFeature>
+                  ))}
+                </PricingFeatures>
+                <PricingCta theme={theme} $primary={plan.highlighted} to="/auth?tab=register">
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  Get Started
+                </PricingCta>
+              </PricingCard>
+            ))}
           </PricingWrap>
+          <div style={{ textAlign: 'center' }}>
+            <PricingDisclaimer theme={theme}>
+              {PADDLE_ENABLED ? 'All plans include a 15-day free trial. No charges until your trial ends.' : 'No payment required during early access.'}
+            </PricingDisclaimer>
+            <ViewAllLink theme={theme} to="/pricing">
+              Compare all plans in detail
+              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </ViewAllLink>
+          </div>
         </Section>
 
         <Footer />

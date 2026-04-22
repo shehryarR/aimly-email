@@ -83,9 +83,14 @@ print()
 print("  ── Paddle Billing ───────────────────────────────")
 print("  ℹ️   Get keys from https://sandbox-vendors.paddle.com (sandbox)")
 print("      or https://vendors.paddle.com (production)")
-paddle_api_key       = ask_secret("Paddle API Key")
+paddle_api_key        = ask_secret("Paddle API Key")
 paddle_webhook_secret = ask_secret("Paddle Webhook Secret")
-paddle_price_id      = ask("Paddle Price ID (starts with pri_)")
+print()
+print("  ℹ️   Enter the price_id for each plan (starts with pri_)")
+print("      Find these in Paddle Dashboard → Catalog → Prices")
+paddle_price_id_solo   = ask("Paddle Price ID — Solo   ($29/mo)")
+paddle_price_id_studio = ask("Paddle Price ID — Studio ($79/mo)")
+paddle_price_id_agency = ask("Paddle Price ID — Agency ($199/mo)")
 paddle_sandbox_input = input("  Use Paddle Sandbox? (true/false) [true]: ").strip()
 paddle_sandbox       = paddle_sandbox_input if paddle_sandbox_input else "true"
 paddle_enabled_input = input("  Enable Paddle payments? (true/false) [false]: ").strip()
@@ -95,7 +100,9 @@ write_section("Paddle", [
     "# ── Paddle Billing ───────────────────────────────────",
     f"PADDLE_API_KEY={paddle_api_key}",
     f"PADDLE_WEBHOOK_SECRET={paddle_webhook_secret}",
-    f"PADDLE_PRICE_ID={paddle_price_id}",
+    f"PADDLE_PRICE_ID_SOLO={paddle_price_id_solo}",
+    f"PADDLE_PRICE_ID_STUDIO={paddle_price_id_studio}",
+    f"PADDLE_PRICE_ID_AGENCY={paddle_price_id_agency}",
     f"PADDLE_SANDBOX={paddle_sandbox}",
     f"PADDLE_ENABLED={paddle_enabled}",
 ])

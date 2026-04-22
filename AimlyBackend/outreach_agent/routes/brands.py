@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from core.database.connection import get_connection
 from routes.auth import get_current_user
 from routes.utils.crypto import encrypt_smtp_password, decrypt_smtp_password
+from core.plans import get_plan_limits
 
 brands_router = APIRouter(prefix="/brands", tags=["Brands"])
 
@@ -322,6 +323,26 @@ async def create_brand(
 ):
     """Create a new brand. email_password is AES encrypted before storage."""
     user_id = current_user["user_id"]
+
+    # ── Plan limit: max_brands ────────────────────────────────────────────────
+    limits = get_plan_limits(user_id)
+    max_brands = limits["max_brands"]
+    if max_brands is not None:  # None = unlimited
+        with get_connection() as _conn:
+            _cur = _conn.cursor()
+            _cur.execute("SELECT COUNT(*) AS cnt FROM brands WHERE user_id = %s", (user_id,))
+            current_brand_count = _cur.fetchone()["cnt"]
+        if current_brand_count >= max_brands:
+            plan_name = limits["plan_name"] or "your current plan"
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Brand limit reached. {plan_name} allows up to {max_brands} "
+                    f"brand{'s' if max_brands != 1 else ''}. "
+                    f"Upgrade your plan to add more brands."
+                ),
+            )
+    # ─────────────────────────────────────────────────────────────────────────
 
     business_name = normalize_text_field(business_name)
     business_info = normalize_text_field(business_info)

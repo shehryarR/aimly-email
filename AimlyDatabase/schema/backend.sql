@@ -251,6 +251,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     status                  ENUM('trialing','active','past_due','paused','canceled','inactive')
                             DEFAULT 'inactive',
     price_id                VARCHAR(255),
+    plan_slug               ENUM('solo','studio','agency') DEFAULT NULL,  -- stable plan identifier; never changes even if price_id rotates
     next_billed_at          DATETIME,
     current_period_ends_at  DATETIME,
     scheduled_change        JSON,

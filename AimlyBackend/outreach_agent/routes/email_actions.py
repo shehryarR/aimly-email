@@ -48,6 +48,7 @@ from services.email_service import (
     generate_email as svc_generate_email,
     send_email as svc_send_email,
 )
+from core.plans import get_plan_limits, get_daily_sends_count
 from .utils.email_helpers import (
     MessageResponse,
     resolve_attachments_for_primary,
@@ -481,6 +482,34 @@ def bulk_send_emails(
 
     if not request.email_ids:
         raise HTTPException(status_code=400, detail="email_ids must not be empty")
+
+    # ── Plan limit: daily_email_cap ───────────────────────────────────────────
+    # Only enforced for immediate sends (no scheduled_at). Scheduled sends that
+    # fire via the scheduler also pass through this endpoint, so they are
+    # covered automatically — no changes needed in scheduler.py.
+    limits = get_plan_limits(user_id)
+    daily_cap = limits["daily_email_cap"]
+    if daily_cap is not None and daily_cap > 0:
+        already_sent_today = get_daily_sends_count(user_id)
+        remaining_quota    = daily_cap - already_sent_today
+        if remaining_quota <= 0:
+            plan_name = limits["plan_name"] or "your current plan"
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Daily email limit reached. {plan_name} allows {daily_cap} emails per day. "
+                    f"Your quota resets at midnight UTC."
+                ),
+            )
+        # Trim the batch to not exceed remaining quota
+        if len(request.email_ids) > remaining_quota:
+            request.email_ids = request.email_ids[:remaining_quota]
+    elif daily_cap == 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Email sending is not available on your current plan. Please subscribe to continue.",
+        )
+    # ─────────────────────────────────────────────────────────────────────────
 
     scheduled_at = None
     if request.time:

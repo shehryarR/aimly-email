@@ -42,10 +42,18 @@ interface User {
 
 type AppState = 'loading' | 'server-down' | 'ready';
 
+// Plan limits resolved from /subscription/status
+export interface PlanLimits {
+  planName:      string | null;   // "Solo" | "Studio" | "Agency" | null
+  planSlug:      string | null;   // "solo" | "studio" | "agency" | null
+  maxBrands:     number | null;   // null = unlimited
+  dailyEmailCap: number;          // 0 = no access
+}
+
 // ── Constants ─────────────────────────────────────────────
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
+const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL  || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
-const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
+const API_BASE     = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
 
 // ── Auth storage helpers ──────────────────────────────────
@@ -95,43 +103,54 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
 
 // ── Auth Context ──────────────────────────────────────────
 interface AuthContextValue {
-  user: User | null;
-  authReady: boolean;
-  isAuthenticated: boolean;
-  hasSubscription: boolean;
-  subscriptionStatus: string;
+  user:                User | null;
+  authReady:           boolean;
+  isAuthenticated:     boolean;
+  hasSubscription:     boolean;
+  subscriptionStatus:  string;
   subscriptionLoading: boolean;
-  login: (user: User) => void;
-  logout: () => void;
+  planLimits:          PlanLimits;
+  login:               (user: User) => void;
+  logout:              () => void;
   refreshSubscription: () => Promise<void>;
 }
 
+const DEFAULT_PLAN_LIMITS: PlanLimits = {
+  planName:      null,
+  planSlug:      null,
+  maxBrands:     0,
+  dailyEmailCap: 0,
+};
+
 const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  authReady: false,
-  isAuthenticated: false,
-  hasSubscription: false,
-  subscriptionStatus: 'inactive',
+  user:                null,
+  authReady:           false,
+  isAuthenticated:     false,
+  hasSubscription:     false,
+  subscriptionStatus:  'inactive',
   subscriptionLoading: true,
-  login: () => {},
-  logout: () => {},
+  planLimits:          DEFAULT_PLAN_LIMITS,
+  login:               () => {},
+  logout:              () => {},
   refreshSubscription: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }> = ({ children, onLogout }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [hasSubscription, setHasSubscription] = useState(false);
-  const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
+  const [user,                setUser]                = useState<User | null>(null);
+  const [authReady,           setAuthReady]           = useState(false);
+  const [hasSubscription,     setHasSubscription]     = useState(false);
+  const [subscriptionStatus,  setSubscriptionStatus]  = useState('inactive');
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+  const [planLimits,          setPlanLimits]          = useState<PlanLimits>(DEFAULT_PLAN_LIMITS);
 
   const logout = useCallback(() => {
     clearAuthData();
     setUser(null);
     setHasSubscription(false);
     setSubscriptionStatus('inactive');
+    setPlanLimits(DEFAULT_PLAN_LIMITS);
     onLogout();
   }, [onLogout]);
 
@@ -141,13 +160,20 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
   }, [logout]);
 
   const refreshSubscription = useCallback(async () => {
-    // Paddle disabled — grant access immediately, no backend call needed
+    // Paddle disabled — grant full Agency-level access immediately
     if (!PADDLE_ENABLED) {
       setSubscriptionStatus('active');
       setHasSubscription(true);
+      setPlanLimits({
+        planName:      'Agency',
+        planSlug:      'agency',
+        maxBrands:     null,
+        dailyEmailCap: 7500,
+      });
       setSubscriptionLoading(false);
       return;
     }
+
     setSubscriptionLoading(true);
     try {
       const res = await apiFetch(`${API_BASE}/subscription/status`);
@@ -155,13 +181,21 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
         const data = await res.json();
         setSubscriptionStatus(data.status || 'inactive');
         setHasSubscription(data.has_access === true);
+        setPlanLimits({
+          planName:      data.plan_name      ?? null,
+          planSlug:      data.plan_slug      ?? null,
+          maxBrands:     data.max_brands     ?? 0,
+          dailyEmailCap: data.daily_email_cap ?? 0,
+        });
       } else {
         setSubscriptionStatus('inactive');
         setHasSubscription(false);
+        setPlanLimits(DEFAULT_PLAN_LIMITS);
       }
     } catch {
       setSubscriptionStatus('inactive');
       setHasSubscription(false);
+      setPlanLimits(DEFAULT_PLAN_LIMITS);
     } finally {
       setSubscriptionLoading(false);
     }
@@ -202,10 +236,11 @@ const AuthProvider: React.FC<{ children: React.ReactNode; onLogout: () => void }
     <AuthContext.Provider value={{
       user,
       authReady,
-      isAuthenticated: !!user,
+      isAuthenticated:     !!user,
       hasSubscription,
       subscriptionStatus,
       subscriptionLoading,
+      planLimits,
       login,
       logout,
       refreshSubscription,
@@ -269,10 +304,10 @@ const CampaignWrapper: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
 // ── Main Router ────────────────────────────────────────────
 const AppRouter: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>('loading');
+  const [appState,     setAppState]     = useState<AppState>('loading');
   const [showSettings, setShowSettings] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { user, login, logout, hasSubscription } = useAuth();
 
   useEffect(() => {
@@ -316,7 +351,7 @@ const AppRouter: React.FC = () => {
     navigate('/auth');
   };
 
-  const handleCampaignClick = (campaignId: number) => navigate(`/campaign/${campaignId}`);
+  const handleCampaignClick  = (campaignId: number) => navigate(`/campaign/${campaignId}`);
   const handleBackToCampaigns = () => navigate('/campaigns');
 
   const handleServerHealthRetry = async () => {
@@ -343,7 +378,7 @@ const AppRouter: React.FC = () => {
     if (path === '/categories')       return 'Categories';
     if (path.startsWith('/campaign/') && path.endsWith('/history')) return 'Campaign Email History';
     if (path.startsWith('/campaign/')) return 'Campaign Management';
-    if (path.startsWith('/company/') && path.endsWith('/history'))  return 'Company Email History';
+    if (path.startsWith('/company/')  && path.endsWith('/history'))  return 'Company Email History';
     return '';
   };
 
@@ -369,7 +404,7 @@ const AppRouter: React.FC = () => {
     return <ServerDown onRetry={handleServerHealthRetry} />;
   }
 
-  const isAuthPage = location.pathname === '/auth';
+  const isAuthPage    = location.pathname === '/auth';
   const isLandingPage = ['/', '/pricing', '/terms', '/privacy', '/refunds'].includes(location.pathname);
 
   return (
@@ -472,12 +507,12 @@ const AppRouter: React.FC = () => {
             }
           />
 
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/"        element={<LandingPage />} />
           <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/terms"   element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/refunds" element={<RefundPolicy />} />
-          <Route path="*" element={<SmartRedirect />} />
+          <Route path="*"        element={<SmartRedirect />} />
         </Routes>
       </main>
 
