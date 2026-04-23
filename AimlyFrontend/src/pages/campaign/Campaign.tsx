@@ -194,7 +194,7 @@ const HeaderIconBtn = styled.button<{ theme: any }>`
 `;
 const NavIconButton = styled.button<{ theme: any }>`
   position: relative;
-  height: 32px;
+  height: 36px;
   padding: 0 0.6rem;
   display: flex;
   align-items: center;
@@ -207,7 +207,7 @@ const NavIconButton = styled.button<{ theme: any }>`
   transition: all 0.2s ease;
   opacity: 0.75;
   flex-shrink: 0;
-  svg { width: 15px; height: 15px; flex-shrink: 0; }
+  svg { width: 16px; height: 16px; flex-shrink: 0; }
   &:hover {
     border-color: ${p => p.theme.colors.primary.main};
     color: ${p => p.theme.colors.primary.main};
@@ -2519,7 +2519,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
               <NavIconButton theme={theme} onClick={() => navigate('/companies')} title="Companies">
-                <svg width="12" height="15" viewBox="0 0 32 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 32 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="1" y="1" width="30" height="38" rx="2"/>
                   <rect x="5" y="6" width="7" height="7" rx="0.5"/>
                   <rect x="20" y="6" width="7" height="7" rx="0.5"/>
