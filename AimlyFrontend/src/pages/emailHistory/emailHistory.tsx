@@ -22,7 +22,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import { apiFetch } from '../../App';
 
@@ -109,6 +109,7 @@ interface DropdownOption { id: number; name: string; }
 
 // ─── Back button ──────────────────────────────────────────────────────────────
 const BackBtn = styled.button<{ theme: any }>`
+  text-decoration: none;
   position: absolute;
   left: 0;
   width: 36px; height: 36px;
@@ -1586,7 +1587,7 @@ const EmailHistory: React.FC = () => {
       <MainContent>
         <HeaderCard theme={theme}>
           <HeaderRow>
-            <BackBtn theme={theme} onClick={() => navigate('/campaigns')} title="Go back">
+            <BackBtn theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Go back">
               <ArrowLeftIcon />
             </BackBtn>
             <HeaderCenter>

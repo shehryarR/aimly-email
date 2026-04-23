@@ -4,7 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import {
@@ -42,6 +42,7 @@ interface ConfirmState { open: boolean; title: string; message: string; onConfir
 
 // ── Back button ─────────────────────────────────────────────
 const BackBtn = styled.button<{ theme: any }>`
+  text-decoration: none;
   position: absolute;
   left: 0;
   width: 36px; height: 36px;
@@ -762,7 +763,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         {/* Header */}
         <HeaderCard theme={theme}>
           <HeaderRow>
-            <BackBtn theme={theme} onClick={() => navigate('/campaigns')} title="Go back">
+            <BackBtn theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Go back">
               <ArrowLeftIcon />
             </BackBtn>
             <HeaderCenter>
