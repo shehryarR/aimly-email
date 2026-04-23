@@ -7,7 +7,7 @@ LLM model and API key are passed in by the caller via llm_config.
 import asyncio
 from pydantic import BaseModel, Field
 from core.llm import LLMFactory
-from typing import Dict,Optional
+from typing import Dict, Optional
 
 
 # =============================================================================
@@ -29,114 +29,183 @@ class EmailWriterInput(BaseModel):
 
 
 # =============================================================================
-# PROMPT TEMPLATES
+# INSTRUCTION PARSER
 # =============================================================================
 
-# Template for when company research is available
-PERSONALIZED_EMAIL_PROMPT = """
-Write a personalized outreach email for "{company_name}" based on:
-User's Business Context: {user_instruction}
-Company Research: {company_summary}
+def _parse_instruction_fields(user_instruction: str) -> dict:
+    """
+    Parse the flat user_instruction string back into individual fields.
 
-Create an email that:
-1. Shows genuine research and understanding of their business
-2. References specific details about their company, industry, or recent developments
-3. Clearly connects how the user's offering solves their potential needs
-4. Uses insights from the research to make the pitch relevant and timely
-5. Follows the tone and style specified in the user's business context
-"""
+    email_actions.py builds user_instruction as:
+        Goal: ...
+        Value Proposition: ...
+        Call to Action: ...
+        Tone: ...
+        Writing Guidelines: ...
+        Additional Context: ...
 
-# Template for when no company research is available
-GENERIC_EMAIL_PROMPT = """
-Write a professional outreach email for "{company_name}" based on:
-User's Business Context: {user_instruction}
+    Returns a dict with keys: goal, value_prop, cta, tone,
+    writing_guidelines, additional_notes. Missing fields are empty strings.
+    """
+    field_map = {
+        "Goal":               "goal",
+        "Value Proposition":  "value_prop",
+        "Call to Action":     "cta",
+        "Tone":               "tone",
+        "Writing Guidelines": "writing_guidelines",
+        "Additional Context": "additional_notes",
+    }
 
-Create an email that:
-1. Presents the user's value proposition clearly
-2. Explains how their offering could benefit companies like {company_name}
-3. Maintains a professional and engaging tone
-4. Follows the tone and style specified in the user's business context
-5. Does NOT attempt to reference specific details about the company since none are available
-"""
+    result = {v: "" for v in field_map.values()}
+    lines = user_instruction.strip().splitlines()
 
-# Template for HTML email with research
-PERSONALIZED_HTML_EMAIL_PROMPT = """
-Write a personalized outreach email for "{company_name}" based on:
-User's Business Context: {user_instruction}
-Company Research: {company_summary}
+    current_key = None
+    for line in lines:
+        matched = False
+        for label, key in field_map.items():
+            if line.startswith(f"{label}:"):
+                result[key] = line[len(label) + 1:].strip()
+                current_key = key
+                matched = True
+                break
+        if not matched and current_key:
+            # Multi-line value — append to current field
+            result[current_key] += " " + line.strip()
 
-Create a visually appealing HTML email that:
-1. Shows genuine research and understanding of their business
-2. References specific details about their company, industry, or recent developments
-3. Clearly connects how the user's offering solves their potential needs
-4. Uses insights from the research to make the pitch relevant and timely
-5. Follows the tone and style specified in the user's business context
-"""
+    return result
 
-# Template for HTML email without research
-GENERIC_HTML_EMAIL_PROMPT = """
-Write a professional outreach email for "{company_name}" based on:
-User's Business Context: {user_instruction}
 
-Create a visually appealing HTML email that:
-1. Presents the user's value proposition clearly
-2. Explains how their offering could benefit companies like {company_name}
-3. Maintains a professional and engaging tone
-4. Follows the tone and style specified in the user's business context
-5. Does NOT attempt to reference specific details about the company since none are available
-"""
+# =============================================================================
+# PROMPT BUILDER
+# =============================================================================
 
-# Additional instructions appended when html_email=True
-HTML_EMAIL_INSTRUCTIONS = """
-HTML EMAIL FORMATTING RULES:
-- The CONTENT section must be a complete, self-contained HTML snippet (NOT a full <!DOCTYPE> page).
-- Use only inline CSS styles — no <style> blocks, no external stylesheets.
-- Use a clean, professional layout with a readable font (e.g. Arial, sans-serif), font-size 15px, line-height 1.6, color #333333.
-- Structure the email with clearly separated sections using <div> or <p> tags with appropriate spacing (margin-bottom: 16px).
-- You may use a subtle accent color for headings or a CTA button, but keep the design minimal and professional.
-- The CTA (call-to-action) should be a styled <a> button, e.g.:
-  <a href="#" style="display:inline-block;padding:10px 24px;background:#4F46E5;color:#fff;
-     text-decoration:none;border-radius:6px;font-weight:bold;">Book a Call</a>
-- Do NOT include <html>, <head>, <body>, or <style> tags.
-- Do NOT include a signature block — it will be added by the system.
-- Do NOT include placeholder fields like [Name] or [Company].
-"""
+def _build_business_context_block(fields: dict) -> str:
+    """
+    Build the explicit business context block that goes into every prompt.
+    Each field gets its own instruction so the LLM knows exactly what to do with it.
+    """
+    lines = []
 
-# Common instructions for both templates
-COMMON_EMAIL_INSTRUCTIONS = """
-IMPORTANT EMAIL FORMATTING RULES:
+    if fields["goal"]:
+        lines.append(f"GOAL — The purpose of this email is: {fields['goal']}")
+
+    if fields["value_prop"]:
+        lines.append(f"VALUE PROPOSITION — Clearly communicate this offering: {fields['value_prop']}")
+
+    if fields["tone"]:
+        lines.append(f"TONE — Every sentence must match this tone exactly: {fields['tone']}")
+
+    if fields["cta"]:
+        lines.append(
+            f"CALL TO ACTION — End the email with this specific CTA (use the exact intent, "
+            f"you may rephrase naturally): {fields['cta']}"
+        )
+
+    if fields["writing_guidelines"]:
+        lines.append(
+            f"WRITING GUIDELINES — These are strict rules you must follow when writing the email:\n"
+            f"{fields['writing_guidelines']}"
+        )
+
+    if fields["additional_notes"]:
+        lines.append(
+            f"ADDITIONAL CONTEXT — Use this information to add relevance and specificity to the email:\n"
+            f"{fields['additional_notes']}"
+        )
+
+    return "\n\n".join(lines)
+
+
+def _build_prompt(
+    company_name: str,
+    fields: dict,
+    company_summary: Optional[str],
+    html_email: bool,
+) -> str:
+    """
+    Assemble the full prompt from parts. Same structure for plain and HTML —
+    HTML gets extra formatting rules appended.
+    """
+    context_block = _build_business_context_block(fields)
+    has_research  = bool(company_summary and company_summary.strip())
+
+    # Opening instruction
+    if html_email:
+        opening = f'Write a visually appealing HTML outreach email to "{company_name}".'
+    else:
+        opening = f'Write a professional outreach email to "{company_name}".'
+
+    # Research section
+    if has_research:
+        research_section = (
+            f"COMPANY RESEARCH — Use these insights to personalise the email. Reference "
+            f"specific details about their business, industry, or situation where relevant:\n"
+            f"{company_summary}"
+        )
+        research_instruction = (
+            "- Personalise the opening by referencing something specific from the company research\n"
+            "- Connect the value proposition directly to the company's known situation or needs\n"
+            "- Make it clear this email was written for them specifically, not a mass blast"
+        )
+    else:
+        research_section = (
+            "No company research is available. Write a strong generic email — "
+            "do NOT invent specific details about the company."
+        )
+        research_instruction = (
+            "- Write a compelling generic opening that could apply to any similar company\n"
+            "- Do NOT reference specific details about the company that you do not know\n"
+            "- Focus on making the value proposition as clear and relevant as possible"
+        )
+
+    prompt = f"""{opening}
+
+BUSINESS CONTEXT (follow every instruction below strictly)
+{context_block}
+
+COMPANY INFORMATION
+{research_section}
+
+EMAIL WRITING RULES
+{research_instruction}
+- Match the TONE field exactly in every sentence — this is non-negotiable
+- Strictly follow every rule in WRITING GUIDELINES if provided
+- Incorporate ADDITIONAL CONTEXT naturally into the email if provided
+- End with the CALL TO ACTION specified — do not substitute a different CTA
 - Do NOT use placeholder fields like [Name], [Company], [Your Name], etc.
-- Use actual information provided or write generically without brackets
-- If specific information is missing, write naturally without placeholders
-- Write a complete, ready-to-send email with no empty fields to fill
+- If no contact name is known, use: "Dear {company_name} Team," or "Hello,"
+- Do NOT include a signature — it will be added by the system
+- Write a complete, ready-to-send email. No empty fields, no manual editing needed.
+- After writing, review: does every sentence reflect the correct tone? Is the CTA present?
 
-GREETING OPTIONS:
-- If no specific contact name: "Dear Team," or "Hello," or "Hi there,"
-- If company name known: "Dear {company_name} Team,"
-- Never use: "Dear [Name]" or "Hi [First Name]"
+SUBJECT LINE RULES
+- Create a subject line that matches the specified TONE exactly
+- Keep it under 50 characters where possible
+- Make it specific and intriguing — avoid generic subjects like "Business Opportunity"
+- The subject line must align with the email's opening line
 
-SIGNATURE:
-- Do not provide any signature. The signature will be added separately by the system.
-
-SUBJECT LINE REQUIREMENTS:
-- Create a compelling subject line that matches the tone specified in user instructions
-- Avoid generic subjects like "Business Opportunity"
-- Keep it under 50 characters when possible
-- Make it intriguing and align with the user's specified approach
-
-RESPONSE FORMAT:
-You MUST respond in exactly this format:
-
-SUBJECT: [Your subject line here]
+RESPONSE FORMAT (follow exactly)
+SUBJECT: [subject line here]
 
 CONTENT:
-[Your complete email content here]
-
-Structure: Appropriate greeting, personalized opening, value proposition,
-clear call-to-action, appropriate closing.
-The email should be complete and ready to send without any manual editing needed.
-After drafting the email, review to ensure no placeholders remain.
+[complete email content here]
 """
+
+    if html_email:
+        prompt += """
+HTML FORMATTING RULES
+- The CONTENT must be a complete, self-contained HTML snippet (NOT a full <!DOCTYPE> page)
+- Use only inline CSS styles — no <style> blocks, no external stylesheets
+- Font: Arial or sans-serif, 15px, line-height 1.6, color #333333
+- Use <div> or <p> tags with margin-bottom: 16px to separate sections
+- The CTA must be a styled <a> button:
+  <a href="#" style="display:inline-block;padding:10px 24px;background:#4F46E5;color:#fff;text-decoration:none;border-radius:6px;font-weight:bold;">Your CTA text</a>
+- Do NOT include <html>, <head>, <body>, or <style> tags
+- Do NOT include a signature block
+- Do NOT use placeholder fields like [Name] or [Company]
+"""
+
+    return prompt.strip()
 
 
 # =============================================================================
@@ -148,9 +217,6 @@ async def run_email_writer_agent(inputs: EmailWriterInput) -> Dict[str, str]:
     Generate a personalised email with subject line.
 
     Credentials come from inputs.llm_config — no DB calls are made here.
-    
-    If company_summary is provided, creates a personalized email using the research.
-    If company_summary is None/empty, creates a generic email based only on user_instruction.
 
     Returns:
         {"subject": str, "content": str}
@@ -169,43 +235,22 @@ async def run_email_writer_agent(inputs: EmailWriterInput) -> Dict[str, str]:
 
     print(f"[EmailWriter] model={model!r}  company={inputs.company_name!r}  html_email={inputs.html_email}  raw_prompt={inputs.raw_prompt}")
 
-    # ── Raw prompt: use user_instruction verbatim, skip all wrapping ──────────
+    # Raw prompt: use user_instruction verbatim, skip all wrapping
     if inputs.raw_prompt:
         full_prompt = inputs.user_instruction
     else:
-        # Determine which prompt template to use based on company_summary and html_email
-        has_research = inputs.company_summary and inputs.company_summary.strip()
-
-        if inputs.html_email:
-            if has_research:
-                print(f"[EmailWriter] Using personalized HTML template with research")
-                main_prompt = PERSONALIZED_HTML_EMAIL_PROMPT.format(
-                    company_name=inputs.company_name,
-                    user_instruction=inputs.user_instruction,
-                    company_summary=inputs.company_summary,
-                )
-            else:
-                print(f"[EmailWriter] Using generic HTML template (no research available)")
-                main_prompt = GENERIC_HTML_EMAIL_PROMPT.format(
-                    company_name=inputs.company_name,
-                    user_instruction=inputs.user_instruction,
-                )
-            full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS + "\n" + HTML_EMAIL_INSTRUCTIONS
-        else:
-            if has_research:
-                print(f"[EmailWriter] Using personalized template with research")
-                main_prompt = PERSONALIZED_EMAIL_PROMPT.format(
-                    company_name=inputs.company_name,
-                    user_instruction=inputs.user_instruction,
-                    company_summary=inputs.company_summary,
-                )
-            else:
-                print(f"[EmailWriter] Using generic template (no research available)")
-                main_prompt = GENERIC_EMAIL_PROMPT.format(
-                    company_name=inputs.company_name,
-                    user_instruction=inputs.user_instruction,
-                )
-            full_prompt = main_prompt + "\n" + COMMON_EMAIL_INSTRUCTIONS
+        fields = _parse_instruction_fields(inputs.user_instruction)
+        has_research = bool(inputs.company_summary and inputs.company_summary.strip())
+        print(
+            f"[EmailWriter] html={inputs.html_email}  research={'yes' if has_research else 'no'}  "
+            f"tone={fields['tone']!r}  guidelines={'yes' if fields['writing_guidelines'] else 'no'}"
+        )
+        full_prompt = _build_prompt(
+            company_name=inputs.company_name,
+            fields=fields,
+            company_summary=inputs.company_summary,
+            html_email=inputs.html_email,
+        )
 
     try:
         llm = LLMFactory.create_llm(api_key, "gemini")
@@ -223,14 +268,14 @@ async def run_email_writer_agent(inputs: EmailWriterInput) -> Dict[str, str]:
 
     print(f"[EmailWriter] Response received for {inputs.company_name!r}")
 
-    # ── Parse SUBJECT / CONTENT markers ──────────────────────────────────────
+    # Parse SUBJECT / CONTENT markers
     if "SUBJECT:" in response_text and "CONTENT:" in response_text:
         parts   = response_text.split("CONTENT:")
         subject = parts[0].replace("SUBJECT:", "").strip()
         content = parts[1].strip()
         return {"subject": subject, "content": content}
 
-    # ── Fallback parsing ──────────────────────────────────────────────────────
+    # Fallback parsing
     print(f"[EmailWriter] Warning: response not in expected format for {inputs.company_name!r}")
     lines = response_text.strip().split("\n")
     if len(lines) > 1 and len(lines[0]) < 100 and ":" not in lines[0]:
