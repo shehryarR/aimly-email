@@ -191,6 +191,7 @@ const HeaderIconBtn = styled.button<{ theme: any }>`
     color: ${p => p.theme.colors.primary.main};
   }
   svg { width: 18px; height: 18px; }
+  text-decoration: none;
 `;
 const NavIconButton = styled.button<{ theme: any }>`
   position: relative;
@@ -208,6 +209,7 @@ const NavIconButton = styled.button<{ theme: any }>`
   opacity: 0.75;
   flex-shrink: 0;
   svg { width: 16px; height: 16px; flex-shrink: 0; }
+  text-decoration: none;
   &:hover {
     border-color: ${p => p.theme.colors.primary.main};
     color: ${p => p.theme.colors.primary.main};

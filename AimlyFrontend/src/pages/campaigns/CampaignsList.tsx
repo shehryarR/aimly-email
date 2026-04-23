@@ -3,6 +3,7 @@
 // ============================================================
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import {
   CampaignsSection, SectionHeader, SectionTitle, AddButton,
@@ -407,11 +408,24 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
               <CampaignCard
                 key={campaign.campaign_id}
                 theme={theme}
-                onClick={() => onCampaignClick(campaign.campaign_id)}
-                style={isSelected
+                onClick={(e: React.MouseEvent) => {
+                  if (e.ctrlKey || e.metaKey) return;
+                  onCampaignClick(campaign.campaign_id);
+                }}
+                style={{ position: 'relative', ...(isSelected
                   ? { borderColor: theme.colors.primary.main, backgroundColor: theme.colors.primary.main + '05' }
-                  : {}}
+                  : {}) }}
               >
+                {/* Invisible Link stretched over card for Ctrl+click → new tab */}
+                <Link
+                  to={`/campaign/${campaign.campaign_id}`}
+                  onClick={(e: React.MouseEvent) => {
+                    if (!e.ctrlKey && !e.metaKey) e.preventDefault();
+                  }}
+                  style={{ position: 'absolute', inset: 0, zIndex: 0 }}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                />
                 <CampaignHeader>
                   <div
                     onClick={(e) => onSelectCampaign(campaign.campaign_id, e)}

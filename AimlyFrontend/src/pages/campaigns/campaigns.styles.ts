@@ -127,6 +127,7 @@ export const HeroNavBtn = styled.button<{ theme: any }>`
   opacity: 0.75;
   white-space: nowrap;
   flex-shrink: 0;
+  text-decoration: none;
 
   svg { width: 13px; height: 13px; flex-shrink: 0; }
 
