@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import BulkEmailModal from './BulkEmailModal';
@@ -2508,7 +2508,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
 
           {/* Top row: back (left) · campaign name (centre) · settings (right) */}
           <StatsHeader>
-            <HeaderIconBtn theme={theme} onClick={handleBack} title="Back to campaigns">
+            <HeaderIconBtn theme={theme} as={Link} to="/campaigns" title="Back to campaigns">
               <ArrowLeftIcon />
             </HeaderIconBtn>
 
@@ -2518,7 +2518,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
             </CampaignTitleSection>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-              <NavIconButton theme={theme} onClick={() => navigate('/companies')} title="Companies">
+              <NavIconButton theme={theme} as={Link} to="/companies" title="Companies">
                 <svg width="16" height="16" viewBox="0 0 32 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="1" y="1" width="30" height="38" rx="2"/>
                   <rect x="5" y="6" width="7" height="7" rx="0.5"/>
