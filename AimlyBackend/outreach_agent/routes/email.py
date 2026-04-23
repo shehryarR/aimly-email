@@ -116,7 +116,7 @@ def get_campaign_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at, e.html_email,
+                e.status, e.sent_at, e.created_at, e.html_email, e.bcc,
                 co.id   AS company_id,
                 co.name AS company_name,
                 fe.reason AS failed_reason
@@ -204,7 +204,7 @@ def get_company_emails(
         cursor.execute(f"""
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
-                e.status, e.sent_at, e.created_at, e.html_email,
+                e.status, e.sent_at, e.created_at, e.html_email, e.bcc,
                 camp.id   AS campaign_id,
                 camp.name AS campaign_name,
                 fe.reason AS failed_reason
@@ -736,7 +736,7 @@ def get_all_emails(
             SELECT
                 e.id, e.email_subject, e.email_content, e.recipient_email,
                 e.status, e.sent_at, e.read_at, e.created_at, e.html_email,
-                e.signature, e.logo, e.logo_mime_type,
+                e.signature, e.logo, e.logo_mime_type, e.bcc,
                 co.id     AS company_id,
                 co.name   AS company_name,
                 camp.id   AS campaign_id,

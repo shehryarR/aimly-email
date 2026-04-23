@@ -79,6 +79,7 @@ interface EmailRecord {
   failed_reason?: string;
   // Baked-in from GET /email/ — no separate fetch needed.
   // To download, use GET /attachments/download/?ids=1,2,3
+  bcc?: string | null;
   attachments: EmailAttachment[];
 }
 
@@ -465,6 +466,11 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   ? <FormInput theme={theme} value={editRecipient} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onRecipientChange(e.target.value)} placeholder="recipient@example.com" />
                   : <ReadBlock theme={theme} style={{ fontFamily: 'SF Mono, Monaco, monospace', fontSize: '0.825rem' }}>{activeEmail.recipient_email}</ReadBlock>
                 }
+                {activeEmail.bcc && (
+                  <div style={{ fontSize: '0.72rem', opacity: 0.45, marginTop: '0.3rem', fontFamily: 'SF Mono, Monaco, monospace', paddingLeft: '0.1rem' }}>
+                    bcc: {activeEmail.bcc}
+                  </div>
+                )}
               </FormGroup>
               <FormGroup>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
