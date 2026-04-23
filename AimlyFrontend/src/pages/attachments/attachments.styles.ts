@@ -49,6 +49,7 @@ export const HeaderRow = styled.div`
 `;
 
 export const BackButton = styled.button<{ theme: any }>`
+  text-decoration: none;
   position: absolute;
   left: 0;
   width: 36px;

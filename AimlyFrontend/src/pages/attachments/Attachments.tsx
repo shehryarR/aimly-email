@@ -15,7 +15,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import { apiFetch } from '../../App';
 
@@ -1062,7 +1062,7 @@ const Attachments: React.FC = () => {
         {/* Header */}
         <HeaderCard theme={theme}>
           <HeaderRow>
-            <BackButton theme={theme} onClick={() => navigate('/campaigns')} title="Back to campaigns">
+            <BackButton theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Back to campaigns">
               <ArrowLeftIcon />
             </BackButton>
             <HeaderCenter>
