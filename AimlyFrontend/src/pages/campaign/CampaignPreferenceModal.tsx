@@ -908,6 +908,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       clearDirty(triggerTab);
       if (triggerTab !== 'strategy_content') clearDirty('strategy_content');
 
+      onToast('success', 'Saved', 'Campaign preferences saved');
       onSaved();
     } catch (err) {
       onToast('error', 'Save Failed', err instanceof Error ? err.message : 'Failed to save');
@@ -983,6 +984,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Failed to save'); }
       clearDirty('template');
       await loadPrefs();
+      onToast('success', 'Saved', 'Template saved');
       onSaved();
     } catch (err) {
       onToast('error', 'Template', err instanceof Error ? err.message : 'Failed to save');
@@ -1346,6 +1348,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                         await apiFetch(`${apiBase}/campaign/${campaignId}/campaign_preference/`, { method: 'PUT', body: fd });
                         savedTemplate.current = { subject: '', body: '' };
                         clearDirty('template');
+                        onToast('success', 'Cleared', 'Template cleared');
                         onSaved();
                       } catch { onToast('error', 'Template', 'Failed to clear template'); }
                       finally { setTemplateSaving(false); }
