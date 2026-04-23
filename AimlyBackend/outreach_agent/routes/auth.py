@@ -15,6 +15,8 @@ import os
 from typing import Optional
 from core.database.connection import get_connection
 
+PADDLE_ENABLED = os.getenv("PADDLE_ENABLED", "true").lower() == "true"
+
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer(auto_error=False)
 
@@ -363,7 +365,8 @@ async def register(request: RegisterRequest):
             """, (request.username, password_hash, request.email))
             user_id = cursor.lastrowid
             cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
-            cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', 0)", (user_id,))
+            special_access = 0 if PADDLE_ENABLED else 1
+            cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', %s)", (user_id, special_access))
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -723,7 +726,8 @@ async def google_callback(request: GoogleCallbackRequest, response: Response):
                 """, (username, email, google_id))
                 user_id = cursor.lastrowid
                 cursor.execute("INSERT INTO global_settings (user_id) VALUES (%s)", (user_id,))
-                cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', 0)", (user_id,))
+                special_access = 0 if PADDLE_ENABLED else 1
+                cursor.execute("INSERT INTO subscriptions (user_id, status, special_access) VALUES (%s, 'inactive', %s)", (user_id, special_access))
                 conn.commit()
             except Exception as e:
                 conn.rollback()
