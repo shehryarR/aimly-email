@@ -1524,7 +1524,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
             {activeTab === 'llm' && (
               <TabPanel theme={theme} key="llm">
                 <PanelTitle theme={theme}>AI Settings</PanelTitle>
-                <PanelSubtitle theme={theme}>The AI model that reads company data and writes personalised emails. Requires a Google Gemini API key.</PanelSubtitle>
+                <PanelSubtitle theme={theme}>Configure your Google Gemini API key and preferred model for email generation. Company search uses a fixed model — Gemini 2.5 Flash with custom tools.</PanelSubtitle>
 
                 <FormGroup>
                   <Label theme={theme}>AI Model <RequiredStar>*</RequiredStar>

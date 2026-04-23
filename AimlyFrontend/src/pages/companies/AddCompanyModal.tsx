@@ -575,6 +575,9 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
               {/* OK — show form */}
               {tavilyStatus === 'ok' && (
                 <>
+                  <div style={{ fontSize: '0.775rem', opacity: 0.5, lineHeight: 1.5, marginBottom: '1rem', color: theme.colors.base.content }}>
+                    Company search uses a fixed model — Gemini 2.5 Flash with custom tools. Your selected model is used for email generation only.
+                  </div>
                   <FormGroup>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
                       <Label theme={theme} style={{ marginBottom: 0 }}>Search Query *</Label>

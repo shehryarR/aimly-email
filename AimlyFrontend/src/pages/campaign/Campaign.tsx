@@ -1541,6 +1541,9 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
                 </div>
               )}
               {tvStatus === 'ok' && (<>
+                <div style={{ fontSize: '0.775rem', opacity: 0.5, lineHeight: 1.5, marginBottom: '1rem', color: theme.colors.base.content }}>
+                  Company search uses a fixed model — Gemini 2.5 Flash with custom tools. Your selected model is used for email generation only.
+                </div>
                 <FG>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
                     <FL theme={theme} style={{ marginBottom: 0 }}>Search Query *</FL>
