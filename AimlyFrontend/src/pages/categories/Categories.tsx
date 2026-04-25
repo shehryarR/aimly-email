@@ -25,9 +25,22 @@ import {
   CancelButton, DangerButton,
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
   ModalBody, ModalFooter, FormGrid, FormGroup, Label, Input, Textarea, PrimaryButton,
+  DotsButton, DotsMenu, DotsMenuItem, DotsMenuDivider,
 } from './categories.styles';
 import { apiFetch, useAuth } from '../../App';
 import AddCompaniesToCategoryModal from './AddCompaniesToCategoryModal';
+
+// ── Mobile detection ────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
 
 const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL  || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
@@ -80,6 +93,8 @@ const BackBtn = styled.button<{ theme: any }>`
   transition: all 0.2s ease; flex-shrink: 0;
   &:hover { border-color: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.main}; }
   svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 const toolbarLabelStyle: React.CSSProperties = {
@@ -167,6 +182,22 @@ const Categories: React.FC = () => {
   const { theme } = useTheme();
   const navigate  = useNavigate();
   const { authReady } = useAuth();
+
+  // ── Mobile ──────────────────────────────────────────────
+  const isMobile = useIsMobile();
+  const [openDotsMenu, setOpenDotsMenu] = useState<number | null>(null);
+  const dotsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openDotsMenu === null) return;
+    const handler = (e: MouseEvent) => {
+      if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node)) {
+        setOpenDotsMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openDotsMenu]);
 
   // ── List state ─────────────────────────────────────────
   const [categories,     setCategories]     = useState<Category[]>([]);
@@ -701,45 +732,105 @@ const Categories: React.FC = () => {
             return (
               <CategoryCard key={cat.id} theme={theme} $selected={isSelected}
                 onClick={e => toggleSelect(cat.id, e)}>
-                <CategoryRow>
-                  <div onClick={e => toggleSelect(cat.id, e)}>
-                    <Checkbox theme={theme} $checked={isSelected} />
-                  </div>
-                  <CategoryInfo>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', minWidth: 0 }}>
-                      <CategoryName>{cat.name}</CategoryName>
-                      {cat.detail && (
-                        <CategoryDetail style={{ flexShrink: 1 }}>
-                          {cat.detail.length > 60 ? cat.detail.slice(0, 60) + '…' : cat.detail}
-                        </CategoryDetail>
+                {isMobile ? (
+                  /* ── Mobile: flat row — checkbox · info · dots ── */
+                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.625rem' }}>
+                    {/* Checkbox */}
+                    <div
+                      onClick={e => toggleSelect(cat.id, e)}
+                      style={{
+                        width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
+                        border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+                        backgroundColor: isSelected ? theme.colors.primary.main : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      {isSelected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                    </div>
+                    {/* Name + detail + badge */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {cat.name}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', opacity: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {cat.company_count} {cat.company_count === 1 ? 'company' : 'companies'}{cat.detail ? ` · ${cat.detail}` : ''}
+                      </span>
+                    </div>
+                    {/* Dots */}
+                    <div
+                      style={{ position: 'relative', flexShrink: 0 }}
+                      ref={openDotsMenu === cat.id ? dotsMenuRef : undefined}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <DotsButton
+                        theme={theme}
+                        onClick={() => setOpenDotsMenu(openDotsMenu === cat.id ? null : cat.id)}
+                        title="More options"
+                        disabled={isSelected}
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                      </DotsButton>
+                      {openDotsMenu === cat.id && (
+                        <DotsMenu theme={theme}>
+                          <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); openAddCompaniesModal(cat, { stopPropagation: () => {} } as any); }}>
+                            <PlusIcon /> Add companies
+                          </DotsMenuItem>
+                          <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); openDetailModal(cat, { stopPropagation: () => {} } as any); }}>
+                            <EyeIcon /> View details
+                          </DotsMenuItem>
+                          <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); openEdit(cat, { stopPropagation: () => {} } as any); }}>
+                            <EditIcon /> Edit
+                          </DotsMenuItem>
+                          <DotsMenuDivider theme={theme} />
+                          <DotsMenuItem theme={theme} $danger onClick={() => { setOpenDotsMenu(null); showConfirm('Delete Category', `Delete "${cat.name}"? This cannot be undone.`, () => deleteCategories([cat.id])); }}>
+                            <TrashIcon /> Delete
+                          </DotsMenuItem>
+                        </DotsMenu>
                       )}
                     </div>
-                  </CategoryInfo>
-                  <CategoryMeta>
-                    <CompanyCountBadge theme={theme}>
-                      <BuildingIcon />
-                      {cat.company_count} {cat.company_count === 1 ? 'company' : 'companies'}
-                    </CompanyCountBadge>
-                  </CategoryMeta>
-                  <CategoryActionButtons onClick={e => e.stopPropagation()}>
-                    <IconButton theme={theme} $size="md" title="Add companies" disabled={isSelected}
-                      onClick={e => openAddCompaniesModal(cat, e)}>
-                      <PlusIcon />
-                    </IconButton>
-                    <IconButton theme={theme} $size="md" title="View details" disabled={isSelected}
-                      onClick={e => openDetailModal(cat, e)}>
-                      <EyeIcon />
-                    </IconButton>
-                    <IconButton theme={theme} $size="md" title="Edit" disabled={isSelected}
-                      onClick={e => openEdit(cat, e)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton theme={theme} $variant="danger" $size="md" title="Delete" disabled={isSelected}
-                      onClick={e => { e.stopPropagation(); showConfirm('Delete Category', `Delete "${cat.name}"? This cannot be undone.`, () => deleteCategories([cat.id])); }}>
-                      <TrashIcon />
-                    </IconButton>
-                  </CategoryActionButtons>
-                </CategoryRow>
+                  </div>
+                ) : (
+                  /* ── Desktop: original layout ── */
+                  <CategoryRow>
+                    <div onClick={e => toggleSelect(cat.id, e)}>
+                      <Checkbox theme={theme} $checked={isSelected} />
+                    </div>
+                    <CategoryInfo>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', minWidth: 0 }}>
+                        <CategoryName>{cat.name}</CategoryName>
+                        {cat.detail && (
+                          <CategoryDetail style={{ flexShrink: 1 }}>
+                            {cat.detail.length > 60 ? cat.detail.slice(0, 60) + '…' : cat.detail}
+                          </CategoryDetail>
+                        )}
+                      </div>
+                    </CategoryInfo>
+                    <CategoryMeta>
+                      <CompanyCountBadge theme={theme}>
+                        <BuildingIcon />
+                        {cat.company_count} {cat.company_count === 1 ? 'company' : 'companies'}
+                      </CompanyCountBadge>
+                    </CategoryMeta>
+                    <CategoryActionButtons onClick={e => e.stopPropagation()}>
+                      <IconButton theme={theme} $size="md" title="Add companies" disabled={isSelected}
+                        onClick={e => openAddCompaniesModal(cat, e)}>
+                        <PlusIcon />
+                      </IconButton>
+                      <IconButton theme={theme} $size="md" title="View details" disabled={isSelected}
+                        onClick={e => openDetailModal(cat, e)}>
+                        <EyeIcon />
+                      </IconButton>
+                      <IconButton theme={theme} $size="md" title="Edit" disabled={isSelected}
+                        onClick={e => openEdit(cat, e)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton theme={theme} $variant="danger" $size="md" title="Delete" disabled={isSelected}
+                        onClick={e => { e.stopPropagation(); showConfirm('Delete Category', `Delete "${cat.name}"? This cannot be undone.`, () => deleteCategories([cat.id])); }}>
+                        <TrashIcon />
+                      </IconButton>
+                    </CategoryActionButtons>
+                  </CategoryRow>
+                )}
               </CategoryCard>
             );
           })}

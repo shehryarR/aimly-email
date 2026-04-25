@@ -20,6 +20,9 @@ export const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+
+  @media (max-width: 768px) { padding: 1rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 0.625rem; gap: 0.75rem; }
 `;
 
 // ── Base card ─────────────────────────────────────────────
@@ -37,6 +40,8 @@ export const Card = styled.div<{ theme: any }>`
 
 export const HeaderCard = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem; }
 `;
 
 export const HeaderRow = styled.div`
@@ -55,6 +60,7 @@ export const HeaderTitle = styled.h1`
   font-weight: 600;
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.025em;
+  @media (max-width: 480px) { font-size: 1.25rem; }
 `;
 
 export const HeaderSubtitle = styled.p`
@@ -65,6 +71,8 @@ export const HeaderSubtitle = styled.p`
 
 export const ListSection = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const SectionHeader = styled.div<{ theme: any }>`
@@ -74,6 +82,13 @@ export const SectionHeader = styled.div<{ theme: any }>`
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
 `;
 
 export const SectionTitle = styled.h2`
@@ -196,6 +211,8 @@ export const BulkActionsBar = styled.div<{ theme: any }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   padding: 0.75rem 1rem;
   background-color: ${p => p.theme.colors.base[400]};
   border: 1px solid ${p => p.theme.colors.primary.main};
@@ -207,6 +224,8 @@ export const BulkActionsBar = styled.div<{ theme: any }>`
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  @media (max-width: 480px) { padding: 0.625rem 0.75rem; }
 `;
 
 export const BulkLeft = styled.div`
@@ -232,7 +251,7 @@ export const Checkbox = styled.div<{ theme: any; $checked: boolean }>`
   border-radius: 4px;
   border: 2px solid ${p => p.$checked
     ? p.theme.colors.primary.main
-    : p.theme.colors.base[400] || p.theme.colors.base[300]};
+    : p.theme.colors.base.content + '40'};
   background-color: ${p => p.$checked ? p.theme.colors.primary.main : 'transparent'};
   display: flex;
   align-items: center;
@@ -280,6 +299,11 @@ export const CategoryCard = styled(Card)<{ theme: any; $selected: boolean }>`
   }
 
   &:last-child { margin-bottom: 0; }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem;
+    transform: none !important;
+  }
 `;
 
 export const CategoryRow = styled.div`
@@ -423,6 +447,8 @@ export const PaginationContainer = styled.div<{ theme: any }>`
   padding-top: 1.5rem;
   margin-top: 1rem;
   border-top: 1px solid ${p => p.theme.colors.base[300]};
+
+  @media (max-width: 480px) { gap: 0.25rem; padding-top: 1rem; }
 `;
 
 export const PaginationButton = styled.button<{ theme: any; $isActive?: boolean }>`
@@ -481,6 +507,8 @@ export const PageSizeSelect = styled.select<{ theme: any }>`
   margin-left: 0.25rem;
   transition: border-color 0.15s ease;
   &:focus { outline: none; border-color: ${p => p.theme.colors.primary.main}; }
+
+  @media (max-width: 480px) { display: none; }
 `;
 
 // ── Toast ─────────────────────────────────────────────────
@@ -515,6 +543,21 @@ export const ToastContainer = styled.div<{ theme: any; $type: 'success' | 'error
   @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to   { transform: translateX(0);    opacity: 1; }
+  }
+
+  @media (max-width: 480px) {
+    top: auto;
+    bottom: 1rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    min-width: unset;
+    max-width: unset;
+    animation-name: slideUp;
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);   opacity: 1; }
+    }
   }
 `;
 
@@ -565,6 +608,8 @@ export const ConfirmBox = styled.div<{ theme: any }>`
   max-width: 420px;
   width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+
+  @media (max-width: 480px) { padding: 1.25rem 1rem; }
 `;
 
 export const ConfirmHeader = styled.div`
@@ -620,6 +665,12 @@ export const ConfirmActions = styled.div`
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 export const CancelButton = styled.button<{ theme: any }>`
@@ -687,6 +738,11 @@ export const ModalOverlay = styled.div<{ $isOpen: boolean }>`
   align-items: center;
   justify-content: center;
   padding: 1rem;
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 export const ModalContent = styled.div<{ theme: any; $wide?: boolean }>`
@@ -698,6 +754,12 @@ export const ModalContent = styled.div<{ theme: any; $wide?: boolean }>`
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: ${p => p.theme.radius.box} ${p => p.theme.radius.box} 0 0;
+  }
 `;
 
 export const ModalHeader = styled.div<{ theme: any }>`
@@ -707,6 +769,8 @@ export const ModalHeader = styled.div<{ theme: any }>`
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+
+  @media (max-width: 480px) { padding: 1rem 1.125rem; }
 `;
 
 export const ModalTitle = styled.h3`
@@ -740,6 +804,8 @@ export const ModalBody = styled.div`
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
+
+  @media (max-width: 480px) { padding: 1rem; }
 `;
 
 export const ModalFooter = styled.div<{ theme: any }>`
@@ -749,6 +815,13 @@ export const ModalFooter = styled.div<{ theme: any }>`
   gap: 0.75rem;
   justify-content: flex-end;
   flex-shrink: 0;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // ── Form elements ─────────────────────────────────────────
@@ -847,4 +920,83 @@ export const CompanyListEmail = styled.div`
   font-size: 0.8125rem;
   opacity: 0.6;
   flex-shrink: 0;
+`;
+// ── Mobile three-dot menu ──────────────────────────────────
+
+export const DotsButton = styled.button<{ theme: any }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${p => p.theme.colors.primary.main};
+    color: ${p => p.theme.colors.primary.main};
+  }
+
+  &:disabled { opacity: 0.35; cursor: not-allowed; }
+  svg { width: 16px; height: 16px; }
+`;
+
+export const DotsMenu = styled.div<{ theme: any }>`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  border-radius: ${p => p.theme.radius.box};
+  box-shadow: ${p => p.theme.colorScheme === 'dark'
+    ? '0 8px 24px rgba(0,0,0,0.45)'
+    : '0 8px 24px rgba(0,0,0,0.14)'};
+  padding: 0.3rem;
+  min-width: 170px;
+  animation: dotsIn 0.15s ease;
+
+  @keyframes dotsIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+`;
+
+export const DotsMenuItem = styled.button<{ theme: any; $danger?: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: ${p => p.theme.radius.field};
+  background: transparent;
+  color: ${p => p.$danger ? p.theme.colors.error.main : p.theme.colors.base.content};
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: ${p => p.$danger
+      ? p.theme.colors.error.main + '14'
+      : p.theme.colors.base[300]};
+  }
+
+  svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.8; }
+`;
+
+export const DotsMenuDivider = styled.div<{ theme: any }>`
+  height: 1px;
+  background: ${p => p.theme.colors.base[300]};
+  margin: 0.3rem 0;
 `;

@@ -46,6 +46,10 @@ const EnrollList = styled.div<{ theme: any }>`
   border-radius: ${p => p.theme.radius.field};
   background: ${p => p.theme.colors.base[200]};
   scrollbar-width: thin;
+
+  @media (max-width: 520px) {
+    max-height: 45vh;
+  }
 `;
 const EnrollRow = styled.div<{ theme: any; $sel: boolean; $enrolled?: boolean }>`
   display: flex; align-items: center; gap: 0.75rem;
@@ -57,6 +61,11 @@ const EnrollRow = styled.div<{ theme: any; $sel: boolean; $enrolled?: boolean }>
   opacity: ${p => p.$enrolled ? 0.65 : 1};
   &:last-child { border-bottom: none; }
   &:hover { background: ${p => p.$enrolled ? `${p.theme.colors.success?.main || '#22c55e'}0a` : p.$sel ? `${p.theme.colors.primary.main}18` : p.theme.colors.base[300]}; }
+
+  @media (max-width: 400px) {
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
 `;
 const RowCheck = styled.div<{ theme: any; $on: boolean; $enrolled?: boolean }>`
   width: 16px; height: 16px; flex-shrink: 0; border-radius: 4px;
