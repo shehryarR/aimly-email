@@ -142,6 +142,9 @@ const Overlay = styled.div<{ theme: any }>`
     );
     pointer-events: none;
   }
+
+  @media (max-width: 640px) { padding: 2rem 0.875rem; justify-content: flex-start; padding-top: 2.5rem; }
+  @media (max-width: 480px) { padding: 1.5rem 0.75rem; }
 `;
 
 const Header = styled.div`
@@ -173,6 +176,8 @@ const Title = styled.h1<{ theme: any }>`
   line-height: 1.1;
   margin: 0 0 0.5rem 0;
   color: ${p => p.theme.colors.base.content};
+
+  @media (max-width: 480px) { font-size: 1.5rem; }
 `;
 
 const Subtitle = styled.p<{ theme: any }>`
@@ -191,6 +196,8 @@ const PlansGrid = styled.div`
   justify-content: center;
   width: 100%;
   max-width: 980px;
+
+  @media (max-width: 640px) { gap: 0.875rem; }
 `;
 
 const PlanCard = styled.div<{ theme: any; $highlighted: boolean; $selected: boolean }>`
@@ -229,6 +236,9 @@ const PlanCard = styled.div<{ theme: any; $highlighted: boolean; $selected: bool
       : 'transparent'
     };
   }
+
+  @media (max-width: 680px) { width: 100%; max-width: 380px; }
+  @media (max-width: 480px) { padding: 1.375rem 1.125rem; max-width: 100%; }
 `;
 
 const PopularBadge = styled.div<{ theme: any }>`
@@ -351,6 +361,8 @@ const CtaArea = styled.div`
   max-width: 480px;
   margin-top: 2rem;
   animation: ${fadeUp} 0.5s 0.2s ease both;
+
+  @media (max-width: 520px) { max-width: 100%; padding: 0 0.125rem; }
 `;
 
 const CtaButton = styled.button<{ theme: any; $loading?: boolean }>`
@@ -481,7 +493,6 @@ const Paywall: React.FC = () => {
       });
       setPaddleReady(true);
     } catch (err) {
-      console.error('Paddle initialization failed:', err);
       setError('Payment system failed to initialize. Please refresh the page.');
     }
   };
@@ -498,7 +509,6 @@ const Paywall: React.FC = () => {
         customData: { user_id: String(user?.user_id || '') },
       });
     } catch (err) {
-      console.error('Paddle checkout error:', err);
       setError('Failed to open checkout. Please try again.');
       setLoading(false);
     }

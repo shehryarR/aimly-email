@@ -18,6 +18,9 @@ const Hero = styled.div<{ theme: any }>`
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   padding: 3.5rem 2rem;
   text-align: center;
+
+  @media (max-width: 640px) { padding: 2.5rem 1.25rem; }
+  @media (max-width: 480px) { padding: 2rem 1rem; }
 `;
 const HeroLabel = styled.div<{ theme: any }>`
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em;
@@ -26,11 +29,18 @@ const HeroLabel = styled.div<{ theme: any }>`
 const HeroTitle = styled.h1<{ theme: any }>`
   font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em;
   margin: 0 0 0.5rem 0; color: ${p => p.theme.colors.base.content};
+
+  @media (max-width: 480px) { font-size: 1.5rem; }
 `;
 const HeroDate = styled.p<{ theme: any }>`
   font-size: 0.8125rem; opacity: 0.55; margin: 0; color: ${p => p.theme.colors.base.content};
 `;
-const Body = styled.div`max-width: 760px; margin: 0 auto; padding: 4rem 2rem;`;
+const Body = styled.div`
+  max-width: 760px; margin: 0 auto; padding: 4rem 2rem;
+
+  @media (max-width: 640px) { padding: 2.5rem 1.25rem; }
+  @media (max-width: 480px) { padding: 1.75rem 1rem; }
+`;
 const Section = styled.section`margin-bottom: 2.75rem;`;
 const SectionTitle = styled.h2<{ theme: any }>`
   font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em;

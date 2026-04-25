@@ -190,9 +190,8 @@ const NavOutlineBtn = styled(Link)<{ theme: any }>`
     color: ${props => props.theme.colors.primary.main};
   }
 
-  @media (max-width: 480px) {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.8125rem;
+  @media (max-width: 768px) {
+    display: none;
   }
 `;
 
@@ -215,9 +214,8 @@ const NavPrimaryBtn = styled(Link)<{ theme: any }>`
     box-shadow: 0 4px 14px ${props => props.theme.colors.primary.main}60;
   }
 
-  @media (max-width: 480px) {
-    padding: 0.4rem 0.875rem;
-    font-size: 0.8125rem;
+  @media (max-width: 768px) {
+    display: none;
   }
 `;
 
@@ -305,8 +303,14 @@ const MobileMenu = styled.div<{ theme: any; $open: boolean }>`
     box-shadow: 0 8px 24px rgba(0,0,0,0.15);
     padding: 0.75rem 1rem;
     gap: 0.5rem;
-    transform: translateY(${p => p.$open ? '0' : '-110%'});
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Slide + fade — visibility ensures it's truly gone when closed */
+    transform: translateY(${p => p.$open ? '0' : '-8px'});
+    opacity: ${p => p.$open ? 1 : 0};
+    visibility: ${p => p.$open ? 'visible' : 'hidden'};
+    pointer-events: ${p => p.$open ? 'auto' : 'none'};
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.2s ease,
+                visibility 0s linear ${p => p.$open ? '0s' : '0.22s'};
   }
 `;
 
@@ -383,15 +387,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
 
   const handleThemeToggle = () => {
     toggleTheme();
     onThemeToggle?.();
   };
 
-  // Close mobile menu on route change / outside click
+  // Close mobile menu on outside click — but NOT when clicking the hamburger itself
   useEffect(() => {
     const handler = (e: MouseEvent) => {
+      if (hamburgerRef.current && hamburgerRef.current.contains(e.target as Node)) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMobileMenuOpen(false);
       }
@@ -440,6 +446,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Mobile hamburger */}
               <HamburgerBtn
                 theme={theme}
+                ref={hamburgerRef}
                 onClick={() => setMobileMenuOpen(p => !p)}
                 aria-label="Open menu"
               >

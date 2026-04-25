@@ -17,6 +17,11 @@ const AuthContainer = styled.div<{ theme: any }>`
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+
+  @media (max-width: 480px) {
+    align-items: flex-start;
+    padding: 1rem 0.75rem 2rem;
+  }
 `;
 
 const AuthCard = styled.div<{ theme: any }>`
@@ -28,6 +33,15 @@ const AuthCard = styled.div<{ theme: any }>`
   width: 100%;
   max-width: 400px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+
+  @media (max-width: 480px) {
+    padding: 1.5rem 1.25rem;
+    border-radius: ${props => props.theme.radius.box};
+  }
+
+  @media (max-width: 360px) {
+    padding: 1.25rem 1rem;
+  }
 `;
 
 
@@ -89,6 +103,11 @@ const Input = styled.input<{ theme: any }>`
   &::placeholder {
     color: ${props => props.theme.colors.base.content};
     opacity: 0.6;
+  }
+
+  @media (max-width: 360px) {
+    font-size: 0.9375rem;
+    padding: 0.675rem 0.875rem;
   }
 `;
 
@@ -604,7 +623,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       setForgotPasswordEmail('');
 
     } catch (error) {
-      console.error('Forgot password error:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to send reset email. Please try again.',
@@ -665,7 +683,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       onLoginSuccess?.(user);
 
     } catch (error) {
-      console.error('Login error:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Login failed. Please check your credentials.',
@@ -752,7 +769,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       }, 2000);
 
     } catch (error) {
-      console.error('Registration error:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Registration failed. Please try again.',
@@ -1031,6 +1047,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             maxWidth: '420px',
             width: '100%',
             boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            margin: '0 0.75rem',
           }}
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
@@ -1072,7 +1089,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             </p>
 
             {/* Buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setShowConsentModal(false)}
                 style={{

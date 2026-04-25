@@ -40,6 +40,9 @@ const Section = styled.section<{ $pad?: string }>`
   padding: ${p => p.$pad || '6rem 2rem'};
   position: relative;
   z-index: 1;
+
+  @media (max-width: 768px) { padding: ${p => p.$pad ? '3rem 1.25rem' : '4rem 1.25rem'}; }
+  @media (max-width: 480px) { padding: ${p => p.$pad ? '2.5rem 1rem' : '3rem 1rem'}; }
 `;
 
 // ── Hero ──────────────────────────────────────────────────
@@ -72,6 +75,9 @@ const HeroInner = styled.div`
   text-align: center;
   position: relative;
   z-index: 1;
+
+  @media (max-width: 768px) { padding: 4.5rem 1.25rem 3.5rem; }
+  @media (max-width: 480px) { padding: 3.5rem 1rem 2.5rem; }
 `;
 
 const HeroBadge = styled.div<{ theme: any }>`
@@ -126,6 +132,8 @@ const HeroSub = styled.p<{ theme: any }>`
   margin: 0 0 2.75rem 0;
   color: ${p => p.theme.colors.base.content};
   animation: ${fadeUp} 0.6s 0.2s ease both;
+
+  @media (max-width: 480px) { font-size: 1rem; margin-bottom: 2rem; }
 `;
 
 const HeroCtas = styled.div`
@@ -135,6 +143,13 @@ const HeroCtas = styled.div`
   flex-wrap: wrap;
   justify-content: center;
   animation: ${fadeUp} 0.6s 0.3s ease both;
+
+  @media (max-width: 480px) {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.75rem;
+    a { width: 100%; justify-content: center; }
+  }
 `;
 
 const PrimaryBtn = styled(Link)<{ theme: any }>`
@@ -196,6 +211,9 @@ const PreviewWrap = styled.div<{ theme: any }>`
     background: linear-gradient(to top, ${p => p.theme.colors.base[100]}, transparent);
     pointer-events: none;
   }
+
+  @media (max-width: 768px) { margin-top: 2.5rem; }
+  @media (max-width: 480px) { display: none; }
 `;
 
 const PreviewFrame = styled.div<{ theme: any }>`
@@ -226,6 +244,8 @@ const PreviewContent = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 1rem;
+
+  @media (max-width: 640px) { grid-template-columns: 1fr; gap: 0.625rem; padding: 1rem; }
 `;
 
 const PreviewCard = styled.div<{ theme: any; $accent?: string }>`
@@ -277,6 +297,11 @@ const StatsStrip = styled.div<{ theme: any }>`
   justify-content: center;
   position: relative;
   z-index: 1;
+
+  @media (max-width: 580px) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 `;
 
 const StatItem = styled.div<{ theme: any }>`
@@ -285,6 +310,15 @@ const StatItem = styled.div<{ theme: any }>`
   text-align: center;
   border-right: 1px solid ${p => p.theme.colors.base[300]};
   &:last-child { border-right: none; }
+
+  @media (max-width: 580px) {
+    padding: 1.25rem 1rem;
+    border-right: 1px solid ${p => p.theme.colors.base[300]};
+    border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+    /* Remove right border on even items (right column), remove bottom border on last two */
+    &:nth-child(2n) { border-right: none; }
+    &:nth-last-child(-n+2) { border-bottom: none; }
+  }
 `;
 
 const StatNum = styled.div<{ theme: any }>`
@@ -335,6 +369,8 @@ const SectionSub = styled.p<{ theme: any }>`
   max-width: 520px;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
+
+  @media (max-width: 480px) { font-size: 0.9375rem; }
 `;
 
 // ── Features ──────────────────────────────────────────────
@@ -343,7 +379,9 @@ const FeaturesGrid = styled.div`
   grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
   margin-top: 3.5rem;
-  @media (max-width: 768px) { grid-template-columns: 1fr; }
+
+  @media (max-width: 768px) { grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-top: 2.5rem; }
+  @media (max-width: 480px) { grid-template-columns: 1fr; gap: 0.875rem; margin-top: 2rem; }
 `;
 
 const FeatureCard = styled.div<{ theme: any; $delay: string }>`
@@ -409,7 +447,9 @@ const HowGrid = styled.div`
   gap: 2rem;
   margin-top: 3.5rem;
   position: relative;
-  @media (max-width: 768px) { grid-template-columns: 1fr; }
+
+  @media (max-width: 768px) { grid-template-columns: 1fr; gap: 2.5rem; margin-top: 2.5rem; }
+  @media (max-width: 480px) { gap: 2rem; margin-top: 2rem; }
 `;
 
 const HowStep = styled.div<{ $delay: string }>`
@@ -481,6 +521,9 @@ const PricingWrap = styled.div`
   gap: 1.25rem;
   margin-top: 3.5rem;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) { gap: 1rem; margin-top: 2rem; }
+  @media (max-width: 480px) { flex-direction: column; align-items: stretch; gap: 0.875rem; }
 `;
 
 const PricingCard = styled.div<{ theme: any; $highlighted: boolean }>`
@@ -506,6 +549,9 @@ const PricingCard = styled.div<{ theme: any; $highlighted: boolean }>`
       ? `linear-gradient(90deg, ${p.theme.colors.primary.main}, ${p.theme.colors.accent.main}, ${p.theme.colors.info.main})`
       : p.theme.colors.base[300]};
   }
+
+  @media (max-width: 860px) { width: 240px; padding: 1.75rem 1.375rem; }
+  @media (max-width: 480px) { width: 100%; padding: 1.5rem 1.25rem; }
 `;
 
 const PricingPopularBadge = styled.div<{ theme: any }>`
@@ -765,8 +811,8 @@ const LandingPage: React.FC = () => {
             </HeroBadge>
 
             <HeroTitle theme={theme}>
-              Personalized outreach<br />
-              at scale. <em>AI writes</em><br />
+              Personalized outreach{' '}
+              at scale. <em>AI writes</em>{' '}
               you close.
             </HeroTitle>
 
@@ -840,8 +886,7 @@ const LandingPage: React.FC = () => {
         <Section>
           <SectionLabel theme={theme}>Features</SectionLabel>
           <SectionTitle theme={theme}>
-            Everything you need to<br />
-            <em>run outreach at scale</em>
+            Everything you need to <em>run outreach at scale</em>
           </SectionTitle>
           <SectionSub theme={theme}>
             Built for sales teams and founders who want results.
@@ -865,8 +910,7 @@ const LandingPage: React.FC = () => {
         <Section>
           <SectionLabel theme={theme}>How It Works</SectionLabel>
           <SectionTitle theme={theme}>
-            Up and running<br />
-            <em>in minutes</em>
+            Up and running <em>in minutes</em>
           </SectionTitle>
           <SectionSub theme={theme}>
             No complex setup. No long onboarding.

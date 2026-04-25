@@ -42,7 +42,15 @@ const Root = styled.div<{ theme: any }>`
   }
 `;
 
-const Hero = styled.div`text-align: center; padding: 5rem 2rem 3rem; position: relative; z-index: 1;`;
+const Hero = styled.div`
+  text-align: center;
+  padding: 5rem 2rem 3rem;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 640px) { padding: 3rem 1.25rem 2rem; }
+  @media (max-width: 480px) { padding: 2rem 1rem 1.5rem; }
+`;
 const HeroLabel = styled.div<{ theme: any }>`font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 1rem; animation: ${fadeUp} 0.5s ease both;`;
 const HeroTitle = styled.h1<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 400; letter-spacing: -0.02em; margin: 0 0 1rem 0; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.1s ease both;`;
 const HeroSub = styled.p<{ theme: any }>`font-size: 1rem; opacity: 0.8; max-width: 500px; margin: 0 auto; line-height: 1.7; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.2s ease both;`;
@@ -56,6 +64,9 @@ const CardsWrap = styled.div`
   position: relative;
   z-index: 1;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) { padding: 1.5rem 1.25rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 1rem; gap: 0.875rem; }
 `;
 
 const Card = styled.div<{ theme: any; $highlighted: boolean }>`
@@ -83,6 +94,9 @@ const Card = styled.div<{ theme: any; $highlighted: boolean }>`
       : p.theme.colors.base[300]
     };
   }
+
+  @media (max-width: 680px) { width: 100%; max-width: 420px; }
+  @media (max-width: 480px) { padding: 1.5rem 1.25rem; max-width: 100%; }
 `;
 
 const PopularBadge = styled.div<{ theme: any }>`
@@ -165,7 +179,15 @@ const ComingSoonBanner = styled.div<{ theme: any }>`
   gap: 0.4rem;
 `;
 
-const FaqSection = styled.div`max-width: 680px; margin: 0 auto; padding: 2rem 2rem 5rem; position: relative; z-index: 1;`;
+const FaqSection = styled.div`
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 2rem 5rem;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 480px) { padding: 1rem 1rem 3rem; }
+`;
 const FaqTitle = styled.h2<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; letter-spacing: -0.02em; text-align: center; margin: 0 0 2.5rem 0; color: ${p => p.theme.colors.base.content};`;
 const FaqItem = styled.div<{ theme: any }>`border-bottom: 1px solid ${p => p.theme.colors.base[300]}; padding: 1.25rem 0; &:first-of-type { border-top: 1px solid ${p => p.theme.colors.base[300]}; }`;
 const FaqQ = styled.h3<{ theme: any }>`font-size: 0.9375rem; font-weight: 600; margin: 0 0 0.5rem 0; letter-spacing: -0.01em; color: ${p => p.theme.colors.base.content};`;

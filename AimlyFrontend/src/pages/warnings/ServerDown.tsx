@@ -16,6 +16,12 @@ const Container = styled.div<{ theme: any }>`
   background-color: ${props => props.theme.colors.base[100]};
   color: ${props => props.theme.colors.base.content};
   padding: 2rem;
+
+  @media (max-width: 480px) {
+    padding: 1.5rem 1.25rem;
+    justify-content: flex-start;
+    padding-top: 4rem;
+  }
 `;
 
 const IconContainer = styled.div<{ theme: any }>`
@@ -65,6 +71,8 @@ const Title = styled.h1<{ theme: any }>`
   color: ${props => props.theme.colors.base.content};
   margin-bottom: 1rem;
   text-align: center;
+
+  @media (max-width: 480px) { font-size: 1.375rem; }
 `;
 
 const Message = styled.p<{ theme: any }>`
@@ -75,6 +83,8 @@ const Message = styled.p<{ theme: any }>`
   max-width: 500px;
   line-height: 1.6;
   margin-bottom: 2rem;
+
+  @media (max-width: 480px) { font-size: 0.9375rem; }
 `;
 
 const RetryButton = styled.button<{ theme: any; $isRetrying: boolean }>`
@@ -138,10 +148,12 @@ const DetailsList = styled.ul<{ theme: any }>`
   line-height: 1.6;
   margin: 1.5rem 0;
   padding-left: 1.5rem;
-  
-  li {
-    margin-bottom: 0.5rem;
-  }
+  max-width: 480px;
+  width: 100%;
+
+  li { margin-bottom: 0.5rem; }
+
+  @media (max-width: 480px) { font-size: 0.8375rem; padding-left: 1.25rem; }
 `;
 
 interface ServerDownProps {
