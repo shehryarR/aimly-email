@@ -36,6 +36,11 @@ const ModalWrapper = styled.div<{ $isOpen: boolean }>`
   z-index: 9999;
   pointer-events: ${p => p.$isOpen ? 'all' : 'none'};
   padding: 1.5rem;
+
+  @media (max-width: 640px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 const Modal = styled.div<{ theme: any; $isOpen: boolean }>`
@@ -50,6 +55,14 @@ const Modal = styled.div<{ theme: any; $isOpen: boolean }>`
   opacity: ${p => p.$isOpen ? 1 : 0};
   transform: ${p => p.$isOpen ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(16px)'};
   transition: opacity 0.25s ease, transform 0.25s ease;
+
+  @media (max-width: 640px) {
+    height: 92vh;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    transform: ${p => p.$isOpen ? 'translateY(0)' : 'translateY(100%)'};
+  }
 `;
 
 // ── Modal header ───────────────────────────────────────────────────────────────
@@ -59,6 +72,10 @@ const ModalHeader = styled.div<{ theme: any }>`
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    padding: 1rem 1.25rem;
+  }
 `;
 
 const ModalTitle = styled.h2<{ theme: any }>`
@@ -67,6 +84,10 @@ const ModalTitle = styled.h2<{ theme: any }>`
   display: flex; align-items: center; gap: 0.6rem;
   letter-spacing: -0.02em;
   svg { width: 20px; height: 20px; opacity: 0.8; }
+
+  @media (max-width: 640px) {
+    font-size: 1rem;
+  }
 `;
 
 const HeaderRight = styled.div`display: flex; align-items: center; gap: 0.75rem;`;
@@ -90,6 +111,10 @@ const UserAvatar = styled.div<{ theme: any }>`
 const UserName = styled.span<{ theme: any }>`
   font-size: 0.8rem; font-weight: 600;
   color: ${p => p.theme.colors.base.content};
+
+  @media (max-width: 480px) {
+    display: none;
+  }
 `;
 
 const LogoutBtn = styled.button<{ theme: any }>`
@@ -112,15 +137,54 @@ const CloseBtn = styled.button<{ theme: any }>`
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s;
   &:hover { background: ${p => p.theme.colors.base[200]}; }
+
+  @media (max-width: 640px) {
+    width: 28px; height: 28px; font-size: 0.95rem;
+  }
 `;
 
 // ── Body layout (sidebar + content) ───────────────────────────────────────────
 
 const ModalBody = styled.div`
   display: flex; flex: 1; min-height: 0;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+  }
 `;
 
 // ── Left tab nav ───────────────────────────────────────────────────────────────
+
+const TabNavWrapper = styled.div<{ theme: any }>`
+  /* Desktop: transparent pass-through, TabNav handles its own sizing */
+  display: contents;
+
+  @media (max-width: 640px) {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+    background: ${p => p.theme.colors.base[200]};
+    border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+
+    /* Subtle fade-out on the right edge — implicit "more content" hint */
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 1px;
+      width: 48px;
+      pointer-events: none;
+      background: linear-gradient(
+        to right,
+        transparent,
+        ${p => p.theme.colors.base[200]}bb 60%,
+        ${p => p.theme.colors.base[200]} 100%
+      );
+      z-index: 2;
+    }
+  }
+`;
 
 const TabNav = styled.nav<{ theme: any }>`
   width: 220px; flex-shrink: 0;
@@ -129,11 +193,32 @@ const TabNav = styled.nav<{ theme: any }>`
   padding: 0.75rem 0.5rem;
   display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto;
+
+  @media (max-width: 640px) {
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: none;
+    padding: 0.375rem 0.75rem;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    /* Extra padding-right so last pill clears the fade gradient */
+    padding-right: 3rem;
+  }
 `;
 
 const NavGroup = styled.div`
   margin-bottom: 0.5rem;
   &:not(:first-child) { margin-top: 0.5rem; }
+
+  @media (max-width: 640px) {
+    display: contents;
+    margin: 0;
+  }
 `;
 
 const NavGroupLabel = styled.div<{ theme: any }>`
@@ -142,6 +227,10 @@ const NavGroupLabel = styled.div<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   opacity: 0.4;
   padding: 0.25rem 0.75rem 0.4rem;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 const TabButton = styled.button<{ theme: any; $active: boolean }>`
@@ -159,9 +248,27 @@ const TabButton = styled.button<{ theme: any; $active: boolean }>`
   }
 
   & > svg { width: 16px; height: 16px; flex-shrink: 0; opacity: ${p => p.$active ? 1 : 0.6}; }
+
+  @media (max-width: 640px) {
+    width: auto;
+    flex-shrink: 0;
+    padding: 0.45rem 0.875rem;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    margin: 0.3rem 0.15rem;
+    gap: 0.35rem;
+    & > svg { width: 14px; height: 14px; }
+  }
 `;
 
-const TabLabel = styled.span`flex: 1;`;
+const TabLabel = styled.span`
+  flex: 1;
+
+  @media (max-width: 640px) {
+    flex: none;
+  }
+`;
 
 const StatusDot = styled.div<{ $status: 'green'|'orange'|'red'|'gray'|'checking' }>`
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
@@ -184,6 +291,10 @@ const TabPanel = styled.div<{ theme: any }>`
   padding: 1.75rem 2rem;
   color: ${p => p.theme.colors.base.content};
   animation: ${slideUp} 0.2s ease;
+
+  @media (max-width: 640px) {
+    padding: 1.25rem 1rem;
+  }
 `;
 
 const PanelTitle = styled.h3<{ theme: any }>`
@@ -191,6 +302,10 @@ const PanelTitle = styled.h3<{ theme: any }>`
   font-size: 1.05rem; font-weight: 700;
   color: ${p => p.theme.colors.base.content};
   letter-spacing: -0.02em;
+
+  @media (max-width: 640px) {
+    font-size: 0.9375rem;
+  }
 `;
 
 const PanelSubtitle = styled.p<{ theme: any }>`
@@ -204,7 +319,14 @@ const PanelSubtitle = styled.p<{ theme: any }>`
 // ── Form primitives ────────────────────────────────────────────────────────────
 
 const FormGroup = styled.div`margin-bottom: 1.1rem;`;
-const FormRow   = styled.div`display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;`;
+const FormRow   = styled.div`
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+`;
 
 const Label = styled.label<{ theme: any }>`
   display: flex; align-items: center; gap: 0.35rem;
@@ -302,6 +424,10 @@ const Msg = styled.div<{ theme: any; $type: 'success'|'error'|'info'|'checking'|
 
 const SaveRow = styled.div`
   display: flex; justify-content: flex-end; margin-top: 1.5rem;
+
+  @media (max-width: 480px) {
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // ── Logo upload ────────────────────────────────────────────────────────────────
@@ -597,8 +723,20 @@ const UnsavedBox = styled.div<{ theme: any }>`
   border-radius: ${p => p.theme.radius.box};
   padding: 1.5rem; max-width: 420px; width: 90%;
   box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+
+  @media (max-width: 480px) {
+    width: 95%;
+    padding: 1.25rem 1rem;
+  }
 `;
-const UnsavedActions = styled.div`display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;`;
+const UnsavedActions = styled.div`
+  display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;
+
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
+`;
 const KeepBtn = styled.button<{ theme: any }>`
   padding: 0.625rem 1.25rem; border-radius: ${p => p.theme.radius.field};
   background: ${p => p.theme.colors.base[200]}; color: ${p => p.theme.colors.base.content};
@@ -1495,6 +1633,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
           <ModalBody>
 
             {/* Tab nav */}
+            <TabNavWrapper theme={theme}>
             <TabNav theme={theme}>
               <NavGroup>
                 <NavGroupLabel theme={theme}>Integrations</NavGroupLabel>
@@ -1519,6 +1658,7 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
                 ))}
               </NavGroup>
             </TabNav>
+            </TabNavWrapper>
 
             {/* ── LLM tab ─────────────────────────────────── */}
             {activeTab === 'llm' && (

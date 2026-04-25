@@ -99,26 +99,19 @@ export const performHealthChecks = async (
   let lastResult: HealthCheckResult = { isHealthy: false, error: 'No attempts made' };
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    console.log(`Health check attempt ${attempt + 1}/${maxRetries}`);
     
     lastResult = await checkServerHealth();
     
     if (lastResult.isHealthy) {
-      console.log(`Server is healthy (${lastResult.responseTime}ms)`);
       return lastResult;
     }
-    
-    console.log(`Health check failed: ${lastResult.error}`);
     
     // If not the last attempt, wait before retrying
     if (attempt < maxRetries - 1) {
       const delay = initialDelay * Math.pow(2, attempt); // Exponential backoff
-      console.log(`Waiting ${delay}ms before next attempt...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
-  console.log('All health check attempts failed');
   return lastResult;
 };
 
@@ -146,7 +139,6 @@ export class HealthMonitor {
    */
   start(onStatusChange: (isHealthy: boolean, result: HealthCheckResult) => void): void {
     if (this.isRunning) {
-      console.warn('Health monitor is already running');
       return;
     }
 
@@ -160,8 +152,6 @@ export class HealthMonitor {
     this.intervalId = setInterval(() => {
       this.performCheck();
     }, this.checkIntervalMs);
-
-    console.log(`Health monitor started (checking every ${this.checkIntervalMs}ms)`);
   }
 
   /**
@@ -175,8 +165,6 @@ export class HealthMonitor {
     
     this.isRunning = false;
     this.onStatusChange = null;
-    
-    console.log('Health monitor stopped');
   }
 
   /**
@@ -188,7 +176,6 @@ export class HealthMonitor {
       
       // Only notify if status changed
       if (result.isHealthy !== this.lastHealthyStatus) {
-        console.log(`Server health status changed: ${result.isHealthy ? 'healthy' : 'unhealthy'}`);
         this.lastHealthyStatus = result.isHealthy;
         
         if (this.onStatusChange) {
@@ -196,7 +183,6 @@ export class HealthMonitor {
         }
       }
     } catch (error) {
-      console.error('Error during health check:', error);
     }
   }
 

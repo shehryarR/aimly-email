@@ -19,6 +19,18 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import { apiFetch } from '../../App';
 
+// ── Mobile detection hook ─────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
+
 import {
   PageContainer, MainContent, HeaderCard, HeaderRow, BackButton,
   HeaderCenter, HeaderTitle, HeaderSubtitle,
@@ -40,6 +52,9 @@ import {
   DropdownWrap, DropdownTrigger, DropdownBadge, DropdownMenu,
   DropdownSearch, DropdownItem,
   EditInput,
+  BackButtonResponsive,
+  DotsButton, DotsMenu, DotsMenuItem, DotsMenuDivider, ActionArea,
+  MobileMetaRow, MobileRow, MobileRowTop, MobileFileName, MobileFileIcon,
 } from './attachments.styles';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
@@ -93,6 +108,23 @@ const formatDate = (str: string) => {
       year: 'numeric', month: 'short', day: 'numeric',
     });
   } catch { return ''; }
+};
+
+const FileIconSvg: React.FC<{ ext: string }> = ({ ext }) => {
+  switch (ext) {
+    case 'pdf':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>;
+    case 'doc': case 'docx':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/><line x1="9" y1="9" x2="13" y2="9"/></svg>;
+    case 'csv':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="8" y2="13.01"/><line x1="12" y1="13" x2="12" y2="13.01"/><line x1="16" y1="13" x2="16" y2="13.01"/><line x1="8" y1="17" x2="8" y2="17.01"/><line x1="12" y1="17" x2="12" y2="17.01"/><line x1="16" y1="17" x2="16" y2="17.01"/></svg>;
+    case 'txt':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>;
+    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp':
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+    default:
+      return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+  }
 };
 
 // ── Inline SVG icons ────────────────────────────────────────────────────────────
@@ -331,6 +363,24 @@ const Attachments: React.FC = () => {
 
   // ── Upload modal ───────────────────────────────────────────
   const [uploadModal, setUploadModal] = useState(false);
+
+  // ── Mobile detection ──────────────────────────────────────────
+  const isMobile = useIsMobile();
+
+  // ── Three-dot menu (mobile) ────────────────────────────────
+  const [openDotsMenu, setOpenDotsMenu] = useState<number | null>(null);
+  const dotsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (openDotsMenu === null) return;
+    const handler = (e: MouseEvent) => {
+      if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node)) {
+        setOpenDotsMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openDotsMenu]);
 
   // ── Toast ──────────────────────────────────────────────────
   const [toast, setToast] = useState<ToastState>({ visible: false, type: 'info', message: '' });
@@ -1062,9 +1112,9 @@ const Attachments: React.FC = () => {
         {/* Header */}
         <HeaderCard theme={theme}>
           <HeaderRow>
-            <BackButton theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Back to campaigns">
+            <BackButtonResponsive theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Back to campaigns">
               <ArrowLeftIcon />
-            </BackButton>
+            </BackButtonResponsive>
             <HeaderCenter>
               <HeaderTitle>Attachments</HeaderTitle>
               <HeaderSubtitle>Upload files and attach them to global settings or specific campaigns</HeaderSubtitle>
@@ -1076,7 +1126,7 @@ const Attachments: React.FC = () => {
         <ListSection theme={theme}>
 
           <SectionHeader theme={theme}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               {attachments.length > 0 && (
                 <Checkbox
                   theme={theme}
@@ -1348,48 +1398,99 @@ const Attachments: React.FC = () => {
                   $selected={isSelected}
                   onClick={e => toggleSelect(att.id, e)}
                 >
-                  <AttachmentRow>
-                    <Checkbox
-                      theme={theme}
-                      $checked={isSelected}
-                      onClick={e => toggleSelect(att.id, e)}
-                    />
+                  {isMobile ? (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: '0.625rem',
+                    }}>
+                      {/* Checkbox */}
+                      <div
+                        onClick={e => toggleSelect(att.id, e)}
+                        style={{
+                          width: 18, height: 18, minWidth: 18, flexShrink: 0,
+                          borderRadius: 4,
+                          border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+                          backgroundColor: isSelected ? theme.colors.primary.main : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                        }}
+                      >
+                        {isSelected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                      </div>
 
-                    <FileIconWrap theme={theme} $ext={ext}>{ext || '?'}</FileIconWrap>
+                      {/* File icon */}
+                      <MobileFileIcon theme={theme} $ext={ext} style={{ flexShrink: 0, margin: 0 }}>
+                        <FileIconSvg ext={ext} />
+                        <span>{ext || '?'}</span>
+                      </MobileFileIcon>
 
-                    <FileInfo>
-                      <FileName>{att.filename}</FileName>
-                      <FileMeta>
-                        <FileMetaItem>{formatBytes(att.file_size)}</FileMetaItem>
-                        {att.created_at && <FileMetaItem>{formatDate(att.created_at)}</FileMetaItem>}
-                      </FileMeta>
-                    </FileInfo>
+                      {/* Filename + meta */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: theme.colors.base.content }}>
+                          {att.filename}
+                        </span>
+                        <span style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, Courier New, monospace', whiteSpace: 'nowrap' }}>
+                          {formatBytes(att.file_size)}{att.created_at ? `  ·  ${formatDate(att.created_at)}` : ''}
+                        </span>
+                      </div>
 
-                    <LinkBadges>
-                      {att.linked_global && <LinkBadge theme={theme} $type="global">Global</LinkBadge>}
-                      {att.linked_campaigns.map(c => (
-                        <LinkBadge key={c.id} theme={theme} $type="campaign" $campaignId={c.id}>{c.name}</LinkBadge>
-                      ))}
-                    </LinkBadges>
-
-                    <ActionButtons onClick={e => e.stopPropagation()}>
-                      <IconButton theme={theme} $size="md" onClick={() => setDetailAttachment(att)} title="View details" disabled={isSelected}>
-                        <EyeIcon />
-                      </IconButton>
-                      <IconButton theme={theme} $size="md" onClick={() => downloadAttachment(att)} title="Download" disabled={isSelected}>
-                        <DownloadIcon />
-                      </IconButton>
-                      <IconButton theme={theme} $size="md" onClick={() => openRenameModal(att)} title="Rename" disabled={isSelected}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton theme={theme} $size="md" onClick={() => openLinkModal([att.id])} title="Manage attachments" disabled={isSelected}>
-                        <LinkChainIcon />
-                      </IconButton>
-                      <IconButton theme={theme} $variant="danger" $size="md" onClick={() => confirmDelete([att.id])} title="Delete" disabled={isSelected}>
-                        <TrashIcon />
-                      </IconButton>
-                    </ActionButtons>
-                  </AttachmentRow>
+                      {/* Three dots */}
+                      <div
+                        style={{ position: 'relative', flexShrink: 0 }}
+                        ref={openDotsMenu === att.id ? dotsMenuRef : undefined}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <DotsButton
+                          theme={theme}
+                          onClick={() => setOpenDotsMenu(openDotsMenu === att.id ? null : att.id)}
+                          title="More options"
+                          disabled={isSelected}
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                        </DotsButton>
+                        {openDotsMenu === att.id && (
+                          <DotsMenu theme={theme}>
+                            <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); setDetailAttachment(att); }}><EyeIcon /> View details</DotsMenuItem>
+                            <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); downloadAttachment(att); }}><DownloadIcon /> Download</DotsMenuItem>
+                            <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); openRenameModal(att); }}><EditIcon /> Rename</DotsMenuItem>
+                            <DotsMenuItem theme={theme} onClick={() => { setOpenDotsMenu(null); openLinkModal([att.id]); }}><LinkChainIcon /> Manage links</DotsMenuItem>
+                            <DotsMenuDivider theme={theme} />
+                            <DotsMenuItem theme={theme} $danger onClick={() => { setOpenDotsMenu(null); confirmDelete([att.id]); }}><TrashIcon /> Delete</DotsMenuItem>
+                          </DotsMenu>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── DESKTOP: original flex row ── */
+                    <AttachmentRow>
+                      <Checkbox theme={theme} $checked={isSelected} onClick={e => toggleSelect(att.id, e)} />
+                      <FileIconWrap theme={theme} $ext={ext}>
+                        <FileIconSvg ext={ext} />
+                        <span>{ext || '?'}</span>
+                      </FileIconWrap>
+                      <FileInfo>
+                        <FileName>{att.filename}</FileName>
+                        <FileMeta>
+                          <FileMetaItem>{formatBytes(att.file_size)}</FileMetaItem>
+                          {att.created_at && <FileMetaItem>{formatDate(att.created_at)}</FileMetaItem>}
+                        </FileMeta>
+                      </FileInfo>
+                      <LinkBadges>
+                        {att.linked_global && <LinkBadge theme={theme} $type="global">Global</LinkBadge>}
+                        {att.linked_campaigns.map(c => (
+                          <LinkBadge key={c.id} theme={theme} $type="campaign" $campaignId={c.id}>{c.name}</LinkBadge>
+                        ))}
+                      </LinkBadges>
+                      <ActionButtons onClick={e => e.stopPropagation()}>
+                        <IconButton theme={theme} $size="md" onClick={() => setDetailAttachment(att)} title="View details"><EyeIcon /></IconButton>
+                        <IconButton theme={theme} $size="md" onClick={() => downloadAttachment(att)} title="Download"><DownloadIcon /></IconButton>
+                        <IconButton theme={theme} $size="md" onClick={() => openRenameModal(att)} title="Rename"><EditIcon /></IconButton>
+                        <IconButton theme={theme} $size="md" onClick={() => openLinkModal([att.id])} title="Manage attachments"><LinkChainIcon /></IconButton>
+                        <IconButton theme={theme} $variant="danger" $size="md" onClick={() => confirmDelete([att.id])} title="Delete"><TrashIcon /></IconButton>
+                      </ActionButtons>
+                    </AttachmentRow>
+                  )}
                 </AttachmentCard>
               );
             })
@@ -1445,7 +1546,7 @@ const Attachments: React.FC = () => {
                   {detailAttachment.filename}
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                 {[
                   { label: 'File Size', value: formatBytes(detailAttachment.file_size) },
                   { label: 'Uploaded',  value: detailAttachment.created_at ? formatDate(detailAttachment.created_at) : null },

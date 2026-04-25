@@ -77,7 +77,6 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
   let response = await fetch(input, { ...init, headers, credentials: 'include' });
 
   if (response.status === 401) {
-    console.log('Received 401, attempting token refresh...');
     try {
       const refreshRes = await fetch(`${API_BASE}/auth/refresh/`, {
         method: 'POST',
@@ -86,7 +85,6 @@ export const apiFetch = async (input: RequestInfo, init: RequestInit = {}): Prom
       if (refreshRes.ok) {
         response = await fetch(input, { ...init, headers, credentials: 'include' });
       } else {
-        console.warn('Token refresh failed, forcing logout.');
         clearAuthData();
         _forceLogoutCallback?.();
         throw new Error('Session expired. Please log in again.');
@@ -312,7 +310,6 @@ const AppRouter: React.FC = () => {
 
   useEffect(() => {
     const initializeApp = async () => {
-      console.log('Performing initial server health check...');
       try {
         const healthResult = await performHealthChecks(3, 1000);
         if (healthResult.isHealthy) {
@@ -414,7 +411,7 @@ const AppRouter: React.FC = () => {
           pageTitle={!isAuthPage ? getPageTitle() : ''}
           user={user ? { username: user.username } : undefined}
           onSettingsClick={() => setShowSettings(true)}
-          onThemeToggle={() => { console.log('Theme toggled'); }}
+          onThemeToggle={() => {}}
           onLogout={handleLogout}
           isAuthPage={isAuthPage}
           hasSubscription={hasSubscription}

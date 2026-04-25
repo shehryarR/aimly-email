@@ -1,6 +1,6 @@
 /**
  * Footer Component for Aimly
- * Includes links to legal pages and pricing
+ * UPDATED: Mobile-responsive stacked layout
  */
 import React from 'react';
 import styled from 'styled-components';
@@ -18,6 +18,14 @@ const FooterContainer = styled.footer<{ theme: any }>`
   flex-wrap: wrap;
   gap: 0.75rem;
   min-height: 3rem;
+
+  @media (max-width: 640px) {
+    padding: 0.875rem 1rem;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+  }
 `;
 
 const CopyrightText = styled.span<{ theme: any }>`
@@ -25,6 +33,10 @@ const CopyrightText = styled.span<{ theme: any }>`
   color: ${props => props.theme.colors.base.content};
   opacity: 0.65;
   font-weight: 400;
+
+  @media (max-width: 640px) {
+    font-size: 0.75rem;
+  }
 `;
 
 const LinkGroup = styled.div`
@@ -32,6 +44,11 @@ const LinkGroup = styled.div`
   align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    gap: 0.875rem;
+    justify-content: center;
+  }
 `;
 
 const FooterLink = styled(Link)<{ theme: any }>`
@@ -51,6 +68,10 @@ const FooterLink = styled(Link)<{ theme: any }>`
     opacity: 1;
     color: ${props => props.theme.colors.primary.main};
   }
+
+  @media (max-width: 640px) {
+    font-size: 0.75rem;
+  }
 `;
 
 export const Footer: React.FC = () => {
@@ -64,18 +85,10 @@ export const Footer: React.FC = () => {
       </CopyrightText>
 
       <LinkGroup>
-        <FooterLink theme={theme} to="/pricing">
-          Pricing
-        </FooterLink>
-        <FooterLink theme={theme} to="/terms">
-          Terms of Service
-        </FooterLink>
-        <FooterLink theme={theme} to="/privacy">
-          Privacy Policy
-        </FooterLink>
-        <FooterLink theme={theme} to="/refunds">
-          Refund Policy
-        </FooterLink>
+        <FooterLink theme={theme} to="/pricing">Pricing</FooterLink>
+        <FooterLink theme={theme} to="/terms">Terms of Service</FooterLink>
+        <FooterLink theme={theme} to="/privacy">Privacy Policy</FooterLink>
+        <FooterLink theme={theme} to="/refunds">Refund Policy</FooterLink>
       </LinkGroup>
     </FooterContainer>
   );

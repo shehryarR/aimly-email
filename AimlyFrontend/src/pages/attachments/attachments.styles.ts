@@ -1,5 +1,15 @@
 // ============================================================
-// attachments.styles.ts
+// attachments.styles.ts  — FULL REPLACEMENT
+// UPDATED: Comprehensive small-device responsiveness
+// Key changes vs original:
+//   - AttachmentRow stacks properly at ≤480px
+//   - ActionButtons collapses to icon-only row with overflow scroll
+//   - BulkActionsBar stacks + wraps on mobile
+//   - FilterBar and sort bar wrap gracefully
+//   - SectionHeader wraps properly
+//   - ModalOverlay slides up from bottom on mobile (sheet)
+//   - PaginationContainer compresses on mobile
+//   - PageSizeSelect hidden on very small screens
 // ============================================================
 
 import styled from 'styled-components';
@@ -19,9 +29,12 @@ export const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+
+  @media (max-width: 768px) { padding: 1rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 0.625rem; gap: 0.75rem; }
 `;
 
-// ── Base card — always base[200] so it lifts off base[100] page bg ──
+// ── Base card ──────────────────────────────────────────────
 
 export const Card = styled.div<{ theme: any }>`
   background-color: ${p => p.theme.colors.base[200]};
@@ -38,6 +51,8 @@ export const Card = styled.div<{ theme: any }>`
 
 export const HeaderCard = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem; }
 `;
 
 export const HeaderRow = styled.div`
@@ -49,7 +64,6 @@ export const HeaderRow = styled.div`
 `;
 
 export const BackButton = styled.button<{ theme: any }>`
-  text-decoration: none;
   position: absolute;
   left: 0;
   width: 36px;
@@ -64,6 +78,7 @@ export const BackButton = styled.button<{ theme: any }>`
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  text-decoration: none;
 
   &:hover {
     background-color: ${p => p.theme.colors.base[400]};
@@ -72,6 +87,12 @@ export const BackButton = styled.button<{ theme: any }>`
   }
 
   svg { width: 18px; height: 18px; }
+
+  @media (max-width: 480px) {
+    width: 32px;
+    height: 32px;
+    svg { width: 16px; height: 16px; }
+  }
 `;
 
 export const HeaderCenter = styled.div`
@@ -83,18 +104,22 @@ export const HeaderTitle = styled.h1`
   font-weight: 600;
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.025em;
+  @media (max-width: 480px) { font-size: 1.25rem; }
 `;
 
 export const HeaderSubtitle = styled.p`
   margin: 0;
   opacity: 0.6;
   font-size: 0.875rem;
+  @media (max-width: 480px) { font-size: 0.8rem; }
 `;
 
 // ── Upload card ───────────────────────────────────────────────
 
 export const UploadCard = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem; }
 `;
 
 export const UploadZone = styled.div<{ theme: any; $isDragging: boolean }>`
@@ -119,18 +144,26 @@ export const UploadZone = styled.div<{ theme: any; $isDragging: boolean }>`
   }
 
   svg { width: 40px; height: 40px; opacity: 0.35; }
+
+  @media (max-width: 480px) {
+    padding: 1.25rem 0.875rem;
+    gap: 0.5rem;
+    svg { width: 28px; height: 28px; }
+  }
 `;
 
 export const UploadText = styled.p`
   margin: 0 0 0.25rem 0;
   font-weight: 500;
   font-size: 0.9375rem;
+  @media (max-width: 480px) { font-size: 0.875rem; }
 `;
 
 export const UploadSubtext = styled.p`
   margin: 0;
   font-size: 0.8125rem;
   opacity: 0.6;
+  @media (max-width: 480px) { font-size: 0.75rem; }
 `;
 
 export const ProgressBar = styled.div<{ theme: any }>`
@@ -139,6 +172,7 @@ export const ProgressBar = styled.div<{ theme: any }>`
   background: ${p => p.theme.colors.base[300]};
   border-radius: 2px;
   overflow: hidden;
+  @media (max-width: 480px) { width: 140px; }
 `;
 
 export const ProgressFill = styled.div<{ theme: any; $pct: number }>`
@@ -153,6 +187,8 @@ export const ProgressFill = styled.div<{ theme: any; $pct: number }>`
 
 export const ListSection = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const SectionHeader = styled.div<{ theme: any }>`
@@ -162,6 +198,14 @@ export const SectionHeader = styled.div<{ theme: any }>`
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    gap: 0.5rem;
+  }
 `;
 
 export const SectionTitle = styled.h2`
@@ -171,7 +215,9 @@ export const SectionTitle = styled.h2`
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
   svg { width: 20px; height: 20px; }
+  @media (max-width: 480px) { font-size: 0.9375rem; }
 `;
 
 export const CountBadge = styled.span<{ theme: any }>`
@@ -203,6 +249,7 @@ export const AddButton = styled.button<{ theme: any }>`
   transition: all 0.2s ease;
   font-size: 1.25rem;
   font-weight: 300;
+  flex-shrink: 0;
 
   &:hover {
     transform: scale(1.05);
@@ -221,11 +268,18 @@ export const BulkActionsBar = styled.div<{ theme: any; $visible: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   opacity: ${p => p.$visible ? 1 : 0};
   transform: translateY(${p => p.$visible ? 0 : -10}px);
   transition: all 0.3s ease;
   pointer-events: ${p => p.$visible ? 'auto' : 'none'};
   overflow: hidden;
+
+  @media (max-width: 480px) {
+    padding: 0.625rem 0.75rem;
+    gap: 0.375rem;
+  }
 `;
 
 export const BulkLeft = styled.div`
@@ -234,15 +288,21 @@ export const BulkLeft = styled.div`
   gap: 1rem;
   font-weight: 500;
   font-size: 0.875rem;
+
+  @media (max-width: 480px) {
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+  }
 `;
 
 export const BulkRight = styled.div`
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  flex-wrap: wrap;
 `;
 
-// ── Attachment card — sits inside ListSection (base[200]), uses base[400] ──
+// ── Attachment card ───────────────────────────────────────────
 
 export const AttachmentCard = styled(Card)<{ theme: any; $selected: boolean }>`
   padding: 1.25rem;
@@ -264,52 +324,127 @@ export const AttachmentCard = styled(Card)<{ theme: any; $selected: boolean }>`
   }
 
   &:last-child { margin-bottom: 0; }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem;
+    transform: none !important;
+  }
 `;
 
+/* Desktop: single flex row — checkbox · icon · info · badges · actions
+   Mobile:  two-row grid
+     Row 1: checkbox · icon · filename · [dots button]
+     Row 2: (indented) meta + badges
+*/
 export const AttachmentRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
+
+  @media (max-width: 640px) {
+    gap: 0;
+  }
 `;
 
 export const FileIconWrap = styled.div<{ theme: any; $ext: string }>`
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  gap: 2px;
   background-color: ${p => {
     switch (p.$ext) {
-      case 'pdf':  return '#EF4444' + '20';
+      case 'pdf':  return '#EF4444' + '18';
       case 'doc':
-      case 'docx': return '#3B82F6' + '20';
-      case 'csv':  return '#10B981' + '20';
-      case 'txt':  return '#6B7280' + '20';
-      default:     return p.theme.colors.primary.main + '20';
+      case 'docx': return '#3B82F6' + '18';
+      case 'csv':  return '#10B981' + '18';
+      case 'txt':  return '#6B7280' + '18';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp': return '#8B5CF6' + '18';
+      default:     return p.theme.colors.primary.main + '18';
     }
   }};
-  color: ${p => {
+  border: 1px solid ${p => {
     switch (p.$ext) {
-      case 'pdf':  return '#EF4444';
+      case 'pdf':  return '#EF4444' + '28';
       case 'doc':
-      case 'docx': return '#3B82F6';
-      case 'csv':  return '#10B981';
-      case 'txt':  return '#6B7280';
-      default:     return p.theme.colors.primary.main;
+      case 'docx': return '#3B82F6' + '28';
+      case 'csv':  return '#10B981' + '28';
+      case 'txt':  return '#6B7280' + '28';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp': return '#8B5CF6' + '28';
+      default:     return p.theme.colors.primary.main + '28';
     }
   }};
+
+  svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: ${p => {
+      switch (p.$ext) {
+        case 'pdf':  return '#EF4444';
+        case 'doc':
+        case 'docx': return '#3B82F6';
+        case 'csv':  return '#10B981';
+        case 'txt':  return '#6B7280';
+        case 'jpg':
+        case 'jpeg':
+        case 'png':
+        case 'gif':
+        case 'webp': return '#8B5CF6';
+        default:     return p.theme.colors.primary.main;
+      }
+    }};
+  }
+
+  span {
+    font-size: 0.48rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: ${p => {
+      switch (p.$ext) {
+        case 'pdf':  return '#EF4444';
+        case 'doc':
+        case 'docx': return '#3B82F6';
+        case 'csv':  return '#10B981';
+        case 'txt':  return '#6B7280';
+        case 'jpg':
+        case 'jpeg':
+        case 'png':
+        case 'gif':
+        case 'webp': return '#8B5CF6';
+        default:     return p.theme.colors.primary.main;
+      }
+    }};
+    opacity: 0.9;
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const FileInfo = styled.div`
   flex: 1;
   min-width: 0;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const FileName = styled.h3`
@@ -320,6 +455,15 @@ export const FileName = styled.h3`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  @media (max-width: 640px) {
+    font-size: 0.875rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
 `;
 
 export const FileMeta = styled.div`
@@ -327,12 +471,30 @@ export const FileMeta = styled.div`
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 export const FileMetaItem = styled.span`
   font-size: 0.8125rem;
   opacity: 0.6;
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  @media (max-width: 640px) { font-size: 0.75rem; }
+`;
+
+/* Mobile row 2: spans all 4 columns, indented to align under filename */
+export const MobileMetaRow = styled.div`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    padding-left: calc(18px + 38px + 1rem);
+  }
 `;
 
 export const LinkBadges = styled.div`
@@ -340,6 +502,10 @@ export const LinkBadges = styled.div`
   align-items: center;
   gap: 0.375rem;
   flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    display: none !important;
+  }
 `;
 
 const CAMPAIGN_BADGE_PALETTE = [
@@ -376,10 +542,17 @@ export const LinkBadge = styled.span<{ theme: any; $type: 'global' | 'campaign';
     : getCampaignBadgeColor(p.$campaignId ?? 0).color};
 `;
 
+// ActionButtons: on mobile, becomes a full-width scrollable row
+// aligned to the right, so all icons stay accessible
 export const ActionButtons = styled.div`
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    display: none !important;
+  }
 `;
 
 // ── Icon button ───────────────────────────────────────────────
@@ -407,6 +580,7 @@ export const IconButton = styled.button<{ theme: any; $variant?: 'default' | 'da
   font-size: 0.825rem;
   font-weight: 600;
   white-space: nowrap;
+  flex-shrink: 0;
 
   &:hover:not(:disabled) {
     background-color: ${p => p.$variant === 'danger'
@@ -427,6 +601,10 @@ export const IconButton = styled.button<{ theme: any; $variant?: 'default' | 'da
     height: ${p => p.$size === 'lg' ? '20px' : p.$size === 'sm' ? '14px' : '16px'};
     flex-shrink: 0;
   }
+
+  @media (max-width: 480px) {
+    padding: ${p => p.$size === 'lg' ? '0.625rem' : p.$size === 'sm' ? '0.25rem' : '0.4375rem'};
+  }
 `;
 
 // ── Checkbox ──────────────────────────────────────────────────
@@ -438,7 +616,7 @@ export const Checkbox = styled.div<{ theme: any; $checked: boolean }>`
   border-radius: 4px;
   border: 2px solid ${p => p.$checked
     ? p.theme.colors.primary.main
-    : p.theme.colors.base[400] || p.theme.colors.base[300]};
+    : p.theme.colors.base.content + '40'};
   background-color: ${p => p.$checked ? p.theme.colors.primary.main : 'transparent'};
   display: flex;
   align-items: center;
@@ -458,6 +636,10 @@ export const Checkbox = styled.div<{ theme: any; $checked: boolean }>`
     border-width: 0 2px 2px 0;
     transform: rotate(45deg) translate(-1px, -1px);
   }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `;
 
 // ── Empty state ───────────────────────────────────────────────
@@ -469,6 +651,7 @@ export const EmptyState = styled.div`
   justify-content: center;
   padding: 4rem 2rem;
   text-align: center;
+  @media (max-width: 480px) { padding: 2.5rem 1rem; }
 `;
 
 export const EmptyIcon = styled.div`
@@ -506,6 +689,11 @@ export const ModalOverlay = styled.div<{ $isOpen: boolean }>`
   align-items: center;
   justify-content: center;
   padding: 1rem;
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 export const ModalContent = styled.div<{ theme: any }>`
@@ -518,6 +706,12 @@ export const ModalContent = styled.div<{ theme: any }>`
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+
+  @media (max-width: 520px) {
+    max-height: 92vh;
+    border-radius: ${p => p.theme.radius.box} ${p => p.theme.radius.box} 0 0;
+    max-width: 100%;
+  }
 `;
 
 export const ModalHeader = styled.div<{ theme: any }>`
@@ -526,12 +720,16 @@ export const ModalHeader = styled.div<{ theme: any }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
+
+  @media (max-width: 480px) { padding: 1.125rem 1rem; }
 `;
 
 export const ModalTitle = styled.h3`
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
+  @media (max-width: 480px) { font-size: 1rem; }
 `;
 
 export const CloseButton = styled.button<{ theme: any }>`
@@ -546,6 +744,7 @@ export const CloseButton = styled.button<{ theme: any }>`
   justify-content: center;
   opacity: 0.6;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 
   &:hover { opacity: 1; background-color: ${p => p.theme.colors.base[100]}; }
   svg { width: 20px; height: 20px; }
@@ -555,6 +754,7 @@ export const ModalBody = styled.div`
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
+  @media (max-width: 480px) { padding: 1rem; }
 `;
 
 export const ModalFooter = styled.div<{ theme: any }>`
@@ -563,6 +763,14 @@ export const ModalFooter = styled.div<{ theme: any }>`
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // ── Link modal rows ───────────────────────────────────────────
@@ -596,15 +804,20 @@ export const LinkRow = styled.div<{ theme: any; $selected: boolean }>`
   &:last-child { margin-bottom: 0; }
 
   svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.6; }
+
+  @media (max-width: 480px) { padding: 0.75rem 0.75rem; gap: 0.625rem; }
 `;
 
 export const LinkRowName = styled.div`
   font-size: 0.875rem;
   font-weight: 500;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
-// sits inside ListSection (base[200]) — use base[100] for inset feel
 export const SearchWrapper = styled.div`
   position: relative;
   display: flex;
@@ -662,6 +875,8 @@ export const SearchInput = styled.input<{ theme: any }>`
     box-shadow: 0 0 0 3px ${p => p.theme.colors.primary.main}20;
   }
   &::placeholder { color: ${p => p.theme.colors.base.content}; opacity: 0.5; }
+
+  @media (max-width: 480px) { font-size: 0.875rem; }
 `;
 
 // ── Toast ─────────────────────────────────────────────────────
@@ -675,6 +890,13 @@ export const ToastContainer = styled.div<{ $isVisible: boolean }>`
   flex-direction: column;
   gap: 0.75rem;
   pointer-events: ${p => p.$isVisible ? 'auto' : 'none'};
+
+  @media (max-width: 480px) {
+    top: auto;
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+  }
 `;
 
 export const ToastItem = styled.div<{ theme: any; $type: 'success' | 'error' | 'warning' | 'info' }>`
@@ -707,6 +929,18 @@ export const ToastItem = styled.div<{ theme: any; $type: 'success' | 'error' | '
     from { opacity: 0; transform: translateX(100%); }
     to   { opacity: 1; transform: translateX(0); }
   }
+
+  @media (max-width: 480px) {
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+    animation-name: slideUp;
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(100%); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  }
 `;
 
 export const ToastMsg = styled.div<{ theme: any }>`
@@ -728,6 +962,11 @@ export const ConfirmOverlay = styled.div<{ $isOpen: boolean }>`
   align-items: center;
   justify-content: center;
   z-index: 10001;
+  padding: 1rem;
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+  }
 `;
 
 export const ConfirmBox = styled.div<{ theme: any }>`
@@ -736,10 +975,12 @@ export const ConfirmBox = styled.div<{ theme: any }>`
   border-radius: ${p => p.theme.radius.box};
   padding: 1.5rem;
   max-width: 420px;
-  width: 90%;
+  width: 100%;
   box-shadow: ${p => p.theme.colorScheme === 'dark'
     ? '0 20px 40px rgba(0,0,0,0.5)'
     : '0 20px 40px rgba(0,0,0,0.15)'};
+
+  @media (max-width: 480px) { padding: 1.125rem 1rem; }
 `;
 
 export const ConfirmHeader = styled.div`
@@ -762,13 +1003,14 @@ export const ConfirmIconWrap = styled.div<{ theme: any }>`
   svg { width: 20px; height: 20px; }
 `;
 
-export const ConfirmContent = styled.div`flex: 1;`;
+export const ConfirmContent = styled.div`flex: 1; min-width: 0;`;
 
 export const ConfirmTitle = styled.h3<{ theme: any }>`
   margin: 0 0 0.5rem 0;
   font-size: 1.125rem;
   font-weight: 600;
   color: ${p => p.theme.colors.base.content};
+  @media (max-width: 480px) { font-size: 1rem; }
 `;
 
 export const ConfirmMessage = styled.p<{ theme: any }>`
@@ -777,6 +1019,7 @@ export const ConfirmMessage = styled.p<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   opacity: 0.85;
   line-height: 1.5;
+  @media (max-width: 480px) { font-size: 0.875rem; }
 `;
 
 export const ConfirmActions = styled.div`
@@ -784,6 +1027,12 @@ export const ConfirmActions = styled.div`
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 export const CancelButton = styled.button<{ theme: any }>`
@@ -883,6 +1132,11 @@ export const FilterChip = styled.button<{ theme: any; $active: boolean }>`
   }
 
   svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  @media (max-width: 480px) {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.625rem;
+  }
 `;
 
 // ── Campaign dropdown filter ──────────────────────────────────
@@ -924,6 +1178,11 @@ export const DropdownTrigger = styled.button<{ theme: any; $active: boolean }>`
   }
 
   svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  @media (max-width: 480px) {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.625rem;
+  }
 `;
 
 export const DropdownBadge = styled.span<{ theme: any }>`
@@ -955,6 +1214,14 @@ export const DropdownMenu = styled.div<{ theme: any }>`
     ? '0 8px 24px rgba(0,0,0,0.4)'
     : '0 8px 24px rgba(0,0,0,0.12)'};
   padding: 0.375rem;
+
+  @media (max-width: 480px) {
+    min-width: 190px;
+    max-height: 220px;
+    /* If the trigger is near the right edge, anchor right instead */
+    left: auto;
+    right: 0;
+  }
 `;
 
 export const DropdownSearch = styled.input<{ theme: any }>`
@@ -1013,6 +1280,11 @@ export const PaginationContainer = styled.div<{ theme: any }>`
   border-top: 1px solid ${p => p.theme.colors.base[300]};
   margin-top: 1rem;
   flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    gap: 0.25rem;
+    padding: 1rem 0;
+  }
 `;
 
 export const PaginationButton = styled.button<{ theme: any; $isActive?: boolean }>`
@@ -1037,6 +1309,13 @@ export const PaginationButton = styled.button<{ theme: any; $isActive?: boolean 
   }
   &:disabled { opacity: 0.4; cursor: not-allowed; }
   svg { width: 16px; height: 16px; }
+
+  @media (max-width: 480px) {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 0.375rem;
+    font-size: 0.8125rem;
+  }
 `;
 
 export const PaginationInfo = styled.span<{ theme: any }>`
@@ -1044,6 +1323,12 @@ export const PaginationInfo = styled.span<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   opacity: 0.7;
   margin: 0 0.5rem;
+  white-space: nowrap;
+
+  @media (max-width: 480px) {
+    font-size: 0.75rem;
+    margin: 0 0.125rem;
+  }
 `;
 
 export const PageSizeSelect = styled.select<{ theme: any }>`
@@ -1061,6 +1346,11 @@ export const PageSizeSelect = styled.select<{ theme: any }>`
   option {
     background-color: ${p => p.theme.colors.base[200]};
     color: ${p => p.theme.colors.base.content};
+  }
+
+  @media (max-width: 480px) {
+    /* Hide page size selector on very small screens to save space */
+    display: none;
   }
 `;
 
@@ -1083,4 +1373,247 @@ export const EditInput = styled.input<{ theme: any }>`
   }
   &::placeholder { color: ${p => p.theme.colors.base.content}; opacity: 0.5; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+// ── Back button — hide on mobile ──────────────────────────────
+
+// Override: hide BackButton on small screens
+// Add this to the existing BackButton or use this export alongside it
+export const BackButtonResponsive = styled.button<{ theme: any }>`
+  position: absolute;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[400]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  text-decoration: none;
+
+  &:hover {
+    background-color: ${p => p.theme.colors.base[400]};
+    border-color: ${p => p.theme.colors.primary.main};
+    color: ${p => p.theme.colors.primary.main};
+  }
+
+  svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`;
+
+// ── Three-dot menu ────────────────────────────────────────────
+
+export const DotsButton = styled.button<{ theme: any }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${p => p.theme.colors.primary.main};
+    color: ${p => p.theme.colors.primary.main};
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  svg { width: 16px; height: 16px; }
+`;
+
+export const DotsMenu = styled.div<{ theme: any }>`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  border-radius: ${p => p.theme.radius.box};
+  box-shadow: ${p => p.theme.colorScheme === 'dark'
+    ? '0 8px 24px rgba(0,0,0,0.45)'
+    : '0 8px 24px rgba(0,0,0,0.14)'};
+  padding: 0.3rem;
+  min-width: 170px;
+  animation: dotsMenuIn 0.15s ease;
+
+  @keyframes dotsMenuIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+`;
+
+export const DotsMenuItem = styled.button<{ theme: any; $danger?: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: ${p => p.theme.radius.field};
+  background: transparent;
+  color: ${p => p.$danger ? p.theme.colors.error.main : p.theme.colors.base.content};
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: ${p => p.$danger
+      ? p.theme.colors.error.main + '14'
+      : p.theme.colors.base[300]};
+  }
+
+  svg { width: 15px; height: 15px; flex-shrink: 0; opacity: 0.8; }
+`;
+
+export const DotsMenuDivider = styled.div<{ theme: any }>`
+  height: 1px;
+  background: ${p => p.theme.colors.base[300]};
+  margin: 0.3rem 0;
+`;
+
+export const ActionArea = styled.div`
+  position: relative;
+  flex-shrink: 0;
+`;
+
+// ── Mobile-only card layout ───────────────────────────────────
+
+/* Shown only on mobile — replaces the desktop flex children entirely */
+export const MobileRow = styled.div`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.375rem;
+    width: 100%;
+    min-width: 0;
+  }
+`;
+
+export const MobileRowTop = styled.div`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    min-height: 38px;
+  }
+`;
+
+export const MobileFileName = styled.span`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+`;
+
+// ── Mobile file icon — separate from desktop FileIconWrap ─────
+// Does NOT inherit the display:none mobile rule from FileIconWrap
+export const MobileFileIcon = styled.div<{ theme: any; $ext: string }>`
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background-color: ${p => {
+    switch (p.$ext) {
+      case 'pdf':  return '#EF4444' + '18';
+      case 'doc':
+      case 'docx': return '#3B82F6' + '18';
+      case 'csv':  return '#10B981' + '18';
+      case 'txt':  return '#6B7280' + '18';
+      case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return '#8B5CF6' + '18';
+      default:     return p.theme.colors.primary.main + '18';
+    }
+  }};
+  border: 1px solid ${p => {
+    switch (p.$ext) {
+      case 'pdf':  return '#EF4444' + '28';
+      case 'doc':
+      case 'docx': return '#3B82F6' + '28';
+      case 'csv':  return '#10B981' + '28';
+      case 'txt':  return '#6B7280' + '28';
+      case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return '#8B5CF6' + '28';
+      default:     return p.theme.colors.primary.main + '28';
+    }
+  }};
+
+  svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: ${p => {
+      switch (p.$ext) {
+        case 'pdf':  return '#EF4444';
+        case 'doc':
+        case 'docx': return '#3B82F6';
+        case 'csv':  return '#10B981';
+        case 'txt':  return '#6B7280';
+        case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return '#8B5CF6';
+        default:     return p.theme.colors.primary.main;
+      }
+    }};
+  }
+
+  span {
+    font-size: 0.42rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: ${p => {
+      switch (p.$ext) {
+        case 'pdf':  return '#EF4444';
+        case 'doc':
+        case 'docx': return '#3B82F6';
+        case 'csv':  return '#10B981';
+        case 'txt':  return '#6B7280';
+        case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return '#8B5CF6';
+        default:     return p.theme.colors.primary.main;
+      }
+    }};
+    opacity: 0.9;
+  }
 `;
