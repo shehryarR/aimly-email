@@ -494,72 +494,71 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
                 />
 
                 {isMobile ? (
-                  /* ── Mobile: name + date + stats row + dots ── */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {/* Row 1: checkbox · name · dots */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div onClick={(e) => { e.stopPropagation(); onSelectCampaign(campaign.campaign_id, e); }}
-                        style={{ width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
-                          border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
-                          backgroundColor: isSelected ? theme.colors.primary.main : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                        {isSelected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                  /* ── Mobile: flat row — checkbox · content · dots ── */
+                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+                    {/* Checkbox */}
+                    <div onClick={(e) => { e.stopPropagation(); onSelectCampaign(campaign.campaign_id, e); }}
+                      style={{ width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
+                        border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+                        backgroundColor: isSelected ? theme.colors.primary.main : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      {isSelected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                    </div>
+
+                    {/* Content: name + date + chips */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {campaign.campaign_name}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {campaign.campaign_name}
+                      {formattedDate && (
+                        <div style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, monospace' }}>
+                          {formattedDate}
                         </div>
-                        {formattedDate && (
-                          <div style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, monospace', marginTop: '0.1rem' }}>
-                            {formattedDate}
+                      )}
+                      {/* Stat chips */}
+                      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.1rem' }}>
+                        {[
+                          { label: 'Co.',   value: campaign.companies_count, color: theme.colors.primary.main },
+                          { label: 'Sent',  value: campaign.sent,            color: theme.colors.success.main },
+                          { label: 'Read',  value: campaign.read,            color: theme.colors.info.main,
+                            sub: campaign.sent > 0 ? `${campaign.read_rate.toFixed(0)}%` : undefined },
+                          { label: 'Sched', value: campaign.scheduled,       color: theme.colors.warning.main },
+                        ].map(({ label, value, color, sub }) => (
+                          <div key={label} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                            padding: '0.2rem 0.55rem', borderRadius: '999px',
+                            border: `1px solid ${color}`,
+                            background: theme.colors.base[300],
+                            fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
+                          }}>
+                            <span style={{ opacity: 0.55, fontWeight: 500, color: theme.colors.base.content }}>{label}</span>
+                            <span style={{ color }}>{value}</span>
+                            {sub && <span style={{ color, opacity: 0.8, fontSize: '0.68rem' }}>{sub}</span>}
                           </div>
-                        )}
-                      </div>
-                      {/* Dots menu */}
-                      <div style={{ position: 'relative', flexShrink: 0 }}
-                        ref={dotsOpenId === campaign.campaign_id ? dotsMenuRef : undefined}
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                        <DotsButton theme={theme}
-                          onClick={() => setDotsOpenId(dotsOpenId === campaign.campaign_id ? null : campaign.campaign_id)}
-                          disabled={isSelected}>
-                          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-                        </DotsButton>
-                        {dotsOpenId === campaign.campaign_id && (
-                          <DotsMenu theme={theme}>
-                            <DotsItem theme={theme} onClick={() => { setDotsOpenId(null); openEditModal(campaign); }}>
-                              <EditIcon /> Rename
-                            </DotsItem>
-                            <DotsDivider theme={theme} />
-                            <DotsItem theme={theme} $danger onClick={(e: React.MouseEvent) => { setDotsOpenId(null); onDelete(campaign.campaign_id, campaign.campaign_name, e); }}>
-                              <TrashIcon /> Delete
-                            </DotsItem>
-                          </DotsMenu>
-                        )}
+                        ))}
                       </div>
                     </div>
-                    {/* Row 2: compact stat chips */}
-                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', paddingLeft: 'calc(18px + 0.5rem)' }}>
-                      {[
-                        { label: 'Co.',   value: campaign.companies_count, color: theme.colors.primary.main },
-                        { label: 'Sent',  value: campaign.sent,            color: theme.colors.success.main },
-                        { label: 'Read',  value: campaign.read,            color: theme.colors.info.main,
-                          sub: campaign.sent > 0 ? `${campaign.read_rate.toFixed(0)}%` : undefined },
-                        { label: 'Sched', value: campaign.scheduled,       color: theme.colors.warning.main },
-                      ].map(({ label, value, color, sub }) => (
-                        <div key={label} style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                          padding: '0.2rem 0.55rem',
-                          borderRadius: '999px',
-                          border: `1px solid ${color}`,
-                          background: theme.colors.base[300],
-                          opacity: 0.9,
-                          fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
-                        }}>
-                          <span style={{ opacity: 0.55, fontWeight: 500, color: theme.colors.base.content }}>{label}</span>
-                          <span style={{ color }}>{value}</span>
-                          {sub && <span style={{ color, opacity: 0.8, fontSize: '0.68rem' }}>{sub}</span>}
-                        </div>
-                      ))}
+
+                    {/* Dots menu */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}
+                      ref={dotsOpenId === campaign.campaign_id ? dotsMenuRef : undefined}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <DotsButton theme={theme}
+                        onClick={() => setDotsOpenId(dotsOpenId === campaign.campaign_id ? null : campaign.campaign_id)}
+                        disabled={isSelected}>
+                        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                      </DotsButton>
+                      {dotsOpenId === campaign.campaign_id && (
+                        <DotsMenu theme={theme}>
+                          <DotsItem theme={theme} onClick={() => { setDotsOpenId(null); openEditModal(campaign); }}>
+                            <EditIcon /> Rename
+                          </DotsItem>
+                          <DotsDivider theme={theme} />
+                          <DotsItem theme={theme} $danger onClick={(e: React.MouseEvent) => { setDotsOpenId(null); onDelete(campaign.campaign_id, campaign.campaign_name, e); }}>
+                            <TrashIcon /> Delete
+                          </DotsItem>
+                        </DotsMenu>
+                      )}
                     </div>
                   </div>
                 ) : (
