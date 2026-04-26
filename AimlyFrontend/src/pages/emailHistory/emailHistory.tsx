@@ -393,8 +393,10 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   onDownloadAttachments,
   formatDT, minDT, theme, isDirty = false,
 }) => {
+  const isMobile = useIsMobile();
   const [confirmClose, setConfirmClose] = useState(false);
   const [htmlEmail, setHtmlEmail] = useState<boolean>(false);
+  const [mobileView, setMobileView] = useState<'email' | 'preview'>('email');
   const [splitRatio, setSplitRatio] = useState(0.5);
   const dragStateRef = useRef<{ dragging: boolean; startX: number; startRatio: number; containerW: number }>({ dragging: false, startX: 0, startRatio: 0.5, containerW: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -403,6 +405,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   useEffect(() => {
     setHtmlEmail(!!activeEmail?.html_email);
     setSplitRatio(0.5);
+    setMobileView('email');
   }, [activeEmail?.id]);
 
   const onDividerMouseDown = (e: React.MouseEvent) => {
@@ -454,7 +457,7 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
   return (
     <>
     <ModalOverlay $isOpen={isOpen} onClick={handleClose}>
-      <ModalContent theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ maxWidth: htmlEmail && tab === 'email' ? 1100 : 680, transition: 'max-width 0.25s' }}>
+      <ModalContent theme={theme} onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ maxWidth: htmlEmail && tab === 'email' && !isMobile ? 1100 : 680, transition: 'max-width 0.25s' }}>
 
         {/* Header */}
         <ModalHeader theme={theme}>
@@ -485,14 +488,62 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               )}
             </button>
           ))}
+
+          {/* Mobile-only Email ↔ Preview toggle — visible only when HTML mode is on */}
+          {isMobile && htmlEmail && tab === 'email' && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingRight: '0.75rem', gap: '0.25rem' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                background: theme.colors.base[400],
+                border: `1px solid ${theme.colors.base[300]}`,
+                borderRadius: '999px',
+                padding: '0.2rem',
+                gap: '0.15rem',
+              }}>
+                {(['email', 'preview'] as const).map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setMobileView(v)}
+                    style={{
+                      padding: '0.25rem 0.65rem',
+                      borderRadius: '999px',
+                      border: 'none',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      background: mobileView === v ? theme.colors.primary.main : 'transparent',
+                      color: mobileView === v ? theme.colors.primary.content : theme.colors.base.content,
+                      opacity: mobileView === v ? 1 : 0.5,
+                    }}
+                  >
+                    {v === 'email' ? 'Edit' : 'Preview'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── EMAIL TAB ── */}
         {tab === 'email' && (<>
-          <div ref={containerRef} style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+          <div
+            ref={containerRef}
+            style={{
+              flex: 1, minHeight: 0,
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              overflow: isMobile ? 'auto' : 'hidden',
+            }}
+          >
 
-            {/* Editor column */}
-            <ModalBody style={{ flex: `0 0 ${htmlEmail ? `${(1 - splitRatio) * 100}%` : '100%'}`, transition: htmlEmail ? 'none' : 'flex 0.25s' }}>
+            {/* Editor column — hidden on mobile when previewing */}
+            {(!isMobile || mobileView === 'email') && (
+            <ModalBody style={{
+              flex: isMobile ? '1 1 auto' : `0 0 ${htmlEmail ? `${(1 - splitRatio) * 100}%` : '100%'}`,
+              transition: (!isMobile && htmlEmail) ? 'none' : 'flex 0.25s',
+              overflowY: isMobile ? 'auto' : 'auto',
+            }}>
               <FormGroup>
                 <FormLabel theme={theme}>Recipient</FormLabel>
                 {(isDraft || isScheduled)
@@ -614,16 +665,31 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
               </FormGroup>
             )}
           </ModalBody>
+            )}
 
-          {/* Drag divider + live preview — only when HTML is on, desktop only */}
-          {htmlEmail && (
-            <>
-              <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}
-                className="hide-on-mobile">
-                <div style={{ width: 2, height: 40, borderRadius: 2, background: theme.colors.base[300] }} />
-              </div>
-              <div style={{ flex: `0 0 ${splitRatio * 100}%`, display: 'flex', flexDirection: 'column', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden', minWidth: 0 }}
-                className="hide-on-mobile">
+          {/* Drag divider — desktop only */}
+          {htmlEmail && !isMobile && (
+            <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}>
+              <div style={{ width: 2, height: 40, borderRadius: 2, background: theme.colors.base[300] }} />
+            </div>
+          )}
+
+          {/* Live preview — side panel on desktop, full-pane on mobile when mobileView === 'preview' */}
+          {htmlEmail && (!isMobile || mobileView === 'preview') && (
+            <div style={isMobile ? {
+              flex: '1 1 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '1rem',
+            } : {
+              flex: `0 0 ${splitRatio * 100}%`,
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '1.5rem 1.5rem 1.5rem 0.75rem',
+              overflow: 'hidden',
+              minWidth: 0,
+            }}>
+              {!isMobile && (
                 <FormLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
@@ -631,22 +697,29 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
                   </svg>
                   Live Preview
                 </FormLabel>
-                <div style={{ flex: 1, border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, overflow: 'hidden', background: '#fff', minHeight: 200 }}>
-                  {(isDraft || isScheduled ? editContent : activeEmail.email_content).trim() ? (
-                    <iframe
-                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${isDraft || isScheduled ? editContent : activeEmail.email_content}</body></html>`}
-                      style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 200 }}
-                      sandbox="allow-same-origin"
-                      title="Email HTML Preview"
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 200, fontSize: '0.75rem', opacity: 0.35, fontStyle: 'italic' }}>
-                      Preview will appear here…
-                    </div>
-                  )}
-                </div>
+              )}
+              <div style={{
+                flex: 1,
+                minHeight: isMobile ? 0 : 200,
+                border: `1px solid ${theme.colors.base[300]}`,
+                borderRadius: theme.radius.field,
+                overflow: 'hidden',
+                background: '#fff',
+              }}>
+                {(isDraft || isScheduled ? editContent : activeEmail.email_content).trim() ? (
+                  <iframe
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${isDraft || isScheduled ? editContent : activeEmail.email_content}</body></html>`}
+                    style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 200 }}
+                    sandbox="allow-same-origin"
+                    title="Email HTML Preview"
+                  />
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 200, fontSize: '0.75rem', opacity: 0.35, fontStyle: 'italic' }}>
+                    Preview will appear here…
+                  </div>
+                )}
               </div>
-            </>
+            </div>
           )}
           </div>
 
