@@ -2207,6 +2207,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
   const [selectingAll, setSelectingAll] = useState(false);
   // Cache of full company objects for selected IDs (needed for cross-page bulk actions)
   const allSelectedCompanies = useRef<Map<number, Company>>(new Map());
+  const sectionCardRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm]               = useState('');
   type SortKey = 'name' | 'created_at';
   type SortDir = 'asc' | 'desc';
@@ -2618,12 +2619,8 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         {/* Stats card — Hero Banner */}
         <StatsCard theme={theme}>
 
-          {/* Top row: back (left) · campaign name (centre) · settings (right) */}
+          {/* Top row: campaign name (centre) · settings (right) */}
           <StatsHeader>
-            <HeaderIconBtn theme={theme} as={Link} to="/campaigns" title="Back to campaigns">
-              <ArrowLeftIcon />
-            </HeaderIconBtn>
-
             <CampaignTitleSection style={{ textAlign: 'center' }}>
               <CampaignTitle>{campaign.name}</CampaignTitle>
               <CampaignMeta>Created {formatDate(campaign.created_at)}</CampaignMeta>
@@ -2681,7 +2678,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
         </StatsCard>
 
         {/* Companies section */}
-        <SectionCard theme={theme} onClick={e => e.stopPropagation()}>
+        <SectionCard ref={sectionCardRef} theme={theme} onClick={() => { if (selectedCompanies.size > 0) { setSelectedCompanies(new Set()); allSelectedCompanies.current.clear(); } }}>
           <SectionHeader theme={theme}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               {companies.length > 0 && (
@@ -2897,7 +2894,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
                 key={company.id}
                 theme={theme}
                 $selected={selectedCompanies.has(company.id)}
-                onClick={() => handleSelectCompany(company.id)}
+                onClick={e => { e.stopPropagation(); handleSelectCompany(company.id); }}
               >
                 {isMobile ? (
                   /* ── Mobile: flat row — checkbox · info · dots ── */
