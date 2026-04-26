@@ -1352,14 +1352,10 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
           {/* Pagination */}
           {displayTotal > 0 && (
             <PaginationContainer theme={theme}>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(1)} disabled={currentPage === 1}>««</PaginationButton>
               <PaginationButton theme={theme} onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>«</PaginationButton>
               {renderPageNumbers()}
               <PaginationButton theme={theme} onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages}>»»</PaginationButton>
-              <PaginationInfo theme={theme}>
-                {displayTotal > 0 ? `${rangeStart}–${rangeEnd} of ${displayTotal}` : '0'}
-              </PaginationInfo>
+              <PaginationInfo theme={theme}>{rangeStart}–{rangeEnd} of {displayTotal}</PaginationInfo>
               <PageSizeSelect theme={theme} value={pageSize}
                 onChange={e => handlePageSizeChange(Number(e.target.value))}>
                 <option value={10}>10 / page</option>
