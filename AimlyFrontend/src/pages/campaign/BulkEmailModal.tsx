@@ -121,17 +121,54 @@ const CloseBtn = styled.button<{ theme: any }>`
 // ── TOP TAB BAR ──────────────────────────────────────────────
 const TopTabBar = styled.div<{ theme: any }>`
   display:flex;border-bottom:1px solid ${p => p.theme.colors.base[300]};flex-shrink:0;
-  background:${p => p.theme.colors.base[200]};
+  background:${p => p.theme.colors.base[200]};overflow-x:auto;scrollbar-width:none;
+  &::-webkit-scrollbar{display:none;}
 `;
 const TopTab = styled.button<{ theme: any; $active: boolean }>`
   display:inline-flex;align-items:center;gap:0.45rem;padding:0.7rem 1.4rem;
   font-size:0.84rem;font-weight:${p => p.$active ? 700 : 500};
   border:none;border-bottom:2px solid ${p => p.$active ? p.theme.colors.primary.main : 'transparent'};
-  background:none;cursor:pointer;
+  background:none;cursor:pointer;white-space:nowrap;
   color:${p => p.$active ? p.theme.colors.primary.main : p.theme.colors.base.content};
   opacity:${p => p.$active ? 1 : 0.55};transition:all 0.15s;margin-bottom:-1px;
   &:hover{opacity:1;color:${p => p.theme.colors.primary.main};}
   svg{width:14px;height:14px;}
+  @media (max-width: 480px) {
+    padding: 0.65rem 0.9rem;
+    font-size: 0.79rem;
+    gap: 0.3rem;
+    svg { width: 13px; height: 13px; }
+  }
+`;
+
+// ── COMPANY SELECTOR (replaces sidebar on tablet/mobile) ──────
+const CompanySelectorBar = styled.div<{ theme: any }>`
+  display:flex;align-items:center;gap:0.6rem;
+  padding:0.6rem 0.875rem;border-bottom:1px solid ${p => p.theme.colors.base[300]};
+  flex-shrink:0;background:${p => p.theme.colors.base[200]};
+`;
+const CompanySelectorLabel = styled.span<{ theme: any }>`
+  font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;
+  opacity:0.4;flex-shrink:0;color:${p => p.theme.colors.base.content};
+`;
+const CompanySelectorSelect = styled.select<{ theme: any }>`
+  flex:1;min-width:0;padding:0.4rem 0.65rem;
+  border:1px solid ${p => p.theme.colors.base[300]};
+  border-radius:${p => p.theme.radius.field};
+  background:${p => p.theme.colors.base[400]};color:${p => p.theme.colors.base.content};
+  font-size:0.84rem;font-weight:500;cursor:pointer;
+  &:focus{outline:none;border-color:${p => p.theme.colors.primary.main};}
+`;
+const CompanyNavBtn = styled.button<{ theme: any; $dir:'prev'|'next'; $disabled:boolean }>`
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;flex-shrink:0;
+  border:1px solid ${p => p.theme.colors.base[300]};
+  border-radius:${p => p.theme.radius.field};
+  background:${p => p.theme.colors.base[400]};color:${p => p.theme.colors.base.content};
+  cursor:${p => p.$disabled ? 'not-allowed' : 'pointer'};
+  opacity:${p => p.$disabled ? 0.3 : 0.7};transition:all 0.12s;
+  &:hover:not(:disabled){opacity:1;border-color:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.main};}
+  svg{width:12px;height:12px;}
 `;
 
 // ── COMPANIES LAYOUT ─────────────────────────────────────────
@@ -142,6 +179,7 @@ const CompanyNav = styled.nav<{ theme: any }>`
   background:${p => p.theme.colors.base[200]};
   border-right:1px solid ${p => p.theme.colors.base[300]};
   overflow-y:auto;display:flex;flex-direction:column;padding:0.5rem 0;scrollbar-width:thin;
+  @media (max-width: 860px) { display: none; }
 `;
 const NavLabel = styled.div<{ theme: any }>`
   font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;
@@ -194,14 +232,21 @@ const InnerTab = styled.button<{ theme: any; $active: boolean }>`
   &:hover{opacity:1;color:${p => p.theme.colors.primary.main};}
   svg{width:14px;height:14px;}
 `;
-const Scroll = styled.div`flex:1;min-height:0;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;animation:${fadeIn} 0.15s ease;scrollbar-width:thin;`;
-const ScrollFlush = styled(Scroll)`gap:0;padding:1.25rem 1.5rem;`;
+const Scroll = styled.div`flex:1;min-height:0;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;animation:${fadeIn} 0.15s ease;scrollbar-width:thin;
+  @media (max-width:480px){padding:1rem;}
+`;
+const ScrollFlush = styled(Scroll)`gap:0;padding:1.25rem 1.5rem;
+  @media (max-width:480px){padding:1rem;}
+`;
 
 // ── BULK SETTINGS PANE ───────────────────────────────────────
 const BulkPane = styled.div`
   flex:1;overflow-y:auto;padding:1.5rem 1.75rem;
   display:flex;flex-direction:column;gap:1.25rem;
   animation:${fadeIn} 0.15s ease;
+  @media (max-width: 480px) {
+    padding: 1rem;
+  }
 `;
 
 // ── SETTINGS-STYLE COMPONENTS ─────────────────────────────────
@@ -431,50 +476,17 @@ const Footer = styled.div<{ theme: any }>`
   background:${p => p.theme.colors.base[200]};
   flex-wrap: wrap;
 
-  @media (max-width: 480px) {
+  @media (max-width: 640px) {
     padding: 0.875rem 1rem;
+    gap: 0.5rem;
+  }
+  @media (max-width: 480px) {
     flex-direction: column-reverse;
     align-items: stretch;
+    > span { text-align: center; margin-right: 0 !important; }
     button { width: 100%; justify-content: center; }
   }
 `;
-const SplitGroup = styled.div`position:relative;display:inline-flex;`;
-const SplitMain = styled.button<{ theme: any }>`
-  display:inline-flex;align-items:center;gap:0.4rem;
-  padding:0.55rem 0.9rem;
-  border-radius:${p => p.theme.radius.field} 0 0 ${p => p.theme.radius.field};
-  border:none;border-right:1px solid rgba(0,0,0,0.15);
-  font-size:0.8375rem;font-weight:600;cursor:pointer;transition:all 0.15s;
-  background:${p => p.theme.colors.base[300]};color:${p => p.theme.colors.base.content};
-  &:hover:not(:disabled){opacity:0.88;transform:translateY(-1px);}
-  &:disabled{opacity:0.45;cursor:not-allowed;transform:none;}
-  svg{width:14px;height:14px;}
-`;
-const SplitChevron = styled.button<{ theme: any; $open: boolean }>`
-  display:inline-flex;align-items:center;justify-content:center;padding:0.55rem 0.45rem;
-  border-radius:0 ${p => p.theme.radius.field} ${p => p.theme.radius.field} 0;
-  border:none;font-size:0.8375rem;font-weight:600;cursor:pointer;transition:all 0.15s;
-  background:${p => p.$open ? p.theme.colors.base[200] : p.theme.colors.base[300]};
-  color:${p => p.theme.colors.base.content};
-  &:hover:not(:disabled){opacity:0.88;}
-  &:disabled{opacity:0.45;cursor:not-allowed;}
-  svg{width:11px;height:11px;transition:transform 0.15s;transform:rotate(${p => p.$open ? '180deg' : '0deg'});}
-`;
-const SplitMenu = styled.div<{ theme: any }>`
-  position:absolute;bottom:calc(100% + 6px);right:0;min-width:170px;
-  background:${p => p.theme.colors.base[100]};border:1px solid ${p => p.theme.colors.base[300]};
-  border-radius:${p => p.theme.radius.field};box-shadow:0 8px 24px rgba(0,0,0,0.18);
-  overflow:hidden;z-index:10;
-`;
-const SplitMenuItem = styled.button<{ theme: any }>`
-  width:100%;padding:0.6rem 0.9rem;border:none;background:transparent;
-  color:${p => p.theme.colors.base.content};font-size:0.8125rem;font-weight:500;
-  cursor:pointer;text-align:left;display:flex;align-items:center;gap:0.5rem;transition:background 0.12s;
-  &:hover{background:${p => p.theme.colors.base[300]};}
-  svg{width:13px;height:13px;opacity:0.6;}
-`;
-
-
 // ── Split-button (matches Campaign.tsx GenBtn pattern) ───────
 const SplitBtn = styled.button<{ theme: any; $disabled?: boolean }>`
   position:relative;display:inline-flex;align-items:center;
@@ -534,7 +546,8 @@ const BulkRegenDropdown: React.FC<{
   acting: boolean;
   hasTemplateEmail: boolean;
   onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
-}> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
+  fullWidth?: boolean;
+}> = ({ theme, acting, hasTemplateEmail, onRegenerate, fullWidth }) => {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
   const chevronRef = useRef<HTMLSpanElement>(null);
@@ -562,8 +575,8 @@ const BulkRegenDropdown: React.FC<{
   };
 
   return (
-    <SplitBtn theme={theme} $disabled={acting}>
-      <SplitBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
+    <SplitBtn theme={theme} $disabled={acting} style={fullWidth ? {width:'100%'} : undefined}>
+      <SplitBtnLeft theme={theme} style={fullWidth ? {flex:1,justifyContent:'center'} : undefined} onClick={() => !acting && onRegenerate('plain')}>
         <SplitBtnIcon>
           <IcoRegen />
         </SplitBtnIcon>
@@ -608,6 +621,113 @@ const BulkRegenDropdown: React.FC<{
   );
 };
 
+
+// ── Bulk Send Split Button (mirrors EmailModal's SendSplitBtn) ──
+const BulkSendSplitBtn: React.FC<{
+  theme: any;
+  acting: string | null;
+  readyCount: number;
+  onSend: () => void;
+  onSchedule: () => void;
+  onSmartSchedule: () => void;
+  onDraft: () => void;
+  fullWidth?: boolean;
+}> = ({ theme, acting, readyCount, onSend, onSchedule, onSmartSchedule, onDraft, fullWidth }) => {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
+  const chevronRef = useRef<HTMLSpanElement>(null);
+  const disabled = !!acting || readyCount === 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < 130;
+      setMenuPos({ top: openUpward ? rect.top : rect.bottom + 4, left: rect.right, openUpward });
+    }
+    setOpen(v => !v);
+  };
+
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'stretch', position: 'relative',
+      width: fullWidth ? '100%' : undefined,
+      borderRadius: theme.radius.field,
+      border: `1px solid ${theme.colors.primary.main}`,
+      opacity: disabled ? 0.5 : 1,
+      overflow: 'visible',
+      pointerEvents: disabled ? 'none' : 'auto',
+    }}>
+      {/* Left: Send All */}
+      <button onClick={onSend} disabled={disabled} style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem',
+        padding: '0.55rem 0.9rem',
+        background: theme.colors.primary.main, color: theme.colors.primary.content,
+        border: 'none', borderRadius: `${theme.radius.field} 0 0 ${theme.radius.field}`,
+        fontSize: '0.8375rem', fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+      }}>
+        {acting === 'send'
+          ? <div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'spin 0.7s linear infinite' }} />
+          : <IcoSend />}
+        Send All ({readyCount})
+      </button>
+
+      {/* Divider */}
+      <div style={{ width: 1, background: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+
+      {/* Right: chevron */}
+      <span ref={chevronRef} onClick={openMenu} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 0.55rem',
+        background: theme.colors.primary.main, color: theme.colors.primary.content,
+        borderRadius: `0 ${theme.radius.field} ${theme.radius.field} 0`,
+        cursor: 'pointer', transition: 'opacity 0.15s',
+      }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="11" height="11"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </span>
+
+      {/* Dropdown portal */}
+      {open && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2999 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'fixed',
+            top: menuPos.top, left: menuPos.left,
+            transform: menuPos.openUpward ? 'translateX(-100%) translateY(-100%)' : 'translateX(-100%)',
+            zIndex: 3000,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            minWidth: 170, overflow: 'hidden',
+          }}>
+            <SplitDropItem theme={theme} onClick={() => { onDraft(); setOpen(false); }}>
+              <IcoDraft />Save as Draft ({readyCount})
+            </SplitDropItem>
+            <SplitDropItem theme={theme} onClick={() => { onSchedule(); setOpen(false); }}>
+              <IcoCal />Schedule…
+            </SplitDropItem>
+            <SplitDropItem theme={theme} onClick={() => { onSmartSchedule(); setOpen(false); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Smart Schedule…
+            </SplitDropItem>
+          </div>
+        </>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 const IcoEmail     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const IcoClip      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
@@ -703,11 +823,42 @@ const CloseConfirmDialog: React.FC<{ open: boolean; theme: any; onKeep: () => vo
 const getExt = (f: string) => f.split('.').pop()?.toLowerCase() || '';
 
 // ─────────────────────────────────────────────────────────────
+// RESPONSIVE HOOKS
+// ─────────────────────────────────────────────────────────────
+const useIsMobile = () => {
+  const [v, setV] = useState(() => window.innerWidth <= 520);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 520px)');
+    const h = (e: MediaQueryListEvent) => setV(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  return v;
+};
+
+// "tablet" = screens where sidebar would be cramped (≤ 860px)
+const useIsTablet = () => {
+  const [v, setV] = useState(() => window.innerWidth <= 860);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 860px)');
+    const h = (e: MediaQueryListEvent) => setV(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  return v;
+};
+
+// ─────────────────────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────────────────────
 const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   isOpen, companies, campaignId, theme, apiBase, onClose, onToast, hasTemplateEmail, initialQueryType = 'plain',
 }) => {
+  // responsive
+  const isMobile  = useIsMobile();
+  const isTablet  = useIsTablet();     // hides sidebar + "Companies" tab, shows selector
+  const [mobileEmailView, setMobileEmailView] = useState<'edit'|'preview'>('edit');
+
   // top-level view
   const [topTab, setTopTab] = useState<'companies'|'bulk-generation'|'bulk-attachments'>('companies');
 
@@ -786,14 +937,12 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
 
   const schedRef      = useRef<HTMLInputElement>(null);
-  const schedDropRef  = useRef<HTMLDivElement>(null);
   const uploadRefs    = useRef<(HTMLInputElement|null)[]>([]);
   const bulkUpRef     = useRef<HTMLInputElement>(null);
 
   // smart schedule state
   const [showSmartSched,    setShowSmartSched]    = useState(false);
   const [showSched,         setShowSched]         = useState(false);
-  const [schedDropOpen,     setSchedDropOpen]     = useState(false);
   const [smartStartTime,    setSmartStartTime]    = useState('');
   const [smartInitial,      setSmartInitial]      = useState('5');
   const [smartInterval,     setSmartInterval]     = useState('30');
@@ -818,7 +967,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     if (!isOpen || companies.length===0) return;
     setTopTab('companies'); setActiveIdx(0);
     setShowSched(false); setSchedTime(''); setBulkActing(null);
-    setShowSmartSched(false); setSmartStartTime(''); setSmartInitial('5'); setSmartInterval('30'); setSmartIntervalUnit('minutes'); setSmartIncrement('2'); setSchedDropOpen(false);
+    setShowSmartSched(false); setSmartStartTime(''); setSmartInitial('5'); setSmartInterval('30'); setSmartIntervalUnit('minutes'); setSmartIncrement('2');
     setBulkAttachInherit(null);
     setBulkInheritMsg(null); setBulkUploadFile(null); setBulkUploadMsg(null); setBulkAttachSearch('');
     setBulkAttachConfirmed(false); setBulkAttachIndivChanged(false);
@@ -844,17 +993,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
     const aOn = ready.every(e => e.inheritCampaignAttachments===1);
     setBulkAttachInherit(aOn ? true : false);
   }, [entries]);
-
-  // close schedule dropdown on outside click
-  useEffect(() => {
-    if (!schedDropOpen) return;
-    const h = (e: MouseEvent) => {
-      if (schedDropRef.current && !schedDropRef.current.contains(e.target as Node))
-        setSchedDropOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [schedDropOpen]);
 
   // ── load / populate / generate entry ────────────────────────
   const loadAllEntries = async (cos: Company[]) => {
@@ -1364,23 +1502,44 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
         {/* ── top tab bar ── */}
         <TopTabBar theme={theme}>
-          <TopTab theme={theme} $active={topTab==='companies'} onClick={()=>setTopTab('companies')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
-            </svg>
-            Companies
-            <span style={{fontSize:'0.65rem',fontWeight:700,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 6px'}}>
-              {entries.length}
-            </span>
-          </TopTab>
+          {isTablet ? (
+            /* On tablet/mobile: single "Company" tab (no sidebar) */
+            <TopTab theme={theme} $active={topTab==='companies'} onClick={()=>setTopTab('companies')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+              </svg>
+              Company
+            </TopTab>
+          ) : (
+            <TopTab theme={theme} $active={topTab==='companies'} onClick={()=>setTopTab('companies')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+              </svg>
+              Companies
+              <span style={{fontSize:'0.65rem',fontWeight:700,background:theme.colors.primary.main+'20',color:theme.colors.primary.main,border:`1px solid ${theme.colors.primary.main}40`,borderRadius:'999px',padding:'1px 6px'}}>
+                {entries.length}
+              </span>
+            </TopTab>
+          )}
           <TopTab theme={theme} $active={topTab==='bulk-generation'} onClick={()=>setTopTab('bulk-generation')}>
             <IcoRegen />
-            Bulk Settings
+            {isMobile ? 'Generation' : 'Bulk Generation'}
           </TopTab>
           <TopTab theme={theme} $active={topTab==='bulk-attachments'} onClick={()=>setTopTab('bulk-attachments')}>
             <IcoClip />
-            Bulk Attachments
+            {isMobile ? 'Attachments' : 'Bulk Attachments'}
           </TopTab>
+          {/* BULK scope indicator — pushes to right end of tab bar */}
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',paddingRight:'0.75rem',flexShrink:0}}>
+            <span style={{
+              fontSize:'0.6rem',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',
+              padding:'2px 7px',borderRadius:'999px',
+              background:theme.colors.primary.main+'15',
+              color:theme.colors.primary.main,
+              border:`1px solid ${theme.colors.primary.main}30`,
+              opacity:0.75,
+            }}>Bulk</span>
+          </div>
         </TopTabBar>
 
         {/* ════════════════════════════════════════════
@@ -1388,7 +1547,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         ════════════════════════════════════════════ */}
         {topTab==='companies' && (
           <TwoCol>
-            {/* left nav */}
+            {/* left nav — desktop only (hidden via CSS on ≤860px) */}
             <CompanyNav theme={theme}>
               <NavLabel theme={theme}>Companies</NavLabel>
               {entries.map((e,idx)=>(
@@ -1403,6 +1562,30 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
             {/* right pane */}
             <EmailPane>
+              {/* ── Tablet/mobile company selector (replaces sidebar) ── */}
+              {isTablet && entries.length > 0 && (
+                <CompanySelectorBar theme={theme}>
+                  <CompanySelectorLabel theme={theme}>Company</CompanySelectorLabel>
+                  <CompanySelectorSelect
+                    theme={theme}
+                    value={activeIdx}
+                    onChange={e => setActiveIdx(Number(e.target.value))}
+                  >
+                    {entries.map((en, idx) => (
+                      <option key={en.company.id} value={idx}>
+                        {en.phase === 'loading' ? '⏳ ' : en.phase === 'error' ? '⚠ ' : en.phase === 'ready' ? '● ' : ''}{en.company.name}
+                      </option>
+                    ))}
+                  </CompanySelectorSelect>
+                  <CompanyNavBtn theme={theme} $dir="prev" $disabled={activeIdx === 0} onClick={() => setActiveIdx(i => Math.max(0, i - 1))}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  </CompanyNavBtn>
+                  <CompanyNavBtn theme={theme} $dir="next" $disabled={activeIdx >= entries.length - 1} onClick={() => setActiveIdx(i => Math.min(entries.length - 1, i + 1))}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </CompanyNavBtn>
+                  <span style={{fontSize:'0.72rem',opacity:0.4,flexShrink:0}}>{activeIdx+1}/{entries.length}</span>
+                </CompanySelectorBar>
+              )}
               {entry ? (
                 <>
                   {entry.phase==='ready' && (
@@ -1424,14 +1607,19 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                           )}
                         </InnerTab>
                       </div>
-                      {entry.activeTab==='email' && (
-                        <BulkRegenDropdown
-                          theme={theme}
-                          acting={!!bulkActing}
-                          hasTemplateEmail={!!hasTemplateEmail}
-                          onRegenerate={(qt)=>generateEntry(activeIdx,entry.company,qt,true)}
-                        />
-                      )}
+                      <div style={{display:'flex',alignItems:'center',gap:'0.5rem',paddingRight:'0.5rem'}}>
+                        {/* Mobile Edit/Preview toggle — shown when HTML on */}
+                        {isMobile && entry.htmlEmail && entry.activeTab==='email' && (
+                          <div style={{display:'flex',alignItems:'center',background:theme.colors.base[400],border:`1px solid ${theme.colors.base[300]}`,borderRadius:'999px',padding:'0.18rem',gap:'0.1rem'}}>
+                            {(['edit','preview'] as const).map(v => (
+                              <button key={v} onClick={()=>setMobileEmailView(v)} style={{padding:'0.22rem 0.55rem',borderRadius:'999px',border:'none',fontSize:'0.69rem',fontWeight:600,cursor:'pointer',transition:'all 0.15s',background:mobileEmailView===v?theme.colors.primary.main:'transparent',color:mobileEmailView===v?theme.colors.primary.content:theme.colors.base.content,opacity:mobileEmailView===v?1:0.5}}>
+                                {v==='edit'?'Edit':'Preview'}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                      </div>
                     </InnerTabBar>
                   )}
 
@@ -1445,9 +1633,10 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   )}
 
                   {entry.phase==='ready'&&entry.activeTab==='email'&&(
-                    <div ref={previewContainerRef} style={{flex:1,minHeight:0,display:'flex',overflow:'hidden'}}>
-                      {/* Editor column */}
-                      <Scroll style={{flex:1,minWidth:0}}>
+                    <div ref={previewContainerRef} style={{flex:1,minHeight:0,display:'flex',flexDirection:isMobile?'column':'row',overflow:isMobile?'auto':'hidden'}}>
+                      {/* Editor column — hidden on mobile when previewing */}
+                      {(!isMobile || mobileEmailView==='edit') && (
+                      <Scroll style={{flex:1,minWidth:0,overflowY:isMobile?'visible':'auto'}}>
                         <div>
                           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0.3rem'}}>
                             <FieldLbl theme={theme} style={{margin:0}}>Subject</FieldLbl>
@@ -1484,18 +1673,22 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                           </div>
                         )}
                       </Scroll>
+                      )} {/* end editor column */}
                       {/* Drag divider + live preview — only when HTML Email is on */}
                       {entry.htmlEmail && (
                         <>
-                          {/* Drag handle */}
+                          {/* Drag handle — desktop only */}
+                          {!isMobile && (
                           <div
                             onMouseDown={onDividerMouseDown}
                             style={{width:6,flexShrink:0,cursor:'col-resize',display:'flex',alignItems:'center',justifyContent:'center',alignSelf:'stretch'}}
                           >
                             <div style={{width:2,height:'40px',borderRadius:2,background:theme.colors.base[300]}}/>
                           </div>
-                          {/* Preview column */}
-                          <div style={{width:previewWidth ?? 280,flexShrink:0,display:'flex',flexDirection:'column',padding:'1.5rem 1.25rem 1.5rem 0.75rem',overflow:'hidden'}}>
+                          )}
+                          {/* Preview column — side panel on desktop, full pane on mobile when mobileEmailView==='preview' */}
+                          {(!isMobile || mobileEmailView==='preview') && (
+                          <div style={isMobile ? {flex:'1 1 auto',display:'flex',flexDirection:'column',padding:'1rem'} : {width:previewWidth ?? 280,flexShrink:0,display:'flex',flexDirection:'column',padding:'1.5rem 1.25rem 1.5rem 0.75rem',overflow:'hidden'}}>
                             <FieldLbl theme={theme} style={{display:'flex',alignItems:'center',gap:'0.35rem',marginBottom:'0.5rem'}}>
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
@@ -1519,6 +1712,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                               )}
                             </div>
                           </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -1882,11 +2076,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
         {/* ── Footer (always visible) ──*/}
         <Footer theme={theme}>
-          {/* Ready count on left always */}
-          <span style={{fontSize:'0.78rem',opacity:0.42,marginRight:'auto'}}>
-            {readyCount} of {entries.length} email{entries.length!==1?'s':''} ready
-          </span>
-
+          {/* ── Smart Schedule expanded inline ── */}
           {showSmartSched ? (
             <>
               <div style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap'}}>
@@ -1915,10 +2105,8 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                     />
                     <select value={smartIntervalUnit} onChange={e=>setSmartIntervalUnit(e.target.value as any)}
                       style={{padding:'0.35rem 0.4rem',fontSize:'0.8rem',border:`1px solid ${theme.colors.base[300]}`,borderRadius:theme.radius.field,background:theme.colors.base[200],color:theme.colors.base.content,cursor:'pointer'}}>
-                      <option value="minutes">min</option>
-                      <option value="hours">hrs</option>
-                      <option value="days">days</option>
-                      <option value="weeks">wks</option>
+                      <option value="minutes">min</option><option value="hours">hrs</option>
+                      <option value="days">days</option><option value="weeks">wks</option>
                     </select>
                   </div>
                 </div>
@@ -1931,11 +2119,13 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                   />
                 </div>
               </div>
-              <Btn theme={theme} disabled={!!bulkActing} onClick={()=>{setShowSmartSched(false);}}>Cancel</Btn>
+              <Btn theme={theme} disabled={!!bulkActing} onClick={()=>setShowSmartSched(false)}>Cancel</Btn>
               <Btn theme={theme} $v="warning" disabled={!smartStartTime||!!bulkActing||readyCount===0} onClick={handleSmartSchedule}>
                 {bulkActing==='schedule'?<MiniSpinner/>:<IcoCal/>}Confirm
               </Btn>
             </>
+
+          /* ── Schedule datetime picker expanded inline ── */
           ) : showSched ? (
             <>
               <input ref={schedRef} type="datetime-local" min={minDT} value={schedTime}
@@ -1947,40 +2137,51 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                 {bulkActing==='schedule'?<MiniSpinner/>:<IcoCal/>}Confirm
               </Btn>
             </>
+
+          /* ── Normal state: two split buttons ── */
+          ) : isMobile ? (
+            /* Mobile: two equal-width buttons side by side */
+            <div style={{display:'flex',width:'100%',gap:'0.5rem'}}>
+              <div style={{flex:1,display:'flex'}}>
+                <BulkRegenDropdown
+                  theme={theme}
+                  acting={!!bulkActing}
+                  hasTemplateEmail={!!hasTemplateEmail}
+                  onRegenerate={qt=>setPendingGenType(qt)}
+                  fullWidth
+                />
+              </div>
+              <div style={{flex:1,display:'flex'}}>
+                <BulkSendSplitBtn
+                  theme={theme}
+                  acting={bulkActing}
+                  readyCount={readyCount}
+                  onSend={handleSendAll}
+                  onDraft={handleDraftAll}
+                  onSchedule={()=>{setShowSched(true);setTimeout(()=>schedRef.current?.focus(),80);}}
+                  onSmartSchedule={()=>setShowSmartSched(true)}
+                  fullWidth
+                />
+              </div>
+            </div>
           ) : (
+            /* Desktop: regen left, send right */
             <>
-              {/* Split schedule button */}
-              <SplitGroup ref={schedDropRef}>
-                <SplitMain theme={theme} disabled={!!bulkActing||readyCount===0}
-                  onClick={()=>{setTopTab('companies');setShowSched(true);setTimeout(()=>schedRef.current?.focus(),80);}}>
-                  <IcoCal/>Schedule
-                </SplitMain>
-                <SplitChevron theme={theme} $open={schedDropOpen} disabled={!!bulkActing||readyCount===0}
-                  onClick={()=>setSchedDropOpen(p=>!p)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                </SplitChevron>
-                {schedDropOpen && (
-                  <SplitMenu theme={theme}>
-                    <SplitMenuItem theme={theme} onClick={()=>{setSchedDropOpen(false);setTopTab('companies');setShowSched(true);setTimeout(()=>schedRef.current?.focus(),80);}}>
-                      <IcoCal/>At a specific time
-                    </SplitMenuItem>
-                    <SplitMenuItem theme={theme} onClick={()=>{setSchedDropOpen(false);setTopTab('companies');setShowSmartSched(true);}}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      Smart schedule
-                    </SplitMenuItem>
-                  </SplitMenu>
-                )}
-              </SplitGroup>
-              {/* Draft All */}
-              <Btn theme={theme} $v="default" disabled={!!bulkActing||readyCount===0} onClick={handleDraftAll}>
-                {bulkActing==='draft'?<MiniSpinner/>:<IcoDraft/>}
-                Draft All ({readyCount})
-              </Btn>
-              {/* Send All */}
-              <Btn theme={theme} $v="primary" disabled={!!bulkActing||readyCount===0} onClick={handleSendAll}>
-                {bulkActing==='send'?<MiniSpinner/>:<IcoSend/>}
-                Send All ({readyCount})
-              </Btn>
+              <BulkRegenDropdown
+                theme={theme}
+                acting={!!bulkActing}
+                hasTemplateEmail={!!hasTemplateEmail}
+                onRegenerate={qt=>setPendingGenType(qt)}
+              />
+              <BulkSendSplitBtn
+                theme={theme}
+                acting={bulkActing}
+                readyCount={readyCount}
+                onSend={handleSendAll}
+                onDraft={handleDraftAll}
+                onSchedule={()=>{setShowSched(true);setTimeout(()=>schedRef.current?.focus(),80);}}
+                onSmartSchedule={()=>setShowSmartSched(true)}
+              />
             </>
           )}
         </Footer>
