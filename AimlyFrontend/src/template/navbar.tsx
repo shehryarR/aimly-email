@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const NavbarContainer = styled.header<{ theme: any }>`
   background-color: ${props => props.theme.colors.base[200]};
@@ -384,7 +384,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   hasSubscription = true,
 }) => {
   const { theme, themeMode, toggleTheme } = useTheme();
-  const navigate = useNavigate();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);

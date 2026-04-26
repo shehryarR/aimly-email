@@ -26,6 +26,13 @@ import { apiFetch } from '../../App';
 interface Company { id: number; name: string; email: string; }
 interface AttachmentOption { id: number; filename: string; file_size: number; }
 
+interface AttachmentEntry {
+  id: number;
+  name: string;
+  source?: 'campaign' | 'global';
+  sources?: ('campaign' | 'global')[];
+}
+
 interface BulkEmailEntry {
   company: Company;
   emailId: number | null;
@@ -305,13 +312,6 @@ const FieldLbl = styled.div<{ theme: any }>`
   font-size:0.72rem;font-weight:600;opacity:0.5;margin-bottom:0.3rem;
   text-transform:uppercase;letter-spacing:0.04em;
 `;
-const MixedBadgeStyle = styled.span<{ theme: any }>`
-  font-size: 0.67rem; font-weight: 600; padding: 1px 6px; border-radius: 999px;
-  background: ${p => (p.theme.colors.warning?.main || '#f59e0b')}20;
-  color: ${p => p.theme.colors.warning?.main || '#f59e0b'};
-  border: 1px solid ${p => (p.theme.colors.warning?.main || '#f59e0b')}40;
-  margin-left: 0.5rem;
-`;
 const SubjectIn = styled.input<{ theme: any }>`
   width:100%;padding:0.65rem 0.9rem;
   border:1px solid ${p => p.theme.colors.base[300]};border-radius:${p => p.theme.radius.field};
@@ -326,16 +326,6 @@ const BodyTA = styled.textarea<{ theme: any }>`
   font-size:0.875rem;font-family:inherit;resize:vertical;min-height:280px;
   box-sizing:border-box;transition:border-color 0.15s;line-height:1.6;
   &:focus{outline:none;border-color:${p => p.theme.colors.primary.main};background:${p => p.theme.colors.base[100]};box-shadow:0 0 0 3px ${p => p.theme.colors.primary.main}20;}
-`;
-const GenBtn = styled.button<{ theme: any }>`
-  display:inline-flex;align-items:center;gap:0.4rem;padding:0.45rem 0.85rem;
-  border-radius:${p => p.theme.radius.field};
-  border:1px solid ${p => p.theme.colors.base[300]};
-  background:${p => p.theme.colors.base[400]};color:${p => p.theme.colors.base.content};
-  font-size:0.79rem;font-weight:600;cursor:pointer;transition:all 0.15s;
-  &:hover:not(:disabled){border-color:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.main};background:${p => p.theme.colors.primary.main + '12'};}
-  &:disabled{opacity:0.4;cursor:not-allowed;}
-  svg{width:12px;height:12px;}
 `;
 const Btn = styled.button<{ theme: any; $v?: 'primary'|'warning'|'default' }>`
   display:inline-flex;align-items:center;gap:0.4rem;padding:0.55rem 1.2rem;
@@ -394,37 +384,6 @@ const AttachSearch = styled.input<{ theme: any }>`
   &::placeholder{opacity:0.5;}
 `;
 
-// Logo
-const LogoZone = styled.div<{ theme: any; $has: boolean }>`
-  width:100%;height:${p => p.$has ? '92px' : '78px'};
-  border:2px dashed ${p => p.$has ? p.theme.colors.primary.main : p.theme.colors.base[300]};
-  border-radius:${p => p.theme.radius.field};background:${p => p.theme.colors.base[200]};
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;position:relative;overflow:hidden;transition:border-color 0.15s;
-  &:hover{border-color:${p => p.theme.colors.primary.main};}
-`;
-const LogoImg = styled.img`max-height:68px;max-width:90%;object-fit:contain;border-radius:4px;`;
-const LogoHint = styled.div`
-  display:flex;flex-direction:column;align-items:center;gap:0.3rem;
-  pointer-events:none;opacity:0.38;font-size:0.73rem;
-`;
-const LogoRemoveButton = styled.button<{ theme: any }>`
-  position: absolute; top: 5px; right: 5px;
-  width: 20px; height: 20px; border-radius: 50%;
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  background: ${p => p.theme.colors.base[100]};
-  color: ${p => p.theme.colors.base.content};
-  font-size: 0.6rem; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; opacity: 0.75;
-  &:hover { 
-    background: ${p => p.theme.colors.error.main}; 
-    color: #fff; 
-    border-color: ${p => p.theme.colors.error.main}; 
-    opacity: 1; 
-  }
-`;
-
 // Misc
 const SaveBtn = styled.button<{ theme: any }>`
   padding:0.55rem 1.3rem;border-radius:${p => p.theme.radius.field};
@@ -433,12 +392,6 @@ const SaveBtn = styled.button<{ theme: any }>`
   transition:all 0.15s;
   &:hover:not(:disabled){opacity:0.88;transform:translateY(-1px);}
   &:disabled{opacity:0.45;cursor:not-allowed;transform:none;}
-`;
-const MsgLine = styled.div<{ theme: any; $ok: boolean }>`
-  padding:0.45rem 0.7rem;border-radius:${p => p.theme.radius.field};font-size:0.8rem;font-weight:500;
-  color:${p => p.$ok ? (p.theme.colors.success?.main||'#22c55e') : p.theme.colors.error.main};
-  background:${p => p.theme.colors.base[200]};
-  border:1px solid ${p => p.$ok ? (p.theme.colors.success?.main||'#22c55e') : p.theme.colors.error.main};
 `;
 const InlineBanner = styled.div<{ theme: any; $t:'success'|'error'|'info' }>`
   padding:0.55rem 0.8rem;border-radius:${p => p.theme.radius.field};
@@ -520,15 +473,6 @@ const SplitBtnChevron = styled.span<{ theme: any; $open: boolean }>`
   transition:background 0.15s,color 0.15s;
   svg{width:10px;height:10px;transition:transform 0.15s;transform:${p => p.$open ? 'rotate(180deg)' : 'none'};}
   &:hover{background:${p => p.theme.colors.primary.main};color:${p => p.theme.colors.primary.content};}
-`;
-const SplitDropMenu = styled.div<{ theme: any; $openUpward?: boolean }>`
-  position:absolute;
-  ${p => p.$openUpward ? 'bottom:calc(100% + 4px);' : 'top:calc(100% + 4px);'}
-  right:0;z-index:3000;
-  background:${p => p.theme.colors.base[200]};border:1px solid ${p => p.theme.colors.base[300]};
-  border-radius:${p => p.theme.radius.field};
-  box-shadow:0 8px 24px rgba(0,0,0,0.18);min-width:130px;overflow:hidden;
-  animation:${fadeIn} 0.15s ease;
 `;
 const SplitDropItem = styled.button<{ theme: any }>`
   width:100%;display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;
@@ -732,9 +676,7 @@ const BulkSendSplitBtn: React.FC<{
 const IcoEmail     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const IcoClip      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
 const IcoHtml      = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
-const IcoBrand     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
 const IcoRegen     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
-const IcoPersonal  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>;
 const IcoTemplate  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
 const IcoSend      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
 const IcoCal       = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/></svg>;
@@ -743,8 +685,6 @@ const IcoCheck     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const IcoUpload    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 const IcoSearch    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IcoWarn      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-const IcoLogoPlaceholder = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-
 const ConfirmOverlay = styled.div<{ $open: boolean }>`
   position:fixed;inset:0;z-index:11000;
   background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);
@@ -950,7 +890,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   const [smartIncrement,    setSmartIncrement]    = useState('2');
 
   // ── dirty tracking ───────────────────────────────────────────
-  const [isDirty,      setIsDirty]      = useState(false);
+  const [_isDirty,      setIsDirty]      = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [pendingGenType, setPendingGenType] = useState<'plain'|'html'|'template'|null>(null);
   const markDirty = () => setIsDirty(true);
@@ -960,7 +900,6 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
   };
 
   const upd = (i: number, p: Partial<BulkEmailEntry>) => setEntries(prev => prev.map((e, j) => j===i ? {...e,...p} : e));
-  const b64 = (f: File): Promise<string> => new Promise((res,rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(f); });
 
   // ── init ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -1024,7 +963,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ company_ids: cos.map(c => c.id) }),
-      }).then(r => r.ok ? r.json() : {}),
+      }).then(r => r.ok ? r.json() as Promise<Record<number, any>> : {} as Record<number, any>),
     ]);
 
     // Build maps
@@ -1032,7 +971,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
     // Populate each entry — no more per-company fetches
     cos.forEach((company, idx) => {
-      const primary = primaryByCompanyId.get(company.id);
+      const primary = primaryByCompanyId.get(company.id) as any;
       if (!primary) {
         setEntries(p => p.map((e, i) => i === idx ? { ...e, phase: 'error' } : e));
         return;
@@ -1403,7 +1342,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
 
   const handleBulkHtmlToggle = async (val: boolean) => {
     setBulkHtmlEmail(val);
-    entries.forEach((e, i) => upd(i, { htmlEmail: val }));
+    entries.forEach((_e, i) => upd(i, { htmlEmail: val }));
     const updates = entries.filter(e => e.emailId).map(e => ({
       email_id: e.emailId as number,
       html_email: val,
@@ -1731,8 +1670,7 @@ const BulkEmailModal: React.FC<BulkEmailModalProps> = ({
                             upd(activeIdx,{inheritCampaignAttachments:v});
                             saveInherit(activeIdx,v);
                             setBulkAttachConfirmed(false); setBulkAttachIndivChanged(true);
-                            setAttachConfirmed(false);
-                            setAttachIndividualChanged(true);
+                            setBulkAttachConfirmed(false); setBulkAttachIndivChanged(true);
                           }}
                           style={{
                             marginBottom: entry.inheritCampaignAttachments?'0':undefined,

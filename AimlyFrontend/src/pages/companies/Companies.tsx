@@ -5,11 +5,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import {
   PageContainer, MainContent,
-  HeaderCard, HeaderRow, HeaderCenter, HeaderTitle, HeaderSubtitle,
+  HeaderCard, HeaderRow, HeaderCenter, HeaderTitle, HeaderSubtitle, BackButtonResponsive,
   ListSection, SectionHeader, SectionTitle, CountBadge, AddButton,
   SearchWrapper, SearchIconWrap, SearchClearBtn, SearchInput,
   DropdownWrap, DropdownTrigger, DropdownBadge, DropdownMenu,
@@ -19,7 +20,7 @@ import {
   CompanyInfo, CompanyName, CompanyEmail, CompanyMeta, MetaItem,
   CampaignTag, CategoryTag, CompanyActionButtons, IconButton,
   EmptyState, EmptyIcon, EmptyTitle, EmptySubtitle,
-  PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
+  PaginationContainer, PaginationButton, PaginationInfo,
   ToastContainer, ToastItem, ToastMsg,
   ConfirmOverlay, ConfirmBox, ConfirmHeader, ConfirmIconWrap,
   ConfirmContent, ConfirmTitle, ConfirmMessage, ConfirmActions,
@@ -218,6 +219,7 @@ const toolbarLabelStyle: React.CSSProperties = {
 // ════════════════════════════════════════════════════════════
 const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
   const { theme } = useTheme();
+  const navigate  = useNavigate();
   const { authReady } = useAuth();
   const isMobile = useIsMobile();
   const listSectionRef = useRef<HTMLDivElement>(null);
@@ -504,6 +506,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
       const enriched: CompanyWithCampaigns[] = raw.map(c => ({
         ...c,
         campaign_ids: (c as any).campaign_ids ?? [],
+        category_ids: (c as any).category_ids ?? [],
       }));
       setPageCompanies(enriched);
       setHasData(true);
@@ -774,6 +777,11 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         {/* Header */}
         <HeaderCard theme={theme}>
           <HeaderRow>
+            <BackButtonResponsive theme={theme} onClick={() => navigate(-1)} title="Go back">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+              </svg>
+            </BackButtonResponsive>
             <HeaderCenter>
               <HeaderTitle>Companies</HeaderTitle>
               <HeaderSubtitle>Browse and manage all companies across your campaigns</HeaderSubtitle>

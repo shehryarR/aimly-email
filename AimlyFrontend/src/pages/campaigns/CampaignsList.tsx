@@ -12,7 +12,7 @@ import {
   CampaignMeta, CampaignDate, StatsContainer, CampaignStatBox,
   CampaignStatValue, CampaignStatLabel, CampaignStatSubtext,
   ActionButtons, IconButton, EmptyState, EmptyIcon, EmptyTitle, EmptySubtitle,
-  PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
+  PaginationContainer, PaginationButton, PaginationInfo,
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
   ModalBody, ModalFooter, FormGroup, Label, Input, Button,
 } from './campaigns.styles.ts';

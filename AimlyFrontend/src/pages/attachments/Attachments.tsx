@@ -32,7 +32,7 @@ const useIsMobile = () => {
 };
 
 import {
-  PageContainer, MainContent, HeaderCard, HeaderRow, BackButton,
+  PageContainer, MainContent, HeaderCard, HeaderRow,
   HeaderCenter, HeaderTitle, HeaderSubtitle,
   UploadZone, UploadText, UploadSubtext, ProgressBar, ProgressFill,
   ListSection, SectionHeader, SectionTitle, CountBadge, AddButton,
@@ -47,14 +47,14 @@ import {
   ToastContainer, ToastItem, ToastMsg,
   ConfirmOverlay, ConfirmBox, ConfirmHeader, ConfirmIconWrap, ConfirmContent,
   ConfirmTitle, ConfirmMessage, ConfirmActions, CancelButton, DangerButton, PrimaryButton,
-  PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
+  PaginationContainer, PaginationButton, PaginationInfo,
   FilterChip,
   DropdownWrap, DropdownTrigger, DropdownBadge, DropdownMenu,
   DropdownSearch, DropdownItem,
   EditInput,
   BackButtonResponsive,
-  DotsButton, DotsMenu, DotsMenuItem, DotsMenuDivider, ActionArea,
-  MobileMetaRow, MobileRow, MobileRowTop, MobileFileName, MobileFileIcon,
+  DotsButton, DotsMenu, DotsMenuItem, DotsMenuDivider,
+  MobileFileIcon,
 } from './attachments.styles';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
@@ -253,7 +253,7 @@ const Attachments: React.FC = () => {
   // ── Data ───────────────────────────────────────────────────
   const [attachments,      setAttachments]      = useState<Attachment[]>([]);
   const [campaigns,        setCampaigns]         = useState<Campaign[]>([]);
-  const [globalSettingsId, setGlobalSettingsId]  = useState<number | null>(null);
+  const [_globalSettingsId, setGlobalSettingsId]  = useState<number | null>(null);
   const [loading,          setLoading]           = useState(true);
   const [totalAttachments, setTotalAttachments]  = useState(0);
 

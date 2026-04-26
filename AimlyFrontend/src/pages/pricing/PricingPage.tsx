@@ -4,7 +4,7 @@
  */
 import React, { useEffect } from 'react';
 import styled, { keyframes, createGlobalStyle } from 'styled-components';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';

@@ -218,10 +218,6 @@ const EStatusBadge = styled.span<{ $status: string }>`
   background: ${p => p.$status === 'sent' ? '#22c55e20' : p.$status === 'draft' ? '#3b82f620' : p.$status === 'scheduled' ? '#f59e0b20' : '#64748b20'};
   color: ${p => p.$status === 'sent' ? '#22c55e' : p.$status === 'draft' ? '#3b82f6' : p.$status === 'scheduled' ? '#f59e0b' : '#64748b'};
 `;
-const ELoadingBox = styled.div`
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 0.75rem; min-height: 200px;
-`;
 const ESpinner = styled.div`
   width: 22px; height: 22px;
   border: 2.5px solid rgba(128,128,128,0.2); border-top-color: currentColor;
@@ -669,7 +665,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [allAttachments,       setAllAttachments]      = useState<AttachmentOption[]>([]);
   const [linkedEmailAttachIds, setLinkedEmailAttachIds] = useState<Set<number>>(new Set());
   const [attachSearch,         setAttachSearch]        = useState('');
-  const [attachSaving,         setAttachSaving]        = useState(false);
+  const [_attachSaving,         _setAttachSaving]        = useState(false);
   const [attachLoading,        setAttachLoading]       = useState(false);
   const [uploadFile,           setUploadFile]          = useState<File | null>(null);
   const [uploading,            setUploading]           = useState(false);
@@ -900,7 +896,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const mergedAttachments   = [...allAttachments, ...ownAttachEntries];
   // Inherited attachment IDs should not appear in the email-level picker at all —
   // they are already shown in the "Include campaign attachments" section above.
-  const inheritedIds        = new Set(inheritedAttachments.map(a => a.id));
   const filteredAttachments = mergedAttachments.filter(a => a.filename.toLowerCase().includes(attachSearch.toLowerCase()));
   const attachedFiles       = filteredAttachments.filter(a =>  linkedEmailAttachIds.has(a.id));
   const notAttachedFiles    = filteredAttachments.filter(a => !linkedEmailAttachIds.has(a.id));

@@ -57,7 +57,7 @@ import {
   ConfirmTitle, ConfirmMessage, ConfirmActions,
   CancelButton, DangerButton, PrimaryButton,
   BtnSpinner,
-  PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
+  PaginationContainer, PaginationButton, PaginationInfo,
   DropdownTrigger, DropdownMenu, DropdownSearch, DropdownItem,
   DDFilterWrap,
 } from './emailHistory.styles';

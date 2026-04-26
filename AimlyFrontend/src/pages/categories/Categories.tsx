@@ -18,7 +18,7 @@ import {
   CategoryName, CategoryDetail, CategoryMeta, CompanyCountBadge,
   CategoryActionButtons, IconButton,
   EmptyState, EmptyIcon, EmptyTitle, EmptySubtitle,
-  PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
+  PaginationContainer, PaginationButton, PaginationInfo,
   ToastContainer, ToastContent, ToastTitle, ToastMsg, ToastCloseButton,
   ConfirmOverlay, ConfirmBox, ConfirmHeader, ConfirmIconWrap,
   ConfirmContent, ConfirmTitle, ConfirmMessage, ConfirmActions,

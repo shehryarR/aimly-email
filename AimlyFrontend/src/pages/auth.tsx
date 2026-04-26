@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { EyeIcon, EyeOffIcon } from '../theme/icons';
@@ -354,22 +354,6 @@ const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
 
-const LegalNote = styled.p<{ theme: any }>`
-  font-size: 0.72rem;
-  text-align: center;
-  opacity: 0.4;
-  margin: 0.5rem 0 0 0;
-  line-height: 1.6;
-  color: \${props => props.theme.colors.base.content};
-`;
-
-const LegalNoteLink = styled(Link)`
-  text-decoration: underline;
-  color: inherit;
-  cursor: pointer;
-  &:hover { opacity: 0.8; }
-`;
-
 const RecaptchaDisclosure = styled.p<{ theme: any }>`
   font-size: 0.7rem;
   text-align: center;
@@ -387,7 +371,7 @@ const RecaptchaDisclosure = styled.p<{ theme: any }>`
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const { theme } = useTheme();
   const { executeRecaptcha } = useGoogleReCaptcha();
-  const navigate = useNavigate();
+
   const [searchParams] = useSearchParams();
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(

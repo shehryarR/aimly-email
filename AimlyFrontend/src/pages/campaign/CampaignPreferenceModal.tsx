@@ -536,12 +536,6 @@ const PaperclipIcon = () => (
     <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
   </svg>
 );
-const InheritIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-    <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-  </svg>
-);
 const HtmlIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13">
     <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
@@ -1101,7 +1095,6 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
   // Hide global-ONLY files from the picker (they're already shown above read-only).
   // Files that are BOTH global AND campaign-linked stay in the picker so the user
   // can detach the campaign link if they want.
-  const globalAttachmentIds = new Set(globalAttachments.map(a => a.id));
   const pickerAttachments   = allAttachments.filter(a =>
     a.filename.toLowerCase().includes(attachSearch.toLowerCase())
   );

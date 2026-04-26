@@ -18,7 +18,7 @@ import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import BulkEmailModal from './BulkEmailModal';
 import { apiFetch } from '../../App';
-import CampaignSettingsModal, { CsCloseBtn } from './CampaignPreferenceModal';
+import CampaignSettingsModal from './CampaignPreferenceModal';
 import EmailModal from './EmailModal';
 // ─────────────────────────────────────────────────────────────
 // ENV
@@ -53,6 +53,7 @@ interface Company {
   created_at: string;
   optedOut?: boolean;
   category_ids?: number[];
+  campaign_ids?: number[];
 }
 
 interface CampaignDetails {
@@ -62,25 +63,8 @@ interface CampaignDetails {
   created_at: string;
 }
 
-interface CampaignPreferences {
-  brand_id: number | null;
-  goal: string;
-  value_prop: string;
-  tone: string;
-  cta: string;
-  additional_notes: string;
-  writing_guidelines: string;
-  template_email?: string;
-  template_html_email?: number;
-  inherit_global_settings: number;
-  inherit_global_attachments: number;
-}
 
-interface AttachmentOption {
-  id: number;
-  filename: string;
-  file_size: number;
-}
+
 
 interface ToastNotification {
   id: number;
@@ -519,15 +503,6 @@ const GenBtnChevron = styled.span<{ theme: any; $open: boolean }>`
   svg { width: 10px; height: 10px; transition: transform 0.15s; transform: ${p => p.$open ? 'rotate(180deg)' : 'none'}; }
   &:hover { background: ${p => p.theme.colors.primary.main}; color: ${p => p.theme.colors.primary.content}; }
 `;
-const GenDropMenu = styled.div<{ theme: any }>`
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 3000;
-  background: ${p => p.theme.colors.base[200]};
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  border-radius: ${p => p.theme.radius.field};
-  box-shadow: ${p => p.theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.45)' : '0 8px 24px rgba(0,0,0,0.13)'};
-  min-width: 130px; overflow: hidden;
-  animation: ${fadeSlide} 0.15s ease;
-`;
 const GenDropItem = styled.button<{ theme: any; $active?: boolean }>`
   width: 100%; display: flex; align-items: center; gap: 0.5rem;
   padding: 0.5rem 0.75rem;
@@ -564,11 +539,6 @@ const BuildingIcon = () => (
     <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/>
   </svg>
 );
-const CheckSmallIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-);
 const EnrollIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -593,11 +563,6 @@ const HtmlIcon = () => (
 const MagnifyIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
-const PaperclipIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
   </svg>
 );
 const PencilIcon = () => (
@@ -656,17 +621,6 @@ const PageBtn = styled.button<{ theme: any; $active?: boolean }>`
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 `;
 const PageInfo = styled.span<{ theme: any }>`font-size: 0.875rem; opacity: 0.7; margin: 0 0.75rem;`;
-const PageSizeSelect = styled.select<{ theme: any }>`
-  padding: 0.5rem 0.75rem;
-  border-radius: ${p => p.theme.radius.field};
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  background: ${p => p.theme.colors.base[400]};
-  color: ${p => p.theme.colors.base.content};
-  font-size: 0.875rem; cursor: pointer; margin-left: 1rem;
-  &:focus { outline: none; border-color: ${p => p.theme.colors.primary.main}; }
-
-  @media (max-width: 480px) { display: none; }
-`;
 const EmptyState = styled.div`
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 4rem 2rem; text-align: center;

@@ -73,8 +73,8 @@ build-backend:
 	$(COMPOSE) build outreach_backend
 
 build-frontend:
-	@echo "── Build: AimlyFrontend ──"
-	$(COMPOSE) build outreach_ui
+	@echo "── Build: AimlyFrontend (includes React build check) ──"
+	$(COMPOSE) build --no-cache outreach_ui
 
 build-microservices:
 	@echo "── Build: AimlyMicroservices ──"

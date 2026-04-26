@@ -69,6 +69,34 @@ export const HeaderSubtitle = styled.p`
   font-size: 0.875rem;
 `;
 
+export const BackButtonResponsive = styled.button<{ theme: any }>`
+  position: absolute;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[400]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${p => p.theme.colors.primary.main};
+    color: ${p => p.theme.colors.primary.main};
+  }
+
+  svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`;
+
 // ── List section ──────────────────────────────────────────────
 
 export const ListSection = styled(Card)`

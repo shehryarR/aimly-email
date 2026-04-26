@@ -10,7 +10,7 @@ import ReactDOM from 'react-dom';
 import styled, { keyframes, css } from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { HelpTooltip } from './helptooltip';
-import { LogoutIcon, RobotIcon, EmailIcon, SearchIcon, SettingsIconSvg, EyeIcon, EyeOffIcon } from '../theme/icons';
+import { LogoutIcon, RobotIcon, SearchIcon, SettingsIconSvg, EyeIcon, EyeOffIcon } from '../theme/icons';
 import { apiFetch } from '../App';
 
 // ── Animations ─────────────────────────────────────────────────────────────────
@@ -808,8 +808,8 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
   const [globalLoaded,     setGlobalLoaded]     = useState(false);
   const [globalMsg,        setGlobalMsg]        = useState<{ type:'success'|'error'; text:string }|null>(null);
   const [globalSettingsId, setGlobalSettingsId] = useState<number | null>(null);
-  const [pendingLogo,      setPendingLogo]      = useState<File | 'remove' | null>(null);
-  const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
+  const setPendingLogo      = useState<File | 'remove' | null>(null)[1];
+  const setPendingLogoPreview = useState<string | null>(null)[1];
 
   // ── Brands state ──────────────────────────────────────────
   const [brands,          setBrands]          = useState<Brand[]>([]);
@@ -1318,15 +1318,6 @@ const Settings: React.FC<SettingsProps> = ({ isOpen, onClose, user, onLogout, on
     } catch (e) { console.error(e); }
   };
 
-  const setDefaultBrand = async (id: number) => {
-    try {
-      await apiFetch(`${API_BASE}/brands/default/`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_id: id }),
-      });
-      await loadBrands();
-    } catch (e) { console.error(e); }
-  };
 
 
   const refreshStatuses = async (autoTab = false) => {

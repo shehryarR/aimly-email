@@ -326,7 +326,7 @@ const AppRouter: React.FC = () => {
 
   useEffect(() => {
     if (appState === 'ready') {
-      healthMonitor.start((isHealthy, result) => {
+      healthMonitor.start((isHealthy, _result) => {
         if (!isHealthy) setAppState('server-down');
       });
       return () => { healthMonitor.stop(); };
