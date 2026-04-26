@@ -38,6 +38,9 @@ export const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+
+  @media (max-width: 768px) { padding: 1rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 0.625rem; gap: 0.75rem; }
 `;
 
 // ── Base card ──────────────────────────────────────────────────────────────────
@@ -57,6 +60,8 @@ export const Card = styled.div<{ theme: any }>`
 
 export const HeaderCard = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem; }
 `;
 
 export const HeaderRow = styled.div`
@@ -90,6 +95,8 @@ export const BackButton = styled.button<{ theme: any }>`
   }
 
   svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 export const HeaderCenter = styled.div`
@@ -101,6 +108,8 @@ export const HeaderTitle = styled.h1`
   font-weight: 600;
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.025em;
+
+  @media (max-width: 480px) { font-size: 1.25rem; }
 `;
 
 export const HeaderSubtitle = styled.p`
@@ -113,6 +122,8 @@ export const HeaderSubtitle = styled.p`
 
 export const ListSection = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const SectionHeader = styled.div<{ theme: any }>`
@@ -122,6 +133,10 @@ export const SectionHeader = styled.div<{ theme: any }>`
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  gap: 0.75rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) { margin-bottom: 1rem; padding-bottom: 0.75rem; }
 `;
 
 export const SectionTitle = styled.h2`
@@ -160,11 +175,15 @@ export const BulkActionsBar = styled.div<{ theme: any; $visible: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   opacity: ${p => p.$visible ? 1 : 0};
   transform: translateY(${p => p.$visible ? 0 : -10}px);
   transition: all 0.3s ease;
   pointer-events: ${p => p.$visible ? 'auto' : 'none'};
   overflow: hidden;
+
+  @media (max-width: 480px) { padding: 0.625rem 0.75rem; }
 `;
 
 export const BulkLeft = styled.div`
@@ -203,6 +222,11 @@ export const EmailCard = styled(Card)<{ theme: any; $selected: boolean }>`
   }
 
   &:last-child { margin-bottom: 0; }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem;
+    transform: none !important;
+  }
 `;
 
 export const EmailRow = styled.div`
@@ -359,7 +383,7 @@ export const Checkbox = styled.div<{ theme: any; $checked: boolean }>`
   border-radius: 4px;
   border: 2px solid ${p => p.$checked
     ? p.theme.colors.primary.main
-    : p.theme.colors.base[400] || p.theme.colors.base[300]};
+    : p.theme.colors.base.content + '40'};
   background-color: ${p => p.$checked ? p.theme.colors.primary.main : 'transparent'};
   display: flex;
   align-items: center;
@@ -486,6 +510,19 @@ export const FilterBar = styled.div`
   margin-bottom: 0.75rem;
 `;
 
+export const DDFilterWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+
+  @media (max-width: 640px) {
+    margin-left: 0;
+    padding-left: calc(15px + 0.625rem);
+  }
+`;
+
 export const FilterChip = styled.button<{ theme: any; $active: boolean }>`
   display: flex;
   align-items: center;
@@ -531,6 +568,13 @@ export const ToastContainer = styled.div<{ $isVisible: boolean }>`
   flex-direction: column;
   gap: 0.75rem;
   pointer-events: ${p => p.$isVisible ? 'auto' : 'none'};
+
+  @media (max-width: 480px) {
+    top: auto;
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+  }
 `;
 
 export const ToastItem = styled.div<{ theme: any; $type: 'success' | 'error' | 'warning' | 'info'; $exiting?: boolean }>`
@@ -558,6 +602,12 @@ export const ToastItem = styled.div<{ theme: any; $type: 'success' | 'error' | '
     ? '0 8px 24px rgba(0,0,0,0.4)'
     : '0 8px 24px rgba(0,0,0,0.15)'};
   animation: ${p => p.$exiting ? slideOutAnim : slideInAnim} 0.3s ease forwards;
+
+  @media (max-width: 480px) {
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+  }
 `;
 
 export const ToastBody = styled.div`flex: 1;`;
@@ -587,6 +637,8 @@ export const ConfirmBox = styled.div<{ theme: any }>`
   box-shadow: ${p => p.theme.colorScheme === 'dark'
     ? '0 20px 40px rgba(0,0,0,0.5)'
     : '0 20px 40px rgba(0,0,0,0.15)'};
+
+  @media (max-width: 480px) { padding: 1.25rem 1rem; width: 95%; }
 `;
 
 export const ConfirmHeader = styled.div`
@@ -635,6 +687,12 @@ export const ConfirmActions = styled.div`
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // ── Spinner ────────────────────────────────────────────────────────────────────
@@ -833,6 +891,8 @@ export const PageSizeSelect = styled.select<{ theme: any }>`
     background-color: ${p => p.theme.colors.base[200]};
     color: ${p => p.theme.colors.base.content};
   }
+
+  @media (max-width: 480px) { display: none; }
 `;
 // ── Buttons ────────────────────────────────────────────────────────────────────
 

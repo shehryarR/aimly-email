@@ -822,13 +822,22 @@ const LandingPage: React.FC = () => {
             </HeroSub>
 
             <HeroCtas>
-              <PrimaryBtn theme={theme} to="/auth?tab=register">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                Get Started
-              </PrimaryBtn>
-              <SecondaryBtn theme={theme} to="/auth?tab=login">
-                Login
-              </SecondaryBtn>
+              {user ? (
+                <PrimaryBtn theme={theme} to="/campaigns">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  Go to Dashboard
+                </PrimaryBtn>
+              ) : (
+                <>
+                  <PrimaryBtn theme={theme} to="/auth?tab=register">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    Get Started
+                  </PrimaryBtn>
+                  <SecondaryBtn theme={theme} to="/auth?tab=login">
+                    Login
+                  </SecondaryBtn>
+                </>
+              )}
             </HeroCtas>
 
             {/* Dashboard mockup */}
@@ -979,9 +988,9 @@ const LandingPage: React.FC = () => {
                     </PricingFeature>
                   ))}
                 </PricingFeatures>
-                <PricingCta theme={theme} $primary={plan.highlighted} to="/auth?tab=register">
+                <PricingCta theme={theme} $primary={plan.highlighted} to={user ? '/campaigns' : '/auth?tab=register'}>
                   <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                  Get Started
+                  {user ? 'Go to Dashboard' : 'Get Started'}
                 </PricingCta>
               </PricingCard>
             ))}

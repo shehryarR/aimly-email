@@ -21,7 +21,23 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, createGlobalStyle } from 'styled-components';
+
+const MobileHideStyle = createGlobalStyle`
+  @media (max-width: 640px) { .hide-on-mobile { display: none !important; } }
+`;
+
+// ── Mobile detection ──────────────────────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
 import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../theme/styles';
 import { apiFetch } from '../../App';
@@ -43,6 +59,7 @@ import {
   BtnSpinner,
   PaginationContainer, PaginationButton, PaginationInfo, PageSizeSelect,
   DropdownTrigger, DropdownMenu, DropdownSearch, DropdownItem,
+  DDFilterWrap,
 } from './emailHistory.styles';
 
 // ─── env ──────────────────────────────────────────────────────────────────────
@@ -130,6 +147,8 @@ const BackBtn = styled.button<{ theme: any }>`
     color: ${p => p.theme.colors.primary.main};
   }
   svg { width: 18px; height: 18px; }
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 const ArrowLeftIcon = () => (
@@ -157,6 +176,11 @@ const ModalOverlay = styled.div<{ $isOpen: boolean }>`
   display: ${p => p.$isOpen ? 'flex' : 'none'};
   align-items: center; justify-content: center;
   padding: 1rem;
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 const ModalContent = styled.div<{ theme: any }>`
@@ -166,12 +190,21 @@ const ModalContent = styled.div<{ theme: any }>`
   overflow: hidden; display: flex; flex-direction: column;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   animation: ${modalUp} 0.25s ease;
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: ${p => p.theme.radius.box} ${p => p.theme.radius.box} 0 0;
+    animation: none;
+  }
 `;
 
 const ModalHeader = styled.div<{ theme: any }>`
   padding: 1.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   display: flex; align-items: center; justify-content: space-between;
+
+  @media (max-width: 480px) { padding: 1rem 1.125rem; }
 `;
 
 const ModalTitle = styled.h3`margin: 0; font-size: 1.125rem; font-weight: 600;`;
@@ -582,13 +615,15 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
             )}
           </ModalBody>
 
-          {/* Drag divider + live preview — only when HTML is on */}
+          {/* Drag divider + live preview — only when HTML is on, desktop only */}
           {htmlEmail && (
             <>
-              <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}>
+              <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}
+                className="hide-on-mobile">
                 <div style={{ width: 2, height: 40, borderRadius: 2, background: theme.colors.base[300] }} />
               </div>
-              <div style={{ flex: `0 0 ${splitRatio * 100}%`, display: 'flex', flexDirection: 'column', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden', minWidth: 0 }}>
+              <div style={{ flex: `0 0 ${splitRatio * 100}%`, display: 'flex', flexDirection: 'column', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden', minWidth: 0 }}
+                className="hide-on-mobile">
                 <FormLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
@@ -876,12 +911,22 @@ const EmailDetailModal: React.FC<EmailDetailModalProps> = ({
 const ModalBody = styled.div`
   padding: 1.5rem; overflow-y: auto; flex: 1;
   display: flex; flex-direction: column; gap: 1.25rem;
+
+  @media (max-width: 480px) { padding: 1rem; }
 `;
 
 const ModalFooter = styled.div<{ theme: any }>`
   padding: 1.25rem 1.5rem;
   border-top: 1px solid ${p => p.theme.colors.base[300]};
   display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;
+  flex-wrap: wrap; flex-shrink: 0;
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -901,23 +946,129 @@ interface DualTagEmailListItemProps {
 const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
   email, selected, onSelect, onOpen, onDelete, formatDT, theme,
 }) => {
+  const isMobile = useIsMobile();
+  const [dotsOpen, setDotsOpen] = useState(false);
+  const dotsRef = useRef<HTMLDivElement>(null);
+
   const isDraftOrFailed = email.status === 'draft' || email.status === 'failed';
   const isScheduled     = email.status === 'scheduled';
   const dateLabel = isDraftOrFailed
     ? email.created_at ? <EmailMetaItem>🕐 {formatDT(email.created_at)}</EmailMetaItem> : null
     : email.sent_at   ? <EmailMetaItem>{isScheduled ? '⏰ ' : ''}{formatDT(email.sent_at)}</EmailMetaItem> : null;
 
+  useEffect(() => {
+    if (!dotsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dotsRef.current && !dotsRef.current.contains(e.target as Node)) setDotsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dotsOpen]);
+
+  if (isMobile) {
+    return (
+      <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
+        {/* Row: checkbox · content (subject + meta + tags) · status · dots */}
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Checkbox */}
+          <div
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSelect(); }}
+            style={{
+              width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
+              border: `2px solid ${selected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+              backgroundColor: selected ? theme.colors.primary.main : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}
+          >
+            {selected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+          </div>
+
+          {/* Content: subject · meta · tags */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {email.email_subject || '(No subject)'}
+            </span>
+            <span style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {email.recipient_email}{dateLabel ? ' · ' : ''}
+            </span>
+            {/* Company + campaign tags — inside content, no extra indent needed */}
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.1rem' }}>
+              <CompanyTag theme={theme} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                <BuildingIcon /> {email.company_name}
+              </CompanyTag>
+              <CompanyTag theme={theme} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', opacity: 0.7 }}>
+                <CampaignIcon /> {email.campaign_name}
+              </CompanyTag>
+            </div>
+          </div>
+
+          {/* Status badge */}
+          <StatusBadge theme={theme} $status={email.status} style={{ flexShrink: 0 }}>{email.status}</StatusBadge>
+
+          {/* Three dots */}
+          <div style={{ position: 'relative', flexShrink: 0 }} ref={dotsRef} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <button
+              onClick={() => setDotsOpen(p => !p)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 32, height: 32, flexShrink: 0, padding: 0, margin: 0,
+                borderRadius: theme.radius.field,
+                border: `1px solid ${theme.colors.base[300]}`,
+                background: theme.colors.base[200],
+                color: theme.colors.base.content, cursor: 'pointer',
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+              </svg>
+            </button>
+            {dotsOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200,
+                background: theme.colors.base[200],
+                border: `1px solid ${theme.colors.base[300]}`,
+                borderRadius: theme.radius.box,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                padding: '0.3rem', minWidth: 160,
+              }}>
+                <button onClick={() => { setDotsOpen(false); onOpen(); }} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
+                  padding: '0.55rem 0.75rem', border: 'none', borderRadius: theme.radius.field,
+                  background: 'transparent', color: theme.colors.base.content,
+                  fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                }}>
+                  <MailSmIcon /> View email
+                </button>
+                <div style={{ height: 1, background: theme.colors.base[300], margin: '0.3rem 0' }} />
+                <button onClick={() => { setDotsOpen(false); onDelete(email.id, `"${email.email_subject}"`); }} style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
+                  padding: '0.55rem 0.75rem', border: 'none', borderRadius: theme.radius.field,
+                  background: 'transparent', color: theme.colors.error.main,
+                  fontSize: '0.875rem', fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                }}>
+                  <TrashIcon /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </EmailCard>
+    );
+  }
+
+  // Desktop layout
   return (
     <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
       <EmailRow>
+        {/* Checkbox */}
         <Checkbox theme={theme} $checked={selected}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          style={{ flexShrink: 0, marginRight: '0.25rem' }} />
+          style={{ flexShrink: 0 }} />
 
+        {/* Content — grows to fill space */}
         <EmailInfo>
-          <BadgeRow style={{ marginBottom: '0.375rem', flexWrap: 'wrap' }}>
+          <BadgeRow style={{ marginBottom: '0.25rem', flexWrap: 'wrap' }}>
             <EmailSubject>{email.email_subject || '(No subject)'}</EmailSubject>
-            <StatusBadge theme={theme} $status={email.status}>{email.status}</StatusBadge>
             <CompanyTag theme={theme} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
               <BuildingIcon /> {email.company_name}
             </CompanyTag>
@@ -938,6 +1089,12 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
           <EmailPreview>{email.email_content.slice(0, 130)}</EmailPreview>
         </EmailInfo>
 
+        {/* Status badge — direct sibling so it centres with the row */}
+        <StatusBadge theme={theme} $status={email.status} style={{ flexShrink: 0 }}>
+          {email.status}
+        </StatusBadge>
+
+        {/* Action buttons */}
         <ActionButtons onClick={(e: React.MouseEvent) => e.stopPropagation()}>
           <IconButton theme={theme} $size="md" title="View email" onClick={onOpen}><MailSmIcon /></IconButton>
           <IconButton theme={theme} $variant="danger" $size="md" title="Delete"
@@ -1528,6 +1685,8 @@ const EmailHistory: React.FC = () => {
   return (
     <PageContainer theme={theme}>
 
+      <MobileHideStyle />
+
       {/* Toast */}
       <ToastContainer $isVisible={toast.visible}>
         {toast.visible && (
@@ -1671,10 +1830,10 @@ const EmailHistory: React.FC = () => {
             )}
 
             {/* Company + Campaign dropdowns */}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <DDFilterWrap>
               {renderDD(companyDD,  'Companies', BuildingIcon)}
               {renderDD(campaignDD, 'Campaigns', CampaignIcon)}
-            </div>
+            </DDFilterWrap>
           </FilterBar>
 
           {/* Bulk bar */}
