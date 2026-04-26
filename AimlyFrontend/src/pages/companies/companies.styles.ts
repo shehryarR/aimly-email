@@ -19,6 +19,8 @@ export const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; gap: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; gap: 1rem; }
 `;
 
 // ── Base card — always base[200] so it lifts off base[100] page bg ──
@@ -38,6 +40,8 @@ export const Card = styled.div<{ theme: any }>`
 
 export const HeaderCard = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 1rem 0.875rem; }
 `;
 
 export const HeaderRow = styled.div`
@@ -56,6 +60,7 @@ export const HeaderTitle = styled.h1`
   font-weight: 600;
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.025em;
+  @media (max-width: 480px) { font-size: 1.375rem; }
 `;
 
 export const HeaderSubtitle = styled.p`
@@ -68,6 +73,8 @@ export const HeaderSubtitle = styled.p`
 
 export const ListSection = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const SectionHeader = styled.div<{ theme: any }>`
@@ -77,6 +84,7 @@ export const SectionHeader = styled.div<{ theme: any }>`
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  @media (max-width: 480px) { margin-bottom: 1rem; padding-bottom: 0.75rem; }
 `;
 
 export const SectionTitle = styled.h2`
@@ -362,11 +370,14 @@ export const BulkActionsBar = styled.div<{ theme: any }>`
   border-radius: ${p => p.theme.radius.field};
   margin-bottom: 1rem;
   animation: slideDown 0.2s ease;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 
   @keyframes slideDown {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+  @media (max-width: 480px) { padding: 0.625rem 0.75rem; }
 `;
 
 export const BulkLeft = styled.div`
@@ -439,12 +450,14 @@ export const CompanyCard = styled(Card)<{ theme: any; $selected: boolean }>`
   }
 
   &:last-child { margin-bottom: 0; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const CompanyRow = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
+  @media (max-width: 640px) { gap: 0.625rem; }
 `;
 
 // ── Company avatar ────────────────────────────────────────────
@@ -581,6 +594,7 @@ export const CompanyActionButtons = styled.div`
   align-items: center;
   gap: 0.375rem;
   flex-shrink: 0;
+  @media (max-width: 640px) { display: none; }
 `;
 
 // ── Icon button ───────────────────────────────────────────────
@@ -916,6 +930,10 @@ export const ModalOverlay = styled.div<{ $isOpen: boolean }>`
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 // modal floats above everything — use base[200] as its surface
@@ -928,6 +946,11 @@ export const ModalContent = styled.div<{ theme: any; $wide?: boolean }>`
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  @media (max-width: 520px) {
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: ${p => p.theme.radius.box} ${p => p.theme.radius.box} 0 0;
+  }
 `;
 
 export const ModalHeader = styled.div<{ theme: any }>`

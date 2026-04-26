@@ -4,7 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import {
@@ -37,32 +37,20 @@ const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL  || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE     = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
+// ── Mobile detection ──────────────────────────────────────────
+const useIsMobile = () => {
+  const [v, setV] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const h = (e: MediaQueryListEvent) => setV(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  return v;
+};
+
 interface ToastState   { visible: boolean; type: 'success'|'error'|'warning'|'info'; message: string; }
 interface ConfirmState { open: boolean; title: string; message: string; onConfirm: () => void; variant?: 'danger'|'warning'|'default'; }
-
-// ── Back button ─────────────────────────────────────────────
-const BackBtn = styled.button<{ theme: any }>`
-  text-decoration: none;
-  position: absolute;
-  left: 0;
-  width: 36px; height: 36px;
-  padding: 0;
-  border-radius: ${p => p.theme.radius.field};
-  border: 1px solid ${p => p.theme.colors.base[300]};
-  background: ${p => p.theme.colors.base[400]};
-  color: ${p => p.theme.colors.base.content};
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    background-color: ${p => p.theme.colors.base[400]};
-    border-color: ${p => p.theme.colors.primary.main};
-    color: ${p => p.theme.colors.primary.main};
-  }
-  svg { width: 18px; height: 18px; }
-`;
 
 const OptedOutBadge = styled.span`
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -83,11 +71,6 @@ const AdditionSpinner = styled.span<{ theme: any }>`
 
 
 // ── Icons ────────────────────────────────────────────────────
-const ArrowLeftIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
-  </svg>
-);
 const PlusIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="18" height="18">
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -235,8 +218,9 @@ const toolbarLabelStyle: React.CSSProperties = {
 // ════════════════════════════════════════════════════════════
 const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
   const { theme } = useTheme();
-  const navigate  = useNavigate();
   const { authReady } = useAuth();
+  const isMobile = useIsMobile();
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   const [allCampaigns,        setAllCampaigns]        = useState<CampaignOption[]>([]);
   const [allCategories,       setAllCategories]       = useState<CampaignOption[]>([]);
@@ -310,6 +294,31 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
   // ── Toast / confirm ────────────────────────────────────────
   const [toast,   setToast]   = useState<ToastState>({ visible: false, type: 'info', message: '' });
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  // ── Mobile dots menu ───────────────────────────────────────
+  const [dotsOpenId, setDotsOpenId] = useState<number | null>(null);
+  const [dotsMenuPos, setDotsMenuPos] = useState({ top: 0, right: 0 });
+  const dotsMenuRef = useRef<HTMLDivElement>(null);
+  const dotsBtnRef  = useRef<HTMLElement | null>(null);
+  const dotsRafRef  = useRef<number | null>(null);
+
+  // While the menu is open, keep repositioning it to follow the anchor button
+  useEffect(() => {
+    if (dotsOpenId === null) {
+      if (dotsRafRef.current) { cancelAnimationFrame(dotsRafRef.current); dotsRafRef.current = null; }
+      dotsBtnRef.current = null;
+      return;
+    }
+    const tick = () => {
+      if (dotsBtnRef.current) {
+        const rect = dotsBtnRef.current.getBoundingClientRect();
+        setDotsMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+      }
+      dotsRafRef.current = requestAnimationFrame(tick);
+    };
+    dotsRafRef.current = requestAnimationFrame(tick);
+    return () => { if (dotsRafRef.current) cancelAnimationFrame(dotsRafRef.current); };
+  }, [dotsOpenId]);
 
   const showToast = (type: ToastState['type'], message: string) => {
     setToast({ visible: true, type, message });
@@ -391,6 +400,8 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         setCampaignDropOpen(false);
       if (categoryDropRef.current && !categoryDropRef.current.contains(e.target as Node))
         setCategoryDropOpen(false);
+      if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node))
+        setDotsOpenId(null);
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -763,9 +774,6 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         {/* Header */}
         <HeaderCard theme={theme}>
           <HeaderRow>
-            <BackBtn theme={theme} as={Link} to="/campaigns" onClick={(e: React.MouseEvent) => { if (e.ctrlKey || e.metaKey) return; e.preventDefault(); navigate('/campaigns'); }} title="Go back">
-              <ArrowLeftIcon />
-            </BackBtn>
             <HeaderCenter>
               <HeaderTitle>Companies</HeaderTitle>
               <HeaderSubtitle>Browse and manage all companies across your campaigns</HeaderSubtitle>
@@ -774,7 +782,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
         </HeaderCard>
 
         {/* List section */}
-        <ListSection theme={theme}>
+        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) { setSelectedIds(new Set()); setSelectAllPages(false); } }}>
 
           {/* Section header */}
           <SectionHeader theme={theme}>
@@ -1162,6 +1170,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
             return (
               <CompanyCard key={company.id} theme={theme} $selected={isSelected}
                 onClick={e => {
+                  e.stopPropagation();
                   if (onCompanyClick) { onCompanyClick(company); return; }
                   toggleSelect(company.id, e);
                 }}>
@@ -1190,7 +1199,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
                     )}
                   </CompanyInfo>
 
-                  {(() => {
+                  {!isMobile && (() => {
                     const companyCategoryIds = company.category_ids ?? [];
                     const hasCampaigns  = company.campaign_ids.length > 0;
                     const hasCategories = companyCategoryIds.length > 0;
@@ -1252,6 +1261,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
                     );
                   })()}
 
+                  {/* Desktop action buttons */}
                   <CompanyActionButtons onClick={e => e.stopPropagation()}>
                     <IconButton theme={theme} $size="md" title="View details" disabled={isSelected}
                       onClick={e => { e.stopPropagation(); setViewCompany(company); setViewCategoriesLoading(false);
@@ -1287,10 +1297,57 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
                       <TrashIcon />
                     </IconButton>
                   </CompanyActionButtons>
+
+                  {/* Mobile dots menu */}
+                  {isMobile && !isSelected && (
+                    <div style={{ position: 'relative', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (dotsOpenId === company.id) { setDotsOpenId(null); return; }
+                          const btn = e.currentTarget as HTMLElement;
+                          dotsBtnRef.current = btn;
+                          const rect = btn.getBoundingClientRect();
+                          setDotsMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                          setDotsOpenId(company.id);
+                        }}
+                        style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, background: theme.colors.base[200], cursor: 'pointer', color: theme.colors.base.content }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                      </button>
+                    </div>
+                  )}
                 </CompanyRow>
               </CompanyCard>
             );
           })}
+
+          {/* Mobile dots dropdown — rendered in portal so it floats above all cards */}
+          {dotsOpenId !== null && isMobile && createPortal(
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 4998 }} onClick={() => setDotsOpenId(null)} />
+              <div ref={dotsMenuRef} style={{ position: 'fixed', top: dotsMenuPos.top, right: dotsMenuPos.right, zIndex: 4999, background: theme.colors.base[200], border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.box, boxShadow: '0 8px 32px rgba(0,0,0,0.22)', minWidth: 170, overflow: 'hidden' }}>
+                {(() => {
+                  const company = pageCompanies.find(c => c.id === dotsOpenId);
+                  if (!company) return null;
+                  return [
+                    { icon: <EyeIcon />, label: 'View', action: () => { setViewCompany(company); setViewCategoriesLoading(false); const cats = allCategories.filter(cat => (company.category_ids ?? []).includes(cat.id)).map(cat => ({ id: cat.id, name: cat.name })).sort((a, b) => a.name.localeCompare(b.name)); setViewCompanyCategories(cats); } },
+                    { icon: <EditIcon />, label: 'Edit', action: () => { setDetailCompany(company); setEditForm({ name: company.name, email: company.email, phone_number: company.phone_number ?? '', address: company.address ?? '', company_info: company.company_info ?? '' }); } },
+                    { icon: <TagIcon />, label: 'Category', action: () => setCategoryAssignCompany(company) },
+                    { icon: <DownloadIcon />, label: 'Download CSV', action: () => downloadCompaniesCSV([company], campaignNameMap, `${company.name.replace(/[^a-z0-9]/gi, '_')}.csv`) },
+                    ...(!company.optedOut ? [{ icon: <LinkIcon />, label: 'Campaigns', action: () => setAssignCompany(company) }] : []),
+                    { icon: <TrashIcon />, label: 'Delete', action: () => showConfirm('Delete Company', `Delete "${company.name}"? This cannot be undone.`, () => deleteCompanies([company.id])), danger: true as const },
+                  ].map(({ icon, label, action, danger }) => (
+                    <button key={label} onClick={e => { e.stopPropagation(); setDotsOpenId(null); action(); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.875rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, color: danger ? theme.colors.error.main : theme.colors.base.content, textAlign: 'left' }}>
+                      <span style={{ width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
+                      {label}
+                    </button>
+                  ));
+                })()}
+              </div>
+            </>,
+            document.body
+          )}
 
           {/* Pagination */}
           {displayTotal > 0 && (
@@ -1327,7 +1384,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
               <CloseButton theme={theme} onClick={() => setViewCompany(null)}><CloseIcon /></CloseButton>
             </ModalHeader>
             <ModalBody>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.45, marginBottom: '0.3rem' }}>Name</div>
                   <div style={{ fontSize: '0.9rem', fontWeight: 500, padding: '0.5rem 0.75rem', background: theme.colors.base[200], borderRadius: theme.radius.field }}>{viewCompany.name}</div>
@@ -1438,7 +1495,7 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
               <CloseButton theme={theme} onClick={() => { setDetailCompany(null); setEditForm(null); }}><CloseIcon /></CloseButton>
             </ModalHeader>
             <ModalBody>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 {/* Name */}
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.45, marginBottom: '0.3rem' }}>Name *</div>
