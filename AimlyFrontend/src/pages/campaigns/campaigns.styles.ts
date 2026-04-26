@@ -19,6 +19,9 @@ export const MainContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+
+  @media (max-width: 768px) { padding: 1rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 0.625rem; gap: 0.75rem; }
 `;
 
 // ── Base card — always base[200] so it lifts off base[100] page bg ──
@@ -76,6 +79,9 @@ export const HeroCommandBar = styled.div<{ theme: any }>`
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   gap: 1rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) { padding: 0.625rem 0.875rem; gap: 0.5rem; }
 `;
 
 export const HeroBarLeft = styled.div`
@@ -95,6 +101,8 @@ export const HeroBarSep = styled.div<{ theme: any }>`
   width: 1px;
   height: 14px;
   background-color: ${p => p.theme.colors.base[300]};
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 export const HeroBarDate = styled.span<{ theme: any }>`
@@ -102,12 +110,15 @@ export const HeroBarDate = styled.span<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   opacity: 0.45;
   font-weight: 400;
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 export const HeroBarRight = styled.div`
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  flex-shrink: 0;
 `;
 
 export const HeroNavBtn = styled.button<{ theme: any }>`
@@ -136,6 +147,14 @@ export const HeroNavBtn = styled.button<{ theme: any }>`
     color: ${p => p.theme.colors.primary.main};
     opacity: 1;
   }
+
+  @media (max-width: 640px) {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
 `;
 
 export const HeroNavBtnCount = styled.span<{ theme: any }>`
@@ -146,12 +165,17 @@ export const HeroNavBtnCount = styled.span<{ theme: any }>`
   border-radius: 4px;
   padding: 0 4px;
   line-height: 16px;
+
+  @media (max-width: 640px) { display: none; }
 `;
 
 export const HeroStatsStrip = styled.div<{ theme: any }>`
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   border-top: 1px solid ${p => p.theme.colors.base[300]};
+
+  @media (max-width: 640px) { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 380px) { grid-template-columns: repeat(2, 1fr); }
 `;
 
 export const HeroStatCell = styled.div<{ theme: any }>`
@@ -166,6 +190,20 @@ export const HeroStatCell = styled.div<{ theme: any }>`
 
   &:hover {
     background-color: ${p => p.theme.colors.base[400]};
+  }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem 1rem;
+    /* every 3rd cell loses its right border; bottom border separates rows */
+    &:nth-child(3n) { border-right: none; }
+    &:nth-child(-n+3) { border-bottom: 1px solid ${p => p.theme.colors.base[300]}; }
+  }
+
+  @media (max-width: 380px) {
+    &:nth-child(3n) { border-right: 1px solid ${p => p.theme.colors.base[300]}; }
+    &:nth-child(2n) { border-right: none; }
+    &:nth-child(-n+4) { border-bottom: 1px solid ${p => p.theme.colors.base[300]}; }
+    &:nth-child(-n+3):not(:nth-child(-n+0)) { border-bottom: none; }
   }
 `;
 
@@ -297,6 +335,8 @@ export const StatSubtext = styled.div<{ theme: any; $color?: string }>`
 
 export const CampaignsSection = styled(Card)`
   padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
 `;
 
 export const SectionHeader = styled.div<{ theme: any }>`
@@ -306,6 +346,10 @@ export const SectionHeader = styled.div<{ theme: any }>`
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  flex-wrap: wrap;
+  gap: 0.75rem;
+
+  @media (max-width: 480px) { margin-bottom: 1rem; padding-bottom: 0.75rem; }
 `;
 
 export const SectionTitle = styled.h2`
@@ -418,6 +462,11 @@ export const CampaignCard = styled(Card)`
   &:hover {
     border-color: ${p => p.theme.colors.primary.main};
   }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem;
+    transform: none !important;
+  }
 `;
 
 export const CampaignHeader = styled.div`
@@ -425,6 +474,9 @@ export const CampaignHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 640px) { gap: 0.5rem; }
 `;
 
 export const CampaignInfo = styled.div`
@@ -456,6 +508,7 @@ export const StatsContainer = styled.div`
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
 `;
 
 // CampaignStatBox sits inside CampaignCard (base[400]) — use base[200] to step back inward
@@ -596,6 +649,16 @@ export const ToastContainer = styled.div<{ theme: any; $type: 'success' | 'error
     from { transform: translateX(100%); opacity: 0; }
     to   { transform: translateX(0);    opacity: 1; }
   }
+
+  @media (max-width: 480px) {
+    top: auto;
+    bottom: 1rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    min-width: unset;
+    max-width: unset;
+    width: auto;
+  }
 `;
 
 export const ToastContent = styled.div`flex: 1;`;
@@ -645,6 +708,8 @@ export const ConfirmBox = styled.div<{ theme: any }>`
   max-width: 400px;
   width: 90%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+
+  @media (max-width: 480px) { padding: 1.25rem 1rem; width: 95%; }
 `;
 
 export const ConfirmHeader = styled.div`
@@ -696,6 +761,12 @@ export const ConfirmButtons = styled.div`
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1.5rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 export const ConfirmButton = styled.button<{ theme: any; $variant?: 'danger' | 'warning' | 'default' }>`
@@ -779,12 +850,16 @@ export const BulkActionsBar = styled.div<{ theme: any; $visible?: boolean }>`
   border: 1px solid ${p => p.theme.colors.primary.main};
   border-radius: ${p => p.theme.radius.field};
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   animation: slideDown 0.2s ease;
 
   @keyframes slideDown {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  @media (max-width: 480px) { padding: 0.625rem 0.75rem; }
 `;
 
 export const BulkActionsLeft = styled.div`
@@ -813,6 +888,11 @@ export const ModalOverlay = styled.div<{ $isOpen: boolean }>`
   align-items: center;
   justify-content: center;
   padding: 1rem;
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 
 export const ModalContent = styled.div<{ theme: any }>`
@@ -821,6 +901,11 @@ export const ModalContent = styled.div<{ theme: any }>`
   width: 100%;
   max-width: 450px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    border-radius: ${p => p.theme.radius.box} ${p => p.theme.radius.box} 0 0;
+  }
 `;
 
 export const ModalHeader = styled.div<{ theme: any }>`
@@ -829,6 +914,8 @@ export const ModalHeader = styled.div<{ theme: any }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
+
+  @media (max-width: 480px) { padding: 1rem 1.125rem; }
 `;
 
 export const ModalTitle = styled.h3`
@@ -855,7 +942,10 @@ export const CloseButton = styled.button<{ theme: any }>`
   svg { width: 18px; height: 18px; }
 `;
 
-export const ModalBody = styled.div`padding: 1.5rem;`;
+export const ModalBody = styled.div`
+  padding: 1.5rem;
+  @media (max-width: 480px) { padding: 1rem; }
+`;
 
 export const ModalFooter = styled.div<{ theme: any }>`
   padding: 1.25rem 1.5rem;
@@ -863,6 +953,13 @@ export const ModalFooter = styled.div<{ theme: any }>`
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    padding: 1rem;
+    flex-direction: column-reverse;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 export const FormGroup = styled.div`
@@ -995,4 +1092,6 @@ export const PageSizeSelect = styled.select<{ theme: any }>`
     background-color: ${p => p.theme.colors.base[200]};
     color: ${p => p.theme.colors.base.content};
   }
+
+  @media (max-width: 480px) { display: none; }
 `;

@@ -4,12 +4,18 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import styled from 'styled-components';
 import {
   HeroCard, HeroCommandBar, HeroBarLeft, HeroBarRight, HeroBarTitle,
   HeroBarDate, HeroBarSep, HeroNavBtn, HeroNavBtnCount,
   HeroStatsStrip, HeroStatCell, HeroStatValue, HeroStatLabel, HeroStatRate,
 } from './campaigns.styles.ts';
 import type { OverallStats } from './campaigns.types';
+
+// Hide nav button text on small screens — icon only
+const NavBtnText = styled.span`
+  @media (max-width: 640px) { display: none; }
+`;
 
 interface OverallStatsCardProps {
   stats: OverallStats;
@@ -38,14 +44,14 @@ const OverallStatsCard: React.FC<OverallStatsCardProps> = ({ stats, theme }) => 
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-            History
+            <NavBtnText>History</NavBtnText>
           </HeroNavBtn>
 
           <HeroNavBtn theme={theme} as={Link} to="/attachments" title="Attachments">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
             </svg>
-            Attachments
+            <NavBtnText>Attachments</NavBtnText>
             <HeroNavBtnCount theme={theme}>{stats.total_attachments}</HeroNavBtnCount>
           </HeroNavBtn>
 
@@ -54,7 +60,7 @@ const OverallStatsCard: React.FC<OverallStatsCardProps> = ({ stats, theme }) => 
               <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
               <line x1="7" y1="7" x2="7.01" y2="7"/>
             </svg>
-            Categories
+            <NavBtnText>Categories</NavBtnText>
             <HeroNavBtnCount theme={theme}>{stats.total_categories}</HeroNavBtnCount>
           </HeroNavBtn>
 
@@ -67,7 +73,7 @@ const OverallStatsCard: React.FC<OverallStatsCardProps> = ({ stats, theme }) => 
               <rect x="20" y="17" width="7" height="7" rx="0.5"/>
               <rect x="11" y="29" width="10" height="10" rx="1"/>
             </svg>
-            Companies
+            <NavBtnText>Companies</NavBtnText>
             <HeroNavBtnCount theme={theme}>{stats.total_companies}</HeroNavBtnCount>
           </HeroNavBtn>
         </HeroBarRight>

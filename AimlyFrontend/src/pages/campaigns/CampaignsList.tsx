@@ -2,7 +2,7 @@
 // CampaignsList.tsx - UPDATED: Server-side sorting only
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import {
@@ -19,6 +19,56 @@ import {
 import { TrashIcon } from '../../theme/icons.tsx';
 
 import type { CampaignStats } from './campaigns.types.ts';
+
+// ── Mobile detection ────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
+
+// ── Dots menu styled components ─────────────────────────────
+const DotsButton = styled.button<{ theme: any }>`
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  padding: 0; border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer; transition: all 0.15s;
+  &:hover { background: ${p => p.theme.colors.base[300]}; }
+  svg { width: 16px; height: 16px; }
+`;
+
+const DotsMenu = styled.div<{ theme: any }>`
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 200;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  border-radius: ${p => p.theme.radius.box};
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  padding: 0.3rem; min-width: 160px;
+`;
+
+const DotsItem = styled.button<{ theme: any; $danger?: boolean }>`
+  width: 100%; display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.55rem 0.75rem; border: none;
+  border-radius: ${p => p.theme.radius.field};
+  background: transparent;
+  color: ${p => p.$danger ? p.theme.colors.error.main : p.theme.colors.base.content};
+  font-size: 0.875rem; font-weight: 500; font-family: inherit;
+  cursor: pointer; text-align: left; transition: background 0.12s;
+  &:hover { background: ${p => p.theme.colors.base[400]}; }
+  svg { width: 15px; height: 15px; flex-shrink: 0; }
+`;
+
+const DotsDivider = styled.div<{ theme: any }>`
+  height: 1px; background: ${p => p.theme.colors.base[300]}; margin: 0.3rem 0;
+`;
 
 type CampaignSortKey = 'name' | 'companies' | 'sent' | 'read' | 'scheduled';
 type SortDir = 'asc' | 'desc';
@@ -147,6 +197,22 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
   onCampaignClick, onDelete, onEdit, onBulkDelete, onAddClick,
   onPageChange, onPageSizeChange,
 }) => {
+
+  const isMobile = useIsMobile();
+  const [dotsOpenId, setDotsOpenId] = useState<number | null>(null);
+  const dotsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dots menu on outside click
+  useEffect(() => {
+    if (dotsOpenId === null) return;
+    const handler = (e: MouseEvent) => {
+      if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node)) {
+        setDotsOpenId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dotsOpenId]);
 
   const [editModal, setEditModal] = useState<EditModalState>({
     open: false,
@@ -426,54 +492,113 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
                   aria-hidden="true"
                   tabIndex={-1}
                 />
-                <CampaignHeader>
-                  <div
-                    onClick={(e) => onSelectCampaign(campaign.campaign_id, e)}
-                    style={{ display: 'flex', alignItems: 'center' }}
-                  >
-                    <Checkbox theme={theme} $checked={isSelected} />
+
+                {isMobile ? (
+                  /* ── Mobile: name + date + stats row + dots ── */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {/* Row 1: checkbox · name · dots */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div onClick={(e) => { e.stopPropagation(); onSelectCampaign(campaign.campaign_id, e); }}
+                        style={{ width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
+                          border: `2px solid ${isSelected ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+                          backgroundColor: isSelected ? theme.colors.primary.main : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        {isSelected && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {campaign.campaign_name}
+                        </div>
+                        {formattedDate && (
+                          <div style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, monospace', marginTop: '0.1rem' }}>
+                            {formattedDate}
+                          </div>
+                        )}
+                      </div>
+                      {/* Dots menu */}
+                      <div style={{ position: 'relative', flexShrink: 0 }}
+                        ref={dotsOpenId === campaign.campaign_id ? dotsMenuRef : undefined}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <DotsButton theme={theme}
+                          onClick={() => setDotsOpenId(dotsOpenId === campaign.campaign_id ? null : campaign.campaign_id)}
+                          disabled={isSelected}>
+                          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                        </DotsButton>
+                        {dotsOpenId === campaign.campaign_id && (
+                          <DotsMenu theme={theme}>
+                            <DotsItem theme={theme} onClick={() => { setDotsOpenId(null); openEditModal(campaign); }}>
+                              <EditIcon /> Rename
+                            </DotsItem>
+                            <DotsDivider theme={theme} />
+                            <DotsItem theme={theme} $danger onClick={(e: React.MouseEvent) => { setDotsOpenId(null); onDelete(campaign.campaign_id, campaign.campaign_name, e); }}>
+                              <TrashIcon /> Delete
+                            </DotsItem>
+                          </DotsMenu>
+                        )}
+                      </div>
+                    </div>
+                    {/* Row 2: compact stat chips */}
+                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', paddingLeft: 'calc(18px + 0.5rem)' }}>
+                      {[
+                        { label: 'Co.',   value: campaign.companies_count, color: theme.colors.primary.main },
+                        { label: 'Sent',  value: campaign.sent,            color: theme.colors.success.main },
+                        { label: 'Read',  value: campaign.read,            color: theme.colors.info.main,
+                          sub: campaign.sent > 0 ? `${campaign.read_rate.toFixed(0)}%` : undefined },
+                        { label: 'Sched', value: campaign.scheduled,       color: theme.colors.warning.main },
+                      ].map(({ label, value, color, sub }) => (
+                        <div key={label} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                          padding: '0.2rem 0.55rem',
+                          borderRadius: '999px',
+                          border: `1px solid ${color}`,
+                          background: theme.colors.base[300],
+                          opacity: 0.9,
+                          fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
+                        }}>
+                          <span style={{ opacity: 0.55, fontWeight: 500, color: theme.colors.base.content }}>{label}</span>
+                          <span style={{ color }}>{value}</span>
+                          {sub && <span style={{ color, opacity: 0.8, fontSize: '0.68rem' }}>{sub}</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                ) : (
+                  /* ── Desktop: original layout ── */
+                  <CampaignHeader>
+                    <div onClick={(e) => onSelectCampaign(campaign.campaign_id, e)}
+                      style={{ display: 'flex', alignItems: 'center' }}>
+                      <Checkbox theme={theme} $checked={isSelected} />
+                    </div>
 
-                  <CampaignInfo>
-                    <CampaignName>{campaign.campaign_name}</CampaignName>
-                    <CampaignMeta>
-                      {formattedDate && <CampaignDate>{formattedDate}</CampaignDate>}
-                    </CampaignMeta>
-                  </CampaignInfo>
+                    <CampaignInfo>
+                      <CampaignName>{campaign.campaign_name}</CampaignName>
+                      <CampaignMeta>
+                        {formattedDate && <CampaignDate>{formattedDate}</CampaignDate>}
+                      </CampaignMeta>
+                    </CampaignInfo>
 
-                  {/* ── 4 stats: Companies, Sent, Read, Scheduled ── */}
-                  <StatsContainer>
-                    {renderStatBox('Companies', campaign.companies_count, theme.colors.primary.main)}
-                    {renderStatBox('Sent',      campaign.sent,            theme.colors.success.main)}
-                    {renderStatBox('Read',      campaign.read,            theme.colors.info.main,
-                      campaign.sent > 0 ? `${campaign.read_rate.toFixed(0)}%` : undefined)}
-                    {renderStatBox('Scheduled', campaign.scheduled,       theme.colors.warning.main)}
-                  </StatsContainer>
+                    <StatsContainer>
+                      {renderStatBox('Companies', campaign.companies_count, theme.colors.primary.main)}
+                      {renderStatBox('Sent',      campaign.sent,            theme.colors.success.main)}
+                      {renderStatBox('Read',      campaign.read,            theme.colors.info.main,
+                        campaign.sent > 0 ? `${campaign.read_rate.toFixed(0)}%` : undefined)}
+                      {renderStatBox('Scheduled', campaign.scheduled,       theme.colors.warning.main)}
+                    </StatsContainer>
 
-                  <ActionButtons onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                    <IconButton
-                      theme={theme}
-                      $size="md"
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        openEditModal(campaign);
-                      }}
-                      title="Rename campaign"
-                      disabled={isSelected}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      theme={theme}
-                      $variant="danger"
-                      onClick={(e: React.MouseEvent) => onDelete(campaign.campaign_id, campaign.campaign_name, e)}
-                      title="Delete campaign"
-                      disabled={isSelected}
-                    >
-                      <TrashIcon />
-                    </IconButton>
-                  </ActionButtons>
-                </CampaignHeader>
+                    <ActionButtons onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <IconButton theme={theme} $size="md"
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEditModal(campaign); }}
+                        title="Rename campaign" disabled={isSelected}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton theme={theme} $variant="danger"
+                        onClick={(e: React.MouseEvent) => onDelete(campaign.campaign_id, campaign.campaign_name, e)}
+                        title="Delete campaign" disabled={isSelected}>
+                        <TrashIcon />
+                      </IconButton>
+                    </ActionButtons>
+                  </CampaignHeader>
+                )}
               </CampaignCard>
             );
           })
