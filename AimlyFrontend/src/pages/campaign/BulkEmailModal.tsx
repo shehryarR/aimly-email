@@ -75,6 +75,11 @@ const Overlay = styled.div<{ $open: boolean }>`
   display:flex;align-items:center;justify-content:center;padding:1.5rem;
   opacity:${p => p.$open ? 1 : 0};pointer-events:${p => p.$open ? 'all' : 'none'};
   transition:opacity 0.22s ease;
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 const ModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
   width:100%;max-width:${p => p.$wide ? '1300px' : '1000px'};height:calc(100vh - 3rem);
@@ -86,11 +91,20 @@ const ModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
   opacity:${p => p.$open ? 1 : 0};
   transform:${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(20px)'};
   transition:opacity 0.25s ease,transform 0.25s ease;
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    height: 92vh;
+    border-radius: 16px 16px 0 0;
+    transform: ${p => p.$open ? 'translateY(0)' : 'translateY(100%)'};
+  }
 `;
 const ModalHeader = styled.div<{ theme: any }>`
   display:flex;align-items:center;justify-content:space-between;
   padding:1.1rem 1.5rem;border-bottom:1px solid ${p => p.theme.colors.base[300]};
   flex-shrink:0;background:${p => p.theme.colors.base[200]};
+
+  @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const ModalTitle = styled.h2`
   margin:0;font-size:1rem;font-weight:700;letter-spacing:-0.02em;
@@ -415,6 +429,14 @@ const Footer = styled.div<{ theme: any }>`
   padding:1.25rem 1.5rem;border-top:1px solid ${p => p.theme.colors.base[300]};
   display:flex;align-items:center;gap:0.75rem;justify-content:flex-end;flex-shrink:0;
   background:${p => p.theme.colors.base[200]};
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    padding: 0.875rem 1rem;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 const SplitGroup = styled.div`position:relative;display:inline-flex;`;
 const SplitMain = styled.button<{ theme: any }>`

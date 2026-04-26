@@ -10,6 +10,18 @@ import styled, { keyframes } from 'styled-components';
 import { apiFetch } from '../../App';
 import { CsCloseBtn } from './CampaignPreferenceModal';
 
+// ── Mobile detection ───────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
+
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
@@ -90,6 +102,11 @@ const EmailModalWrap = styled.div<{ $open: boolean }>`
   display: flex; align-items: center; justify-content: center;
   z-index: 9001; padding: 1.5rem;
   pointer-events: ${p => p.$open ? 'all' : 'none'};
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 const EmailModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
   width: 100%; max-width: ${p => p.$wide ? '1100px' : '720px'};
@@ -102,12 +119,21 @@ const EmailModalBox = styled.div<{ theme: any; $open: boolean; $wide?: boolean }
   opacity: ${p => p.$open ? 1 : 0};
   transform: ${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(16px)'};
   transition: opacity 0.2s, transform 0.2s, max-width 0.25s;
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    height: 92vh;
+    border-radius: 16px 16px 0 0;
+    transform: ${p => p.$open ? 'translateY(0)' : 'translateY(100%)'};
+  }
 `;
 const EmailModalHead = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: space-between;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   flex-shrink: 0;
+
+  @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const EmailModalTitle = styled.h2`
   margin: 0; font-size: 1rem; font-weight: 700; letter-spacing: -0.02em;
@@ -122,6 +148,14 @@ const EmailModalFoot = styled.div<{ theme: any }>`
   border-top: 1px solid ${p => p.theme.colors.base[300]};
   display: flex; gap: 0.75rem; justify-content: flex-end; align-items: center;
   flex-shrink: 0; background: ${p => p.theme.colors.base[200]};
+  flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    padding: 0.875rem 1rem;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    button { width: 100%; justify-content: center; }
+  }
 `;
 
 // Scroll areas — mirrors BulkEmailModal's Scroll / ScrollFlush
@@ -330,8 +364,144 @@ const GenDropItem = styled.button<{ theme: any; $active?: boolean }>`
 `;
 
 // ─────────────────────────────────────────────────────────────
-// ICONS
+// SEND SPLIT BUTTON (mobile only)
+// Primary action: Send Now. Dropdown: Schedule, Draft
 // ─────────────────────────────────────────────────────────────
+const SendSplitBtn: React.FC<{
+  theme: any;
+  acting: string | null;
+  onSend: () => void;
+  onSchedule: () => void;
+  onDraft: () => void;
+  fullWidth?: boolean;
+}> = ({ theme, acting, onSend, onSchedule, onDraft, fullWidth }) => {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
+  const chevronRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, [open]);
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = chevronRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < 110;
+      setMenuPos({ top: openUpward ? rect.top : rect.bottom + 4, left: rect.right, openUpward });
+    }
+    setOpen(v => !v);
+  };
+
+  const disabled = !!acting;
+
+  // Send icon
+  const SendIco = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  );
+  // Schedule icon
+  const SchedIco = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  );
+  // Draft icon
+  const DraftIco = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+  );
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'stretch', position: 'relative',
+      width: fullWidth ? '100%' : undefined,
+      borderRadius: theme.radius.field,
+      border: `1px solid ${theme.colors.primary.main}`,
+      opacity: disabled ? 0.6 : 1,
+      overflow: 'visible',
+    }}>
+      {/* Left: Send Now */}
+      <button
+        onClick={() => !disabled && onSend()}
+        disabled={disabled}
+        style={{
+          flex: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem',
+          padding: '0.55rem 0.85rem',
+          background: theme.colors.primary.main,
+          color: theme.colors.primary.content,
+          border: 'none', borderRadius: `${theme.radius.field} 0 0 ${theme.radius.field}`,
+          fontSize: '0.8rem', fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {acting === 'send'
+          ? <ESpinner style={{ width: 13, height: 13, borderWidth: 2, borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />
+          : <SendIco />
+        }
+        Send
+      </button>
+
+      {/* Divider */}
+      <div style={{ width: 1, background: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+
+      {/* Right: chevron dropdown */}
+      <span
+        ref={chevronRef}
+        onClick={openMenu}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 0.5rem',
+          background: theme.colors.primary.main,
+          color: theme.colors.primary.content,
+          borderRadius: `0 ${theme.radius.field} ${theme.radius.field} 0`,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          transition: 'opacity 0.15s',
+        }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" width="11" height="11"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </span>
+
+      {/* Dropdown portal */}
+      {open && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'fixed',
+            top: menuPos.openUpward ? menuPos.top : menuPos.top,
+            left: menuPos.left,
+            transform: menuPos.openUpward
+              ? 'translateX(-100%) translateY(-100%)'
+              : 'translateX(-100%)',
+            zIndex: 9999,
+            background: theme.colors.base[200],
+            border: `1px solid ${theme.colors.base[300]}`,
+            borderRadius: theme.radius.field,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            minWidth: 140, overflow: 'hidden',
+          }}>
+            <GenDropItem theme={theme} onClick={() => { onSchedule(); setOpen(false); }}>
+              <SchedIco /> Schedule
+            </GenDropItem>
+            <GenDropItem theme={theme} onClick={() => { onDraft(); setOpen(false); }}>
+              <DraftIco /> Save as Draft
+            </GenDropItem>
+          </div>
+        </>,
+        document.body
+      )}
+    </div>
+  );
+};
 const CheckSmallIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"/>
@@ -366,7 +536,8 @@ const RegenDropdown: React.FC<{
   acting: boolean;
   hasTemplateEmail: boolean;
   onRegenerate: (queryType: 'plain' | 'html' | 'template') => void;
-}> = ({ theme, acting, hasTemplateEmail, onRegenerate }) => {
+  fullWidth?: boolean;
+}> = ({ theme, acting, hasTemplateEmail, onRegenerate, fullWidth }) => {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUpward: false });
   const chevronRef = useRef<HTMLSpanElement>(null);
@@ -390,8 +561,8 @@ const RegenDropdown: React.FC<{
   };
 
   return (
-    <GenBtn theme={theme} $disabled={acting}>
-      <GenBtnLeft theme={theme} onClick={() => !acting && onRegenerate('plain')}>
+    <GenBtn theme={theme} $disabled={acting} style={fullWidth ? { width: '100%' } : undefined}>
+      <GenBtnLeft theme={theme} style={fullWidth ? { flex: 1, justifyContent: 'center' } : undefined} onClick={() => !acting && onRegenerate('plain')}>
         <GenBtnIcon>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -455,6 +626,12 @@ const EmailModal: React.FC<EmailModalProps> = ({
   const [splitRatio, setSplitRatio] = useState(0.5);
   const dragStateRef = useRef<{ dragging: boolean; startX: number; startRatio: number; containerW: number }>({ dragging: false, startX: 0, startRatio: 0.5, containerW: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const isMobile = useIsMobile();
+  const [mobileView, setMobileView] = useState<'email' | 'preview'>('email');
+
+  // Reset mobileView when html mode changes or a new email opens
+  useEffect(() => { setMobileView('email'); }, [htmlEmail, email?.id]);
 
   useEffect(() => { if (!htmlEmail) setSplitRatio(0.5); }, [htmlEmail]);
 
@@ -740,7 +917,7 @@ const EmailModal: React.FC<EmailModalProps> = ({
     <>
       <EmailModalBackdrop $open={isOpen} onClick={handleClose} />
       <EmailModalWrap $open={isOpen} onClick={handleClose}>
-        <EmailModalBox theme={theme} $open={isOpen} $wide={htmlEmail && activeTab === 'email'} onClick={e => e.stopPropagation()}>
+        <EmailModalBox theme={theme} $open={isOpen} $wide={htmlEmail && activeTab === 'email' && !isMobile} onClick={e => e.stopPropagation()}>
 
           {/* Header */}
           <EmailModalHead theme={theme}>
@@ -773,6 +950,41 @@ const EmailModal: React.FC<EmailModalProps> = ({
                   </span>
                 )}
               </ETabBtn>
+
+              {/* Mobile-only Edit ↔ Preview toggle — shown when HTML mode is on */}
+              {isMobile && htmlEmail && activeTab === 'email' && (
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingRight: '0.75rem', gap: '0.25rem' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center',
+                    background: theme.colors.base[400],
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    borderRadius: '999px',
+                    padding: '0.2rem',
+                    gap: '0.15rem',
+                  }}>
+                    {(['email', 'preview'] as const).map(v => (
+                      <button
+                        key={v}
+                        onClick={() => setMobileView(v)}
+                        style={{
+                          padding: '0.25rem 0.65rem',
+                          borderRadius: '999px',
+                          border: 'none',
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                          background: mobileView === v ? theme.colors.primary.main : 'transparent',
+                          color: mobileView === v ? theme.colors.primary.content : theme.colors.base.content,
+                          opacity: mobileView === v ? 1 : 0.5,
+                        }}
+                      >
+                        {v === 'email' ? 'Edit' : 'Preview'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </ETabBar>
           )}
 
@@ -798,10 +1010,15 @@ const EmailModal: React.FC<EmailModalProps> = ({
 
             {/* ── EMAIL TAB ── */}
             {phase === 'ready' && activeTab === 'email' && (
-              <div ref={containerRef} style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+              <div ref={containerRef} style={{
+                flex: 1, minHeight: 0, display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                overflow: isMobile ? 'auto' : 'hidden',
+              }}>
 
-                {/* Editor column */}
-                <EScroll style={{ flex: 1, minWidth: 0 }}>
+                {/* Editor column — hidden on mobile when previewing */}
+                {(!isMobile || mobileView === 'email') && (
+                <EScroll style={{ flex: isMobile ? '1 1 auto' : 1, minWidth: 0, overflowY: isMobile ? 'visible' : 'auto' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
                       <EFieldLabel theme={theme} style={{ margin: 0 }}>Subject</EFieldLabel>
@@ -865,14 +1082,25 @@ const EmailModal: React.FC<EmailModalProps> = ({
                     </div>
                   )}
                 </EScroll>
+                )}
 
-                {/* Drag divider + preview */}
-                {htmlEmail && (
-                  <>
-                    <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}>
-                      <div style={{ width: 2, height: '40px', borderRadius: 2, background: theme.colors.base[300] }} />
-                    </div>
-                    <div style={{ width: `${splitRatio * 100}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden' }}>
+                {/* Drag divider — desktop only */}
+                {htmlEmail && !isMobile && (
+                  <div onMouseDown={onDividerMouseDown} style={{ width: 6, flexShrink: 0, cursor: 'col-resize', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' }}>
+                    <div style={{ width: 2, height: '40px', borderRadius: 2, background: theme.colors.base[300] }} />
+                  </div>
+                )}
+
+                {/* Preview — side panel on desktop, full-pane on mobile when mobileView === 'preview' */}
+                {htmlEmail && (!isMobile || mobileView === 'preview') && (
+                  <div style={isMobile ? {
+                    flex: '1 1 auto', display: 'flex', flexDirection: 'column', padding: '1rem',
+                  } : {
+                    width: `${splitRatio * 100}%`, flexShrink: 0,
+                    display: 'flex', flexDirection: 'column',
+                    padding: '1.5rem 1.5rem 1.5rem 0.75rem', overflow: 'hidden',
+                  }}>
+                    {!isMobile && (
                       <EFieldLabel theme={theme} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.5rem' }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
@@ -880,23 +1108,28 @@ const EmailModal: React.FC<EmailModalProps> = ({
                         </svg>
                         Live Preview
                       </EFieldLabel>
-                      <div style={{ flex: 1, border: `1px solid ${theme.colors.base[300]}`, borderRadius: theme.radius.field, overflow: 'hidden', background: '#fff', minHeight: 200 }}>
-                        {body.trim() ? (
-                          <iframe
-                            key={body}
-                            srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${body}</body></html>`}
-                            style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 200 }}
-                            sandbox="allow-same-origin"
-                            title="Email HTML Preview"
-                          />
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 200, fontSize: '0.75rem', opacity: 0.35, fontStyle: 'italic' }}>
-                            Preview will appear here…
-                          </div>
-                        )}
-                      </div>
+                    )}
+                    <div style={{
+                      flex: 1, minHeight: isMobile ? 0 : 200,
+                      border: `1px solid ${theme.colors.base[300]}`,
+                      borderRadius: theme.radius.field,
+                      overflow: 'hidden', background: '#fff',
+                    }}>
+                      {body.trim() ? (
+                        <iframe
+                          key={body}
+                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:14px;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#111;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${body}</body></html>`}
+                          style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 200 }}
+                          sandbox="allow-same-origin"
+                          title="Email HTML Preview"
+                        />
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 200, fontSize: '0.75rem', opacity: 0.35, fontStyle: 'italic' }}>
+                          Preview will appear here…
+                        </div>
+                      )}
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             )}
@@ -1152,10 +1385,10 @@ const EmailModal: React.FC<EmailModalProps> = ({
           {/* Footer — email tab only */}
           {phase === 'ready' && activeTab === 'email' && (
             <EmailModalFoot theme={theme}>
-              <RegenDropdown theme={theme} acting={!!acting} hasTemplateEmail={!!hasTemplateEmail} onRegenerate={generateEmail} />
               {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
               {showSched ? (
                 <>
+                  <RegenDropdown theme={theme} acting={!!acting} hasTemplateEmail={!!hasTemplateEmail} onRegenerate={generateEmail} />
                   <input
                     ref={schedInputRef}
                     type="datetime-local"
@@ -1174,8 +1407,28 @@ const EmailModal: React.FC<EmailModalProps> = ({
                     Confirm
                   </EActionBtn>
                 </>
+              ) : isMobile ? (
+                /* Mobile: regen left, send right — equal width so chevrons align */
+                <div style={{ display: 'flex', width: '100%', gap: '0.5rem' }}>
+                  <div style={{ flex: 1, display: 'flex' }}>
+                    <RegenDropdown theme={theme} acting={!!acting} hasTemplateEmail={!!hasTemplateEmail} onRegenerate={generateEmail} fullWidth />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex' }}>
+                    <SendSplitBtn
+                      theme={theme}
+                      acting={acting}
+                      onSend={handleSend}
+                      onSchedule={() => { setShowSched(true); setTimeout(() => schedInputRef.current?.focus(), 80); }}
+                      onDraft={handleDraft}
+                      fullWidth
+                    />
+                  </div>
+                </div>
               ) : (
+                /* Desktop: regen + three separate buttons */
                 <>
+                  <RegenDropdown theme={theme} acting={!!acting} hasTemplateEmail={!!hasTemplateEmail} onRegenerate={generateEmail} />
+                  {acting === 'regenerate' && <ESpinner style={{ width: 16, height: 16, borderWidth: 2 }} />}
                   <EActionBtn theme={theme} disabled={!!acting} onClick={handleDraft}>
                     {acting === 'draft' ? <ESpinner style={{ width: 14, height: 14, borderWidth: 2 }} /> : (
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

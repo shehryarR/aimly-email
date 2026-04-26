@@ -58,6 +58,11 @@ const CsModalWrap = styled.div<{ $open: boolean }>`
   display: flex; align-items: center; justify-content: center;
   z-index: 9999; padding: 1.5rem;
   pointer-events: ${p => p.$open ? 'all' : 'none'};
+
+  @media (max-width: 520px) {
+    padding: 0;
+    align-items: flex-end;
+  }
 `;
 const CsModal = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
   width: 100%; max-width: ${p => p.$wide ? '1200px' : '860px'};
@@ -70,12 +75,21 @@ const CsModal = styled.div<{ theme: any; $open: boolean; $wide?: boolean }>`
   opacity: ${p => p.$open ? 1 : 0};
   transform: ${p => p.$open ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(16px)'};
   transition: opacity 0.25s ease, transform 0.25s ease, max-width 0.25s ease;
+
+  @media (max-width: 520px) {
+    max-width: 100%;
+    height: 92vh;
+    border-radius: 16px 16px 0 0;
+    transform: ${p => p.$open ? 'translateY(0)' : 'translateY(100%)'};
+  }
 `;
 const CsHead = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: space-between;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   flex-shrink: 0;
+
+  @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const CsTitle = styled.h2`
   margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em;
@@ -99,7 +113,41 @@ export const CsCloseBtn = styled.button<{ theme: any }>`
 // ─────────────────────────────────────────────────────────────
 const CsNavBody = styled.div`
   display: flex; flex: 1; min-height: 0;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+  }
 `;
+
+/* Wraps the nav — transparent on desktop, block with fade-edge on mobile */
+const CsNavWrapper = styled.div<{ theme: any }>`
+  display: contents;
+
+  @media (max-width: 640px) {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+    background: ${p => p.theme.colors.base[200]};
+    border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+
+    /* Fade-out hint on right edge */
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 1px;
+      width: 48px;
+      pointer-events: none;
+      background: linear-gradient(
+        to right,
+        transparent,
+        ${p => p.theme.colors.base[200]}bb 60%,
+        ${p => p.theme.colors.base[200]} 100%
+      );
+      z-index: 2;
+    }
+  }
+`;
+
 const CsNav = styled.nav<{ theme: any }>`
   width: 220px; flex-shrink: 0;
   background: ${p => p.theme.colors.base[200]};
@@ -107,14 +155,44 @@ const CsNav = styled.nav<{ theme: any }>`
   padding: 0.75rem 0.5rem;
   display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto;
+
+  @media (max-width: 640px) {
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: none;
+    padding: 0.375rem 0.75rem;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    padding-right: 3rem; /* clears the fade gradient */
+  }
 `;
+
+/* Group wrapper — becomes display:contents on mobile so labels + buttons sit flat in the row */
+const CsNavGroup = styled.div`
+  margin-bottom: 0.5rem;
+  &:not(:first-child) { margin-top: 0.5rem; }
+
+  @media (max-width: 640px) {
+    display: contents;
+    margin: 0;
+  }
+`;
+
 const CsNavGroupLabel = styled.div<{ theme: any }>`
   font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em;
   color: ${p => p.theme.colors.base.content};
   opacity: 0.4;
   padding: 0.25rem 0.75rem 0.4rem;
+
+  @media (max-width: 640px) { display: none; }
 `;
+
 const CsNavBtn = styled.button<{ theme: any; $active: boolean }>`
   width: 100%; padding: 0.6rem 0.75rem;
   border: none; border-radius: 8px; cursor: pointer;
@@ -126,8 +204,29 @@ const CsNavBtn = styled.button<{ theme: any; $active: boolean }>`
   opacity: ${p => p.$active ? 1 : 0.72};
   &:hover { background: ${p => p.$active ? p.theme.colors.primary.main + '22' : p.theme.colors.base[300]}; opacity: 1; }
   svg { width: 16px; height: 16px; flex-shrink: 0; opacity: ${p => p.$active ? 1 : 0.7}; }
+
+  @media (max-width: 640px) {
+    width: auto;
+    flex-shrink: 0;
+    padding: 0.45rem 0.875rem;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    margin: 0.3rem 0.15rem;
+    gap: 0.35rem;
+    background: ${p => p.$active ? p.theme.colors.primary.main + '18' : 'transparent'};
+    color: ${p => p.$active ? p.theme.colors.primary.main : p.theme.colors.base.content};
+    opacity: 1;
+    &:hover { background: ${p => p.$active ? p.theme.colors.primary.main + '22' : p.theme.colors.base[300]}; opacity: 1; }
+    svg { width: 14px; height: 14px; }
+  }
 `;
-const CsNavLabel = styled.span`flex: 1;`;
+
+const CsNavLabel = styled.span`
+  flex: 1;
+
+  @media (max-width: 640px) { flex: none; }
+`;
 
 // ─────────────────────────────────────────────────────────────
 // STYLED COMPONENTS — TAB CONTENT PANEL
@@ -137,6 +236,9 @@ const CsTabPanel = styled.div<{ theme: any }>`
   padding: 1.75rem 2rem;
   color: ${p => p.theme.colors.base.content};
   animation: ${contentFade} 0.2s ease;
+
+  @media (max-width: 640px) { padding: 1.25rem 1rem; }
+  @media (max-width: 480px) { padding: 1rem 0.875rem; }
 `;
 const CsPanelTitle = styled.h3<{ theme: any }>`
   margin: 0 0 0.25rem 0;
@@ -1047,21 +1149,25 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
           <CsNavBody>
 
             {/* Left sidebar */}
-            <CsNav theme={theme}>
-              <CsNavGroupLabel theme={theme}>Settings</CsNavGroupLabel>
-              {csTabs.map(t => {
-                const isDirty = dirtyTabs[t.id];
-                return (
-                  <CsNavBtn key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
-                    {t.icon}
-                    <CsNavLabel>{t.label}</CsNavLabel>
-                    {isDirty && (
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1, flexShrink: 0, color: '#F59E0B', opacity: 0.9 }}>*</span>
-                    )}
-                  </CsNavBtn>
-                );
-              })}
-            </CsNav>
+            <CsNavWrapper theme={theme}>
+              <CsNav theme={theme}>
+                <CsNavGroup>
+                  <CsNavGroupLabel theme={theme}>Settings</CsNavGroupLabel>
+                  {csTabs.map(t => {
+                    const isDirty = dirtyTabs[t.id];
+                    return (
+                      <CsNavBtn key={t.id} theme={theme} $active={activeTab === t.id} onClick={() => setActiveTab(t.id)}>
+                        {t.icon}
+                        <CsNavLabel>{t.label}</CsNavLabel>
+                        {isDirty && (
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1, flexShrink: 0, color: '#F59E0B', opacity: 0.9 }}>*</span>
+                        )}
+                      </CsNavBtn>
+                    );
+                  })}
+                </CsNavGroup>
+              </CsNav>
+            </CsNavWrapper>
 
             {/* ── STRATEGY & CONTENT tab ───────────────────── */}
             {activeTab === 'strategy_content' && (

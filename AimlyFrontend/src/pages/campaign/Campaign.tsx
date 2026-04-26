@@ -27,6 +27,18 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost';
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT;
 const API_BASE = BACKEND_PORT ? `${BACKEND_URL}:${BACKEND_PORT}` : BACKEND_URL;
 
+// ── Mobile detection ───────────────────────────────────────────
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 640);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
+
 // ─────────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────────
@@ -136,6 +148,9 @@ const PageContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
+
+  @media (max-width: 768px) { padding: 1rem; gap: 1rem; }
+  @media (max-width: 480px) { padding: 0.625rem; gap: 0.75rem; }
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -176,6 +191,9 @@ const StatsHeader = styled.div`
   justify-content: space-between;
   padding: 1.75rem 2rem 1.5rem;
   gap: 1rem;
+
+  @media (max-width: 640px) { padding: 1rem 1.25rem 1rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.875rem 0.875rem; }
 `;
 const HeaderIconBtn = styled.button<{ theme: any }>`
   width: 36px; height: 36px; padding: 0; flex-shrink: 0;
@@ -235,6 +253,9 @@ const CampaignTitle = styled.h1`
   font-size: 2rem; font-weight: 800; margin: 0;
   letter-spacing: -0.045em; line-height: 1;
   text-align: center;
+
+  @media (max-width: 640px) { font-size: 1.375rem; }
+  @media (max-width: 480px) { font-size: 1.125rem; }
 `;
 const CampaignMeta = styled.p`
   margin: 0; opacity: 0.4; font-size: 0.7rem;
@@ -245,6 +266,9 @@ const StatsGrid = styled.div<{ theme: any }>`
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   border-top: 1px solid ${p => p.theme.colors.base[300]};
+
+  @media (max-width: 640px) { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 380px) { grid-template-columns: repeat(2, 1fr); }
 `;
 const StatBox = styled.div<{ theme: any }>`
   padding: 1rem 1.5rem;
@@ -256,6 +280,18 @@ const StatBox = styled.div<{ theme: any }>`
     background-color: ${p => p.theme.colorScheme === 'dark'
       ? p.theme.colors.base[300]
       : p.theme.colors.base[200]};
+  }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem 1rem;
+    &:nth-child(3n) { border-right: none; }
+    &:nth-child(-n+3) { border-bottom: 1px solid ${p => p.theme.colors.base[300]}; }
+  }
+
+  @media (max-width: 380px) {
+    &:nth-child(3n) { border-right: 1px solid ${p => p.theme.colors.base[300]}; }
+    &:nth-child(2n) { border-right: none; }
+    &:nth-child(-n+4) { border-bottom: 1px solid ${p => p.theme.colors.base[300]}; }
   }
 `;
 const StatLabel = styled.div`
@@ -275,11 +311,18 @@ const StatSub = styled.div<{ $color?: string }>`
 // ─────────────────────────────────────────────────────────────
 // COMPANIES SECTION
 // ─────────────────────────────────────────────────────────────
-const SectionCard = styled(Card)`padding: 2rem;`;
+const SectionCard = styled(Card)`
+  padding: 2rem;
+  @media (max-width: 768px) { padding: 1.25rem; }
+  @media (max-width: 480px) { padding: 0.875rem 0.75rem; }
+`;
 const SectionHeader = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 1.5rem; padding-bottom: 1rem;
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  flex-wrap: wrap; gap: 0.75rem;
+
+  @media (max-width: 480px) { margin-bottom: 1rem; padding-bottom: 0.75rem; }
 `;
 const SectionTitle = styled.h2`
   font-size: 1.125rem; font-weight: 600; margin: 0;
@@ -333,11 +376,14 @@ const BulkBar = styled.div<{ theme: any; $visible: boolean }>`
   pointer-events: ${p => p.$visible ? 'auto' : 'none'};
   height: ${p => p.$visible ? 'auto' : 0};
   overflow: hidden;
+  flex-wrap: wrap; gap: 0.5rem;
   animation: ${p => p.$visible ? 'bulkSlideDown 0.2s ease' : 'none'};
   @keyframes bulkSlideDown {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  @media (max-width: 480px) { padding: ${p => p.$visible ? '0.625rem 0.75rem' : '0'}; }
 `;
 const Checkbox = styled.div<{ theme: any; $checked: boolean }>`
   width: 18px; height: 18px; min-width: 18px;
@@ -370,9 +416,15 @@ const CompanyCardItem = styled(Card)<{ theme: any; $selected?: boolean }>`
     box-shadow: ${p => p.theme.colorScheme === 'dark' ? '0 8px 24px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3)' : '0 8px 24px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.06)'};
   }
   &:last-child { margin-bottom: 0; }
+
+  @media (max-width: 640px) {
+    padding: 0.75rem;
+    transform: none !important;
+  }
 `;
 const CompanyCardHeader = styled.div`
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap;
 `;
 const CompanyCardInfo = styled.div`flex: 1; min-width: 0;`;
 const CompanyCardName = styled.h3`
@@ -577,7 +629,7 @@ const Pagination = styled.div<{ theme: any }>`
   display: flex; align-items: center; justify-content: center;
   gap: 0.5rem; padding: 1.5rem 0;
   border-top: 1px solid ${p => p.theme.colors.base[300]};
-  margin-top: 1rem;
+  margin-top: 1rem; flex-wrap: wrap;
 `;
 const PageBtn = styled.button<{ theme: any; $active?: boolean }>`
   min-width: 36px; height: 36px; padding: 0 0.75rem;
@@ -599,10 +651,47 @@ const PageSizeSelect = styled.select<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   font-size: 0.875rem; cursor: pointer; margin-left: 1rem;
   &:focus { outline: none; border-color: ${p => p.theme.colors.primary.main}; }
+
+  @media (max-width: 480px) { display: none; }
 `;
 const EmptyState = styled.div`
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 4rem 2rem; text-align: center;
+`;
+
+// ── Mobile dots menu ───────────────────────────────────────────
+const DotsBtn = styled.button<{ theme: any }>`
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0; padding: 0;
+  border-radius: ${p => p.theme.radius.field};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  color: ${p => p.theme.colors.base.content};
+  cursor: pointer; transition: all 0.15s;
+  &:hover { background: ${p => p.theme.colors.base[300]}; }
+  svg { width: 16px; height: 16px; }
+`;
+const DotsMenuWrap = styled.div<{ theme: any }>`
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 3000;
+  background: ${p => p.theme.colors.base[200]};
+  border: 1px solid ${p => p.theme.colors.base[300]};
+  border-radius: ${p => p.theme.radius.box};
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  padding: 0.3rem; min-width: 170px;
+`;
+const DotsItem = styled.button<{ theme: any; $danger?: boolean }>`
+  width: 100%; display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.55rem 0.75rem; border: none;
+  border-radius: ${p => p.theme.radius.field};
+  background: transparent;
+  color: ${p => p.$danger ? p.theme.colors.error.main : p.theme.colors.base.content};
+  font-size: 0.875rem; font-weight: 500; font-family: inherit;
+  cursor: pointer; text-align: left; transition: background 0.12s;
+  &:hover { background: ${p => p.theme.colors.base[400]}; }
+  svg { width: 14px; height: 14px; flex-shrink: 0; }
+`;
+const DotsDivider = styled.div<{ theme: any }>`
+  height: 1px; background: ${p => p.theme.colors.base[300]}; margin: 0.3rem 0;
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -612,6 +701,11 @@ const ToastWrapper = styled.div<{ $visible: boolean }>`
   position: fixed; top: 24px; right: 24px; z-index: 10000;
   display: flex; flex-direction: column; gap: 0.75rem;
   pointer-events: ${p => p.$visible ? 'auto' : 'none'};
+
+  @media (max-width: 480px) {
+    top: auto; bottom: 1rem;
+    left: 0.75rem; right: 0.75rem;
+  }
 `;
 const ToastItem = styled.div<{ theme: any; $type: string; $exiting?: boolean }>`
   display: flex; align-items: flex-start; gap: 0.75rem;
@@ -2087,6 +2181,22 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
   const { campaignId: urlId } = useParams<{ campaignId: string }>();
   const campaignId = propId || (urlId ? parseInt(urlId, 10) : null);
 
+  const isMobile = useIsMobile();
+  const [dotsOpenId, setDotsOpenId] = useState<number | null>(null);
+  const dotsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dots menu on outside click
+  useEffect(() => {
+    if (dotsOpenId === null) return;
+    const handler = (e: MouseEvent) => {
+      if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node)) {
+        setDotsOpenId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dotsOpenId]);
+
   const [campaign, setCampaign]       = useState<CampaignDetails | null>(null);
   const [companies, setCompanies]     = useState<Company[]>([]);
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
@@ -2789,90 +2899,174 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
                 $selected={selectedCompanies.has(company.id)}
                 onClick={() => handleSelectCompany(company.id)}
               >
-                <CompanyCardHeader>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <Checkbox
-                      theme={theme}
-                      $checked={selectedCompanies.has(company.id)}
+                {isMobile ? (
+                  /* ── Mobile: flat row — checkbox · info · dots ── */
+                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+                    {/* Checkbox */}
+                    <div
                       onClick={e => { e.stopPropagation(); handleSelectCompany(company.id); }}
-                    />
-                    <CompanyCardInfo>
-                      <CompanyCardName>{company.name}</CompanyCardName>
-                      <CompanyCardEmail>{company.email}</CompanyCardEmail>{company.optedOut && (
-                        <OptedOutBadge>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-                          </svg>
-                          Opted out
-                        </OptedOutBadge>
-                      )}
-                      {(company.phone_number || company.address) && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
-                          {company.phone_number && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', opacity: 0.65 }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.08 6.08l1.08-.9a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                              </svg>
-                              {company.phone_number}
-                            </span>
+                      style={{ width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
+                        border: `2px solid ${selectedCompanies.has(company.id) ? theme.colors.primary.main : theme.colors.base.content + '55'}`,
+                        backgroundColor: selectedCompanies.has(company.id) ? theme.colors.primary.main : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      {selectedCompanies.has(company.id) && <div style={{ width: 4, height: 8, border: `solid ${theme.colors.primary.content}`, borderWidth: '0 2px 2px 0', transform: 'rotate(45deg) translate(-1px,-1px)' }} />}
+                    </div>
+                    {/* Content */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
+                        <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {company.name}
+                        </span>
+                        {company.optedOut && (
+                          <OptedOutBadge>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                            </svg>
+                            Opted out
+                          </OptedOutBadge>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.75rem', opacity: 0.55, fontFamily: 'SF Mono, Monaco, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {company.email}
+                      </span>
+                    </div>
+                    {/* Dots menu */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}
+                      ref={dotsOpenId === company.id ? dotsMenuRef : undefined}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <DotsBtn theme={theme}
+                        onClick={() => setDotsOpenId(dotsOpenId === company.id ? null : company.id)}
+                        disabled={selectedCompanies.size > 0}>
+                        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                      </DotsBtn>
+                      {dotsOpenId === company.id && (
+                        <DotsMenuWrap theme={theme}>
+                          <DotsItem theme={theme} onClick={() => { setDotsOpenId(null); openDetailModal(company); }}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            View details
+                          </DotsItem>
+                          <DotsDivider theme={theme} />
+                          {/* Generate options — disabled for opted-out companies */}
+                          <div style={{ padding: '0.2rem 0.75rem', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.4 }}>
+                            Generate Email
+                          </div>
+                          <DotsItem theme={theme}
+                            onClick={() => { if (!company.optedOut) { setDotsOpenId(null); openEmailModal(company, false, 'plain'); } }}
+                            style={company.optedOut ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                            <SparkleIcon /> Plain text
+                          </DotsItem>
+                          <DotsItem theme={theme}
+                            onClick={() => { if (!company.optedOut) { setDotsOpenId(null); openEmailModal(company, true, undefined); } }}
+                            style={company.optedOut ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                            <HtmlIcon /> HTML email
+                          </DotsItem>
+                          {hasTemplateEmail && (
+                            <DotsItem theme={theme}
+                              onClick={() => { if (!company.optedOut) { setDotsOpenId(null); openEmailModal(company, false, 'template'); } }}
+                              style={company.optedOut ? { opacity: 0.35, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                              <TemplateIcon /> Use template
+                            </DotsItem>
                           )}
-                          {company.address && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', opacity: 0.65 }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                              </svg>
-                              {company.address}
-                            </span>
-                          )}
-                        </div>
+                          <DotsDivider theme={theme} />
+                          <DotsItem theme={theme} onClick={() => { setDotsOpenId(null); handleDownloadOne(company); }}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download CSV
+                          </DotsItem>
+                          <DotsDivider theme={theme} />
+                          <DotsItem theme={theme} $danger onClick={e => { setDotsOpenId(null); handleUnenroll(company, e); }}>
+                            <UserMinusIcon /> Unenroll
+                          </DotsItem>
+                        </DotsMenuWrap>
                       )}
-                    </CompanyCardInfo>
+                    </div>
                   </div>
-                  <ActionBtns onClick={e => e.stopPropagation()}>
-                    <IconBtn theme={theme}
-                      disabled={selectedCompanies.size > 0}
-                      onClick={e => { e.stopPropagation(); openDetailModal(company); }}
-                      title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'View company details'}
-                      style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    </IconBtn>
-                    <IconBtn theme={theme}
-                      disabled={selectedCompanies.size > 0}
-                      onClick={e => { e.stopPropagation(); handleDownloadOne(company); }}
-                      title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'Download as CSV'}
-                      style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
-                    </IconBtn>
-                    <CompanyGenBtn
-                      company={company}
-                      theme={theme}
-                      disabled={selectedCompanies.size > 0 || !!company.optedOut}
-                      hasTemplateEmail={hasTemplateEmail}
-                      mode={genEmailModes[company.id] ?? 'plain'}
-                      onModeChange={(mode, co) => {
-                        setGenEmailModes(m => ({ ...m, [co.id]: mode }));
-                        openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
-                      }}
-                      onOpen={(co) => {
-                        openEmailModal(co, false, 'plain');
-                      }}
-                    />
-                    <IconBtn theme={theme} $variant="danger"
-                      disabled={selectedCompanies.size > 0}
-                      onClick={e => handleUnenroll(company, e)}
-                      title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'Unenroll from campaign'}
-                      style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
-                      <UserMinusIcon />
-                    </IconBtn>
-                  </ActionBtns>
-                </CompanyCardHeader>
+                ) : (
+                  /* ── Desktop: original layout ── */
+                  <CompanyCardHeader>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <Checkbox
+                        theme={theme}
+                        $checked={selectedCompanies.has(company.id)}
+                        onClick={e => { e.stopPropagation(); handleSelectCompany(company.id); }}
+                      />
+                      <CompanyCardInfo>
+                        <CompanyCardName>{company.name}</CompanyCardName>
+                        <CompanyCardEmail>{company.email}</CompanyCardEmail>{company.optedOut && (
+                          <OptedOutBadge>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                            </svg>
+                            Opted out
+                          </OptedOutBadge>
+                        )}
+                        {(company.phone_number || company.address) && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.2rem' }}>
+                            {company.phone_number && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', opacity: 0.65 }}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.08 6.08l1.08-.9a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                                </svg>
+                                {company.phone_number}
+                              </span>
+                            )}
+                            {company.address && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', opacity: 0.65 }}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                {company.address}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </CompanyCardInfo>
+                    </div>
+                    <ActionBtns onClick={e => e.stopPropagation()}>
+                      <IconBtn theme={theme}
+                        disabled={selectedCompanies.size > 0}
+                        onClick={e => { e.stopPropagation(); openDetailModal(company); }}
+                        title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'View company details'}
+                        style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      </IconBtn>
+                      <IconBtn theme={theme}
+                        disabled={selectedCompanies.size > 0}
+                        onClick={e => { e.stopPropagation(); handleDownloadOne(company); }}
+                        title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'Download as CSV'}
+                        style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="7 10 12 15 17 10"/>
+                          <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                      </IconBtn>
+                      <CompanyGenBtn
+                        company={company}
+                        theme={theme}
+                        disabled={selectedCompanies.size > 0 || !!company.optedOut}
+                        hasTemplateEmail={hasTemplateEmail}
+                        mode={genEmailModes[company.id] ?? 'plain'}
+                        onModeChange={(mode, co) => {
+                          setGenEmailModes(m => ({ ...m, [co.id]: mode }));
+                          openEmailModal(co, mode === 'html', mode === 'template' ? 'template' : undefined);
+                        }}
+                        onOpen={(co) => {
+                          openEmailModal(co, false, 'plain');
+                        }}
+                      />
+                      <IconBtn theme={theme} $variant="danger"
+                        disabled={selectedCompanies.size > 0}
+                        onClick={e => handleUnenroll(company, e)}
+                        title={selectedCompanies.size > 0 ? 'Deselect all to use individual actions' : 'Unenroll from campaign'}
+                        style={selectedCompanies.size > 0 ? { opacity: 0.3, cursor: 'not-allowed', pointerEvents: 'none' } : undefined}>
+                        <UserMinusIcon />
+                      </IconBtn>
+                    </ActionBtns>
+                  </CompanyCardHeader>
+                )}
               </CompanyCardItem>
             ))
           )}
