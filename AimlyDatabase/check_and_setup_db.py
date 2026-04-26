@@ -94,8 +94,8 @@ def get_expected_tables(sql_path: Path) -> set:
         if upper.startswith("CREATE TABLE IF NOT EXISTS"):
             # Extract table name — strip backticks and spaces
             parts = line.split()
-            if len(parts) >= 5:
-                table_name = parts[4].strip('`()').strip()
+            if len(parts) >= 6:
+                table_name = parts[5].strip('`()').strip()
                 if table_name:
                     tables.add(table_name)
     return tables
