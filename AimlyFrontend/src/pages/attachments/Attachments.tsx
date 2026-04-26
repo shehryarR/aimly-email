@@ -249,6 +249,7 @@ const Attachments: React.FC = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // ── Data ───────────────────────────────────────────────────
   const [attachments,      setAttachments]      = useState<Attachment[]>([]);
@@ -1123,7 +1124,7 @@ const Attachments: React.FC = () => {
         </HeaderCard>
 
         {/* Files list */}
-        <ListSection theme={theme}>
+        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) { setSelected(new Set()); setSelectAllPages(false); } }}>
 
           <SectionHeader theme={theme}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -1396,7 +1397,7 @@ const Attachments: React.FC = () => {
                   key={att.id}
                   theme={theme}
                   $selected={isSelected}
-                  onClick={e => toggleSelect(att.id, e)}
+                  onClick={e => { e.stopPropagation(); toggleSelect(att.id, e); }}
                 >
                   {isMobile ? (
                     <div style={{

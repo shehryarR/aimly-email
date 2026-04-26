@@ -187,6 +187,7 @@ const Categories: React.FC = () => {
   const isMobile = useIsMobile();
   const [openDotsMenu, setOpenDotsMenu] = useState<number | null>(null);
   const dotsMenuRef = useRef<HTMLDivElement>(null);
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (openDotsMenu === null) return;
@@ -585,7 +586,7 @@ const Categories: React.FC = () => {
         </HeaderCard>
 
         {/* List section */}
-        <ListSection theme={theme}>
+        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) { setSelectedIds(new Set()); setSelectAllPages(false); setDeselectedIds(new Set()); } }}>
 
           {/* Section header */}
           <SectionHeader theme={theme}>
@@ -731,7 +732,7 @@ const Categories: React.FC = () => {
             const isSelected = selectAllPages ? !deselectedIds.has(cat.id) : selectedIds.has(cat.id);
             return (
               <CategoryCard key={cat.id} theme={theme} $selected={isSelected}
-                onClick={e => toggleSelect(cat.id, e)}>
+                onClick={e => { e.stopPropagation(); toggleSelect(cat.id, e); }}>
                 {isMobile ? (
                   /* ── Mobile: flat row — checkbox · info · dots ── */
                   <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.625rem' }}>

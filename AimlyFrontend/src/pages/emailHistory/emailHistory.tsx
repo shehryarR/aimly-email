@@ -1040,7 +1040,7 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
 
   if (isMobile) {
     return (
-      <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
+      <EmailCard theme={theme} $selected={selected} onClick={e => { e.stopPropagation(); onSelect(); }} style={{ cursor: 'pointer' }}>
         {/* Row: checkbox · content (subject + meta + tags) · status · dots */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
           {/* Checkbox */}
@@ -1131,7 +1131,7 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
 
   // Desktop layout
   return (
-    <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
+    <EmailCard theme={theme} $selected={selected} onClick={e => { e.stopPropagation(); onSelect(); }} style={{ cursor: 'pointer' }}>
       <EmailRow>
         {/* Checkbox */}
         <Checkbox theme={theme} $checked={selected}
@@ -1271,6 +1271,7 @@ const EmailHistory: React.FC = () => {
   // selection
   const [selectedIds,  setSelectedIds]  = useState<Set<number>>(new Set());
   const [allSelected,  setAllSelected]  = useState(false);
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // modal
   type ModalTab = 'email' | 'attachments';
@@ -1835,7 +1836,7 @@ const EmailHistory: React.FC = () => {
           </HeaderRow>
         </HeaderCard>
 
-        <ListSection theme={theme}>
+        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (selectedIds.size > 0) { setSelectedIds(new Set()); setAllSelected(false); } }}>
           <SectionHeader theme={theme}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               {emails.length > 0 && (
