@@ -1040,7 +1040,7 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
 
   if (isMobile) {
     return (
-      <EmailCard theme={theme} $selected={selected} onClick={e => { e.stopPropagation(); onSelect(); }} style={{ cursor: 'pointer' }}>
+      <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
         {/* Row: checkbox · content (subject + meta + tags) · status · dots */}
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
           {/* Checkbox */}
@@ -1131,7 +1131,7 @@ const DualTagEmailListItem: React.FC<DualTagEmailListItemProps> = ({
 
   // Desktop layout
   return (
-    <EmailCard theme={theme} $selected={selected} onClick={e => { e.stopPropagation(); onSelect(); }} style={{ cursor: 'pointer' }}>
+    <EmailCard theme={theme} $selected={selected} onClick={onSelect} style={{ cursor: 'pointer' }}>
       <EmailRow>
         {/* Checkbox */}
         <Checkbox theme={theme} $checked={selected}
@@ -1271,7 +1271,6 @@ const EmailHistory: React.FC = () => {
   // selection
   const [selectedIds,  setSelectedIds]  = useState<Set<number>>(new Set());
   const [allSelected,  setAllSelected]  = useState(false);
-  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // modal
   type ModalTab = 'email' | 'attachments';
@@ -1836,7 +1835,7 @@ const EmailHistory: React.FC = () => {
           </HeaderRow>
         </HeaderCard>
 
-        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (selectedIds.size > 0) { setSelectedIds(new Set()); setAllSelected(false); } }}>
+        <ListSection theme={theme}>
           <SectionHeader theme={theme}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               {emails.length > 0 && (
@@ -1948,19 +1947,36 @@ const EmailHistory: React.FC = () => {
           {/* Pagination */}
           {serverTotal > 0 && (
             <PaginationContainer theme={theme}>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(1)} disabled={currentPage === 1}>««</PaginationButton>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>«</PaginationButton>
-              {renderPageNumbers()}
-              <PaginationButton theme={theme} onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages}>»»</PaginationButton>
-              <PaginationInfo theme={theme}>{serverTotal > 0 ? `${rangeStart}–${rangeEnd} of ${serverTotal}` : '0'}</PaginationInfo>
-              <PageSizeSelect theme={theme} value={pageSize} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handlePageSizeChange(Number(e.target.value))}>
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-                <option value={200}>200 / page</option>
-              </PageSizeSelect>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationButton theme={theme} onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>«</PaginationButton>
+                {renderPageNumbers()}
+                <PaginationButton theme={theme} onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationInfo theme={theme}>{serverTotal > 0 ? `${rangeStart}–${rangeEnd} of ${serverTotal}` : '0'}</PaginationInfo>
+                <select
+                  value={pageSize}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handlePageSizeChange(Number(e.target.value))}
+                  style={{
+                    display: 'block',
+                    height: 36,
+                    padding: '0 0.625rem',
+                    borderRadius: theme.radius.field,
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    background: theme.colors.base[400],
+                    color: theme.colors.base.content,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                </select>
+              </div>
             </PaginationContainer>
           )}
 

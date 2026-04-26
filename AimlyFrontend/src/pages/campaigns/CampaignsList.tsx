@@ -100,6 +100,7 @@ interface CampaignsListProps {
   onAddClick: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
+  onClearSelection: () => void;
 }
 
 const formatDate = (dateString: string): string | null => {
@@ -195,12 +196,13 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
   sortKey, sortDir, onSort, onSortClear,
   onSearchChange, onSelectAll, onSelectCampaign,
   onCampaignClick, onDelete, onEdit, onBulkDelete, onAddClick,
-  onPageChange, onPageSizeChange,
+  onPageChange, onPageSizeChange, onClearSelection,
 }) => {
 
   const isMobile = useIsMobile();
   const [dotsOpenId, setDotsOpenId] = useState<number | null>(null);
   const dotsMenuRef = useRef<HTMLDivElement>(null);
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // Close dots menu on outside click
   useEffect(() => {
@@ -313,7 +315,7 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
 
   return (
     <>
-      <CampaignsSection theme={theme}>
+      <CampaignsSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) onClearSelection(); }}>
 
         {/* ── Section header ─────────────────────────────────── */}
         <SectionHeader theme={theme}>
@@ -475,6 +477,7 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
                 key={campaign.campaign_id}
                 theme={theme}
                 onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
                   if (e.ctrlKey || e.metaKey) return;
                   onCampaignClick(campaign.campaign_id);
                 }}
@@ -606,25 +609,38 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
         {/* ── Pagination ─────────────────────────────────────── */}
         {totalCampaigns > 0 && (
           <PaginationContainer theme={theme}>
-            <PaginationButton theme={theme} onClick={() => onPageChange(1)} disabled={currentPage === 1} title="First">««</PaginationButton>
-            <PaginationButton theme={theme} onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1} title="Prev">«</PaginationButton>
-            {renderPageNumbers()}
-            <PaginationButton theme={theme} onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} title="Next">»</PaginationButton>
-            <PaginationButton theme={theme} onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages} title="Last">»»</PaginationButton>
-            <PaginationInfo theme={theme}>
-              {totalCampaigns > 0 ? `${rangeStart}–${rangeEnd} of ${totalCampaigns}` : '0'}
-            </PaginationInfo>
-            <PageSizeSelect
-              theme={theme}
-              value={pageSize}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onPageSizeChange(Number(e.target.value))}
-            >
-              <option value={10}>10 / page</option>
-              <option value={20}>20 / page</option>
-              <option value={50}>50 / page</option>
-              <option value={100}>100 / page</option>
-              <option value={200}>200 / page</option>
-            </PageSizeSelect>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <PaginationButton theme={theme} onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1} title="Prev">«</PaginationButton>
+              {renderPageNumbers()}
+              <PaginationButton theme={theme} onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} title="Next">»</PaginationButton>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+              <PaginationInfo theme={theme}>
+                {totalCampaigns > 0 ? `${rangeStart}–${rangeEnd} of ${totalCampaigns}` : '0'}
+              </PaginationInfo>
+              <select
+                value={pageSize}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onPageSizeChange(Number(e.target.value))}
+                style={{
+                  display: 'block',
+                  height: 36,
+                  padding: '0 0.625rem',
+                  borderRadius: theme.radius.field,
+                  border: `1px solid ${theme.colors.base[300]}`,
+                  background: theme.colors.base[400],
+                  color: theme.colors.base.content,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+                <option value={200}>200 / page</option>
+              </select>
+            </div>
           </PaginationContainer>
         )}
       </CampaignsSection>

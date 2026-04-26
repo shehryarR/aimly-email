@@ -187,7 +187,6 @@ const Categories: React.FC = () => {
   const isMobile = useIsMobile();
   const [openDotsMenu, setOpenDotsMenu] = useState<number | null>(null);
   const dotsMenuRef = useRef<HTMLDivElement>(null);
-  const listSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (openDotsMenu === null) return;
@@ -586,7 +585,7 @@ const Categories: React.FC = () => {
         </HeaderCard>
 
         {/* List section */}
-        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) { setSelectedIds(new Set()); setSelectAllPages(false); setDeselectedIds(new Set()); } }}>
+        <ListSection theme={theme}>
 
           {/* Section header */}
           <SectionHeader theme={theme}>
@@ -732,7 +731,7 @@ const Categories: React.FC = () => {
             const isSelected = selectAllPages ? !deselectedIds.has(cat.id) : selectedIds.has(cat.id);
             return (
               <CategoryCard key={cat.id} theme={theme} $selected={isSelected}
-                onClick={e => { e.stopPropagation(); toggleSelect(cat.id, e); }}>
+                onClick={e => toggleSelect(cat.id, e)}>
                 {isMobile ? (
                   /* ── Mobile: flat row — checkbox · info · dots ── */
                   <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.625rem' }}>
@@ -839,18 +838,38 @@ const Categories: React.FC = () => {
           {/* Pagination */}
           {serverTotal > 0 && (
             <PaginationContainer theme={theme}>
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>«</PaginationButton>
-              {renderPageNumbers()}
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
-              <PaginationInfo theme={theme}>{rangeStart}–{rangeEnd} of {serverTotal}</PaginationInfo>
-              <PageSizeSelect theme={theme} value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); localStorage.setItem('categories_page_size', e.target.value); setCurrentPage(1); }}>
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-                <option value={200}>200 / page</option>
-              </PageSizeSelect>
+              {/* Nav group */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationButton theme={theme} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>«</PaginationButton>
+                {renderPageNumbers()}
+                <PaginationButton theme={theme} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
+              </div>
+              {/* Info + size group */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationInfo theme={theme}>{rangeStart}–{rangeEnd} of {serverTotal}</PaginationInfo>
+                <select
+                  value={pageSize}
+                  onChange={e => { setPageSize(Number(e.target.value)); localStorage.setItem('categories_page_size', e.target.value); setCurrentPage(1); }}
+                  style={{
+                    display: 'block',
+                    height: 36,
+                    padding: '0 0.625rem',
+                    borderRadius: theme.radius.field,
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    background: theme.colors.base[400],
+                    color: theme.colors.base.content,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                </select>
+              </div>
             </PaginationContainer>
           )}
         </ListSection>

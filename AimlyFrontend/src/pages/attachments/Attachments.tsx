@@ -249,7 +249,6 @@ const Attachments: React.FC = () => {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // ── Data ───────────────────────────────────────────────────
   const [attachments,      setAttachments]      = useState<Attachment[]>([]);
@@ -1124,7 +1123,7 @@ const Attachments: React.FC = () => {
         </HeaderCard>
 
         {/* Files list */}
-        <ListSection ref={listSectionRef} theme={theme} onClick={() => { if (showBulkBar) { setSelected(new Set()); setSelectAllPages(false); } }}>
+        <ListSection theme={theme}>
 
           <SectionHeader theme={theme}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -1397,7 +1396,7 @@ const Attachments: React.FC = () => {
                   key={att.id}
                   theme={theme}
                   $selected={isSelected}
-                  onClick={e => { e.stopPropagation(); toggleSelect(att.id, e); }}
+                  onClick={e => toggleSelect(att.id, e)}
                 >
                   {isMobile ? (
                     <div style={{
@@ -1500,30 +1499,38 @@ const Attachments: React.FC = () => {
           {/* Pagination */}
           {totalAttachments > 0 && (
             <PaginationContainer theme={theme}>
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(1)} disabled={currentPage === 1} title="First page">««</PaginationButton>
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} title="Previous page">«</PaginationButton>
-              {renderPageNumbers()}
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} title="Next page">»</PaginationButton>
-              <PaginationButton theme={theme} onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} title="Last page">»»</PaginationButton>
-              <PaginationInfo theme={theme}>
-                {totalAttachments > 0 ? `${rangeStart}–${rangeEnd} of ${totalAttachments}` : '0'}
-              </PaginationInfo>
-              <PageSizeSelect
-                theme={theme}
-                value={pageSize}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setPageSize(val);
-                  localStorage.setItem('attachments_page_size', String(val));
-                  setCurrentPage(1);
-                }}
-              >
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-                <option value={200}>200 / page</option>
-              </PageSizeSelect>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationButton theme={theme} onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} title="Previous page">«</PaginationButton>
+                {renderPageNumbers()}
+                <PaginationButton theme={theme} onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} title="Next page">»</PaginationButton>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationInfo theme={theme}>
+                  {totalAttachments > 0 ? `${rangeStart}–${rangeEnd} of ${totalAttachments}` : '0'}
+                </PaginationInfo>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { const val = Number(e.target.value); setPageSize(val); localStorage.setItem('attachments_page_size', String(val)); setCurrentPage(1); }}
+                  style={{
+                    display: 'block',
+                    height: 36,
+                    padding: '0 0.625rem',
+                    borderRadius: theme.radius.field,
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    background: theme.colors.base[400],
+                    color: theme.colors.base.content,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                </select>
+              </div>
             </PaginationContainer>
           )}
         </ListSection>

@@ -187,12 +187,16 @@ const StatsCard = styled(Card)`
 `;
 const StatsHeader = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  position: relative;
   padding: 1.75rem 2rem 1.5rem;
   gap: 1rem;
 
-  @media (max-width: 640px) { padding: 1rem 1.25rem 1rem; }
+  @media (max-width: 640px) {
+    justify-content: flex-end;
+    padding: 1rem 1.25rem 1rem;
+  }
   @media (max-width: 480px) { padding: 0.875rem 0.875rem 0.875rem; }
 `;
 const HeaderIconBtn = styled.button<{ theme: any }>`
@@ -210,6 +214,9 @@ const HeaderIconBtn = styled.button<{ theme: any }>`
   }
   svg { width: 18px; height: 18px; }
   text-decoration: none;
+`;
+const BackIconBtn = styled(HeaderIconBtn)`
+  @media (max-width: 640px) { display: none; }
 `;
 const NavIconButton = styled.button<{ theme: any }>`
   position: relative;
@@ -241,13 +248,19 @@ const NavIconCount = styled.span`
   letter-spacing: -0.01em;
   opacity: 0.8;
   line-height: 1;
+  @media (max-width: 640px) { display: none; }
 `;
 const CampaignTitleSection = styled.div`
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
+  pointer-events: none;
+  text-align: center;
+  max-width: 60%;
 `;
 const CampaignTitle = styled.h1`
   font-size: 2rem; font-weight: 800; margin: 0;
@@ -2621,7 +2634,11 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
 
           {/* Top row: campaign name (centre) · settings (right) */}
           <StatsHeader>
-            <CampaignTitleSection style={{ textAlign: 'center' }}>
+            <BackIconBtn theme={theme} as={Link} to="/campaigns" title="Back to campaigns">
+              <ArrowLeftIcon />
+            </BackIconBtn>
+
+            <CampaignTitleSection>
               <CampaignTitle>{campaign.name}</CampaignTitle>
               <CampaignMeta>Created {formatDate(campaign.created_at)}</CampaignMeta>
             </CampaignTitleSection>
@@ -3070,21 +3087,38 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
 
           {totalCompanies > 0 && (
             <Pagination theme={theme}>
-              <PageBtn theme={theme} onClick={() => setCurrentPage(1)} disabled={currentPage === 1} title="First">««</PageBtn>
-              <PageBtn theme={theme} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} title="Previous">«</PageBtn>
-              {renderPageButtons()}
-              <PageBtn theme={theme} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} title="Next">»</PageBtn>
-              <PageBtn theme={theme} onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} title="Last">»»</PageBtn>
-              <PageInfo theme={theme}>
-                {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalCompanies)} of {totalCompanies}
-              </PageInfo>
-              <PageSizeSelect theme={theme} value={pageSize} onChange={e => { const v = Number(e.target.value); setPageSize(v); localStorage.setItem('campaign_page_size', String(v)); setCurrentPage(1); }}>
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-                <option value={200}>200 / page</option>
-              </PageSizeSelect>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <PageBtn theme={theme} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} title="Previous">«</PageBtn>
+                {renderPageButtons()}
+                <PageBtn theme={theme} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} title="Next">»</PageBtn>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <PageInfo theme={theme}>
+                  {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalCompanies)} of {totalCompanies}
+                </PageInfo>
+                <select
+                  value={pageSize}
+                  onChange={e => { const v = Number(e.target.value); setPageSize(v); localStorage.setItem('campaign_page_size', String(v)); setCurrentPage(1); }}
+                  style={{
+                    display: 'block',
+                    height: 36,
+                    padding: '0 0.625rem',
+                    borderRadius: theme.radius.field,
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    background: theme.colors.base[400],
+                    color: theme.colors.base.content,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                </select>
+              </div>
             </Pagination>
           )}
         </SectionCard>

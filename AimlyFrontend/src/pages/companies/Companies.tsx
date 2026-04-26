@@ -1352,18 +1352,36 @@ const Companies: React.FC<CompaniesProps> = ({ onCompanyClick }) => {
           {/* Pagination */}
           {displayTotal > 0 && (
             <PaginationContainer theme={theme}>
-              <PaginationButton theme={theme} onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>«</PaginationButton>
-              {renderPageNumbers()}
-              <PaginationButton theme={theme} onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
-              <PaginationInfo theme={theme}>{rangeStart}–{rangeEnd} of {displayTotal}</PaginationInfo>
-              <PageSizeSelect theme={theme} value={pageSize}
-                onChange={e => handlePageSizeChange(Number(e.target.value))}>
-                <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
-                <option value={50}>50 / page</option>
-                <option value={100}>100 / page</option>
-                <option value={200}>200 / page</option>
-              </PageSizeSelect>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationButton theme={theme} onClick={() => handlePageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>«</PaginationButton>
+                {renderPageNumbers()}
+                <PaginationButton theme={theme} onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>»</PaginationButton>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <PaginationInfo theme={theme}>{rangeStart}–{rangeEnd} of {displayTotal}</PaginationInfo>
+                <select
+                  value={pageSize}
+                  onChange={e => handlePageSizeChange(Number(e.target.value))}
+                  style={{
+                    display: 'block',
+                    height: 36,
+                    padding: '0 0.625rem',
+                    borderRadius: theme.radius.field,
+                    border: `1px solid ${theme.colors.base[300]}`,
+                    background: theme.colors.base[400],
+                    color: theme.colors.base.content,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={10}>10 / page</option>
+                  <option value={20}>20 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
+                  <option value={200}>200 / page</option>
+                </select>
+              </div>
             </PaginationContainer>
           )}
         </ListSection>

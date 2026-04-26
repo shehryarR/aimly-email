@@ -451,6 +451,7 @@ const Campaigns: React.FC<CampaignsProps> = ({ onCampaignClick }) => {
           onAddClick={() => setShowCreateDialog(true)}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
+          onClearSelection={() => { setSelectedCampaigns(new Set()); setSelectAllPages(false); }}
         />
       </MainContent>
 
