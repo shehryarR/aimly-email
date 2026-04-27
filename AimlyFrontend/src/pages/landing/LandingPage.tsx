@@ -122,16 +122,19 @@ const HeroTitle = styled.h1<{ theme: any }>`
 `;
 
 const HeroSub = styled.p<{ theme: any }>`
-  font-size: 1.125rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 1.05rem;
   font-weight: 400;
-  line-height: 1.75;
-  opacity: 0.8;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
   max-width: 540px;
   margin: 0 0 2.75rem 0;
   color: ${p => p.theme.colors.base.content};
   animation: ${fadeUp} 0.6s 0.2s ease both;
 
-  @media (max-width: 480px) { font-size: 1rem; margin-bottom: 2rem; }
+  @media (max-width: 480px) { font-size: 0.95rem; margin-bottom: 2rem; }
 `;
 
 const HeroCtas = styled.div`
@@ -254,9 +257,10 @@ const PreviewCard = styled.div<{ theme: any; $accent?: string }>`
 `;
 
 const PreviewLabel = styled.div<{ theme: any }>`
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.7rem;
+  letter-spacing: 0.01em;
   opacity: 0.55;
   margin-bottom: 0.4rem;
   color: ${p => p.theme.colors.base.content};
@@ -330,11 +334,12 @@ const StatNum = styled.div<{ theme: any }>`
 `;
 
 const StatDesc = styled.div<{ theme: any }>`
-  font-size: 0.75rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.8rem;
   opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-weight: 400;
   color: ${p => p.theme.colors.base.content};
 `;
 
@@ -358,8 +363,11 @@ const TrustItem = styled.div<{ theme: any }>`
   gap: 0.5rem;
   padding: 1rem 2rem;
   border-right: 1px solid ${p => p.theme.colors.base[300]};
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.825rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: ${p => p.theme.colors.base.content};
   opacity: 0.75;
   &:last-child { border-right: none; }
@@ -395,15 +403,18 @@ const SectionTitle = styled.h2<{ theme: any }>`
 `;
 
 const SectionSub = styled.p<{ theme: any }>`
-  font-size: 1rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.975rem;
   font-weight: 400;
-  line-height: 1.75;
-  opacity: 0.8;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
   max-width: 520px;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
 
-  @media (max-width: 480px) { font-size: 0.9375rem; }
+  @media (max-width: 480px) { font-size: 0.9rem; }
 `;
 
 // ── Features ──────────────────────────────────────────────
@@ -465,10 +476,13 @@ const FeatureTitle = styled.h3<{ theme: any }>`
 `;
 
 const FeatureDesc = styled.p<{ theme: any }>`
-  font-size: 0.9375rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
   font-weight: 400;
-  line-height: 1.75;
-  opacity: 0.8;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -515,10 +529,13 @@ const StepTitle = styled.h3<{ theme: any }>`
 `;
 
 const StepDesc = styled.p<{ theme: any }>`
-  font-size: 0.9375rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
   font-weight: 400;
-  line-height: 1.75;
-  opacity: 0.8;
+  line-height: 1.8;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
   margin: 0;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -627,7 +644,11 @@ const PricingPlanName = styled.div<{ theme: any }>`
 `;
 
 const PricingIdealFor = styled.div<{ theme: any }>`
-  font-size: 0.72rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   opacity: 0.4;
   margin-bottom: 0.9rem;
   color: ${p => p.theme.colors.base.content};
@@ -659,13 +680,21 @@ const PricingNumber = styled.span<{ theme: any }>`
 `;
 
 const PricingPer = styled.span<{ theme: any }>`
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
   font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   opacity: 0.55;
   color: ${p => p.theme.colors.base.content};
 `;
 
 const PricingSub = styled.p<{ theme: any }>`
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
   font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   opacity: 0.55;
   margin: 0 0 1rem 0;
   color: ${p => p.theme.colors.base.content};
@@ -692,7 +721,11 @@ const PricingFeature = styled.li<{ theme: any }>`
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 0.8125rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   opacity: 0.85;
   color: ${p => p.theme.colors.base.content};
 `;
@@ -864,7 +897,7 @@ const LandingPage: React.FC = () => {
                   <PreviewDot $c="#ffbd2e" />
                   <PreviewDot $c="#28ca41" />
                   <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', opacity: 0.5, fontFamily: 'DM Sans', color: theme.colors.base.content }}>
-                    app.aimly.io/campaigns
+                    email.aimly.online/campaigns
                   </span>
                 </PreviewBar>
                 <PreviewContent>

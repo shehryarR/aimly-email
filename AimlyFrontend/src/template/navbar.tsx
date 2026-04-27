@@ -55,10 +55,13 @@ const LogoImage = styled.img`
 `;
 
 const PageTitle = styled.span<{ theme: any }>`
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
   font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: ${props => props.theme.colors.base.content};
   opacity: 0.65;
-  font-weight: 500;
   &::before {
     content: '•';
     margin-right: 0.75rem;
@@ -161,12 +164,14 @@ const NavTextBtn = styled(Link)<{ theme: any }>`
   border: 1px solid transparent;
   background: transparent;
   color: ${props => props.theme.colors.base.content};
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: all 0.2s;
   opacity: 0.65;
-  font-family: inherit;
   white-space: nowrap;
   &:hover {
     opacity: 1;
@@ -185,12 +190,14 @@ const NavOutlineBtn = styled(Link)<{ theme: any }>`
   border: 1px solid ${props => props.theme.colors.base[300]};
   background: transparent;
   color: ${props => props.theme.colors.base.content};
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: all 0.2s;
   opacity: 0.8;
-  font-family: inherit;
   white-space: nowrap;
   &:hover {
     opacity: 1;
@@ -327,8 +334,11 @@ const MobileMenuLink = styled(Link)<{ theme: any }>`
   padding: 0.75rem 1rem;
   border-radius: ${props => props.theme.radius.field};
   color: ${props => props.theme.colors.base.content};
-  font-size: 0.9375rem;
-  font-weight: 500;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.975rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   transition: background 0.15s;
   display: block;
 

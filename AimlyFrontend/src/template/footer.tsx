@@ -29,10 +29,13 @@ const FooterContainer = styled.footer<{ theme: any }>`
 `;
 
 const CopyrightText = styled.span<{ theme: any }>`
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
   font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: ${props => props.theme.colors.base.content};
   opacity: 0.65;
-  font-weight: 400;
 
   @media (max-width: 640px) {
     font-size: 0.75rem;
@@ -56,13 +59,15 @@ const FooterLink = styled(Link)<{ theme: any }>`
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: ${props => props.theme.colors.base.content};
   opacity: 0.6;
-  font-weight: 400;
   padding: 0;
   transition: opacity 0.15s;
-  font-family: inherit;
 
   &:hover {
     opacity: 1;
