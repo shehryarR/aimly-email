@@ -8,9 +8,16 @@ import styled from 'styled-components';
 import { useTheme } from '../theme/styles';
 import { Link } from 'react-router-dom';
 
-const NavbarContainer = styled.header<{ theme: any }>`
-  background-color: ${props => props.theme.colors.base[200]};
-  border-bottom: 1px solid ${props => props.theme.colors.base[300]};
+const NavbarContainer = styled.header<{ theme: any; $scrolled: boolean }>`
+  background-color: ${props => props.$scrolled
+    ? `${props.theme.colors.base[200]}ee`
+    : props.theme.colors.base[200]};
+  border-bottom: 1px solid ${props => props.$scrolled
+    ? props.theme.colors.base[300]
+    : props.theme.colors.base[300]};
+  box-shadow: ${props => props.$scrolled
+    ? '0 4px 24px rgba(0,0,0,0.12)'
+    : 'none'};
   color: ${props => props.theme.colors.base.content};
   padding: 0 2rem;
   height: 4rem;
@@ -20,7 +27,8 @@ const NavbarContainer = styled.header<{ theme: any }>`
   position: sticky;
   top: 0;
   z-index: 1000;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(${props => props.$scrolled ? '16px' : '8px'});
+  transition: box-shadow 0.25s ease, background-color 0.25s ease, backdrop-filter 0.25s ease;
 
   @media (max-width: 640px) {
     padding: 0 1rem;
@@ -388,6 +396,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleThemeToggle = () => {
     toggleTheme();
@@ -412,7 +427,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      <NavbarContainer theme={theme}>
+      <NavbarContainer theme={theme} $scrolled={scrolled}>
         <LeftSection>
           <LogoContainer to="/">
             <LogoImage src="/logo.png" alt="Aimly" />

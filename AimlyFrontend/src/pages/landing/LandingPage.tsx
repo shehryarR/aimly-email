@@ -30,8 +30,6 @@ const Root = styled.div<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   font-family: 'DM Sans', sans-serif;
   min-height: 100vh;
-  overflow-x: hidden;
-  position: relative;
 `;
 
 const Section = styled.section<{ $pad?: string }>`
@@ -340,7 +338,42 @@ const StatDesc = styled.div<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
 `;
 
-// ── Section Header ────────────────────────────────────────
+// ── Trust Strip ───────────────────────────────────────────
+const TrustStrip = styled.div<{ theme: any }>`
+  border-top: 1px solid ${p => p.theme.colors.base[300]};
+  border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+  background: ${p => p.theme.colors.base[200]};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  position: relative;
+  z-index: 1;
+`;
+
+const TrustItem = styled.div<{ theme: any }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  border-right: 1px solid ${p => p.theme.colors.base[300]};
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: ${p => p.theme.colors.base.content};
+  opacity: 0.75;
+  &:last-child { border-right: none; }
+  svg { color: ${p => p.theme.colors.accent.main}; flex-shrink: 0; }
+
+  @media (max-width: 640px) {
+    padding: 0.875rem 1.25rem;
+    border-right: none;
+    border-bottom: 1px solid ${p => p.theme.colors.base[300]};
+    width: 100%;
+    justify-content: center;
+    &:last-child { border-bottom: none; }
+  }
+`;
 const SectionLabel = styled.div<{ theme: any }>`
   font-size: 0.7rem;
   font-weight: 700;
@@ -895,6 +928,32 @@ const LandingPage: React.FC = () => {
             ))}
           </FeaturesGrid>
         </Section>
+
+        {/* ── Trust Strip ── */}
+        <TrustStrip theme={theme}>
+          {[
+            {
+              icon: <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+              label: 'Mandatory opt-out on every email, enforced by platform',
+            },
+            {
+              icon: <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+              label: 'CAN-SPAM & GDPR compliant',
+            },
+            {
+              icon: <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+              label: 'No spam facilitation',
+            },
+            {
+              icon: <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+              label: 'API keys never stored on our servers',
+            },
+          ].map(({ icon, label }) => (
+            <TrustItem key={label} theme={theme}>
+              {icon}{label}
+            </TrustItem>
+          ))}
+        </TrustStrip>
 
         <Divider theme={theme} />
 

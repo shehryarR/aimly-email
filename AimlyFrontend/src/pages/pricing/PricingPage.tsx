@@ -24,8 +24,6 @@ const Root = styled.div<{ theme: any }>`
   color: ${p => p.theme.colors.base.content};
   font-family: 'DM Sans', sans-serif;
   min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
   &::before {
     content: '';
     position: fixed;
