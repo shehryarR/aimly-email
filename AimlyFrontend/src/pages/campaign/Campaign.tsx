@@ -1064,7 +1064,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
   const [tvStatusCode, setTvStatusCode] = useState<number>(0);
   const [llmMsg, setLlmMsg]     = useState('');
   const [llmStatusCode, setLlmStatusCode] = useState<number>(0);
-
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const resetAll = () => {
     setTab('enroll'); setResult(null);
@@ -1074,6 +1074,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
     setMan({ name: '', email: '', phone_number: '', address: '', company_info: '' });
     setCsvFile(null); setIsDrag(false);
     setAiQuery(''); setAiLimit(10); setAiLimitRaw('10'); setAiIncludePhone(true); setAiIncludeAddress(true); setAiIncludeInfo(true); setIsImprovingPrompt(false); setTvStatus('idle'); setTvMsg('');
+    setConsentChecked(false);
   };
 
   useEffect(() => { if (isOpen) resetAll(); }, [isOpen]);
@@ -1313,11 +1314,50 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
         <ModalBody>
           <TabBar theme={theme}>
             {([['enroll', <EnrollIcon />, 'Enroll Existing'], ['manual', <PencilIcon />, 'Manual'], ['csv', <FileIcon />, 'CSV Upload'], ['ai', <SparkleIcon />, 'AI Search']] as [ModalTab, React.ReactNode, string][]).map(([t, icon, label]) => (
-              <TabBtn key={t} theme={theme} $active={tab === t} onClick={() => { setTab(t); setResult(null); }}>
+              <TabBtn key={t} theme={theme} $active={tab === t} onClick={() => {
+                if ((t === 'manual' || t === 'csv' || t === 'ai') && !consentChecked) {
+                  setTab(t); setResult(null); return;
+                }
+                setTab(t); setResult(null);
+              }}>
                 {icon} {label}
               </TabBtn>
             ))}
           </TabBar>
+
+          {/* ── Consent gate for manual / csv / ai tabs ── */}
+          {(tab === 'manual' || tab === 'csv' || tab === 'ai') && !consentChecked && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              padding: '2.5rem 1.5rem', gap: '1.25rem', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: `${theme.colors.primary.main}15`,
+                border: `1px solid ${theme.colors.primary.main}40`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: theme.colors.primary.main,
+              }}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <div>
+                <p style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.4rem', color: theme.colors.base.content }}>Confirm Contact Source</p>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', maxWidth: 380, textAlign: 'left' }}>
+                <input
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={e => setConsentChecked(e.target.checked)}
+                  style={{ marginTop: '2px', accentColor: theme.colors.primary.main, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: '0.8rem', lineHeight: 1.55, color: theme.colors.base.content, opacity: 0.8 }}>
+                  I confirm that these contacts are sourced from publicly available business information and I have a legitimate business interest in contacting them.
+                </span>
+              </label>
+            </div>
+          )}
 
           {tab === 'enroll' && (
             <div>
@@ -1514,7 +1554,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
             </div>
           )}
 
-          {tab === 'manual' && (
+          {tab === 'manual' && consentChecked && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <FG><FL theme={theme}>Company Name *</FL><FI theme={theme} value={man.name} autoFocus placeholder="Acme Corp" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMan(p => ({ ...p, name: e.target.value }))} /></FG>
               <FG><FL theme={theme}>Email *</FL><FI theme={theme} type="email" value={man.email} placeholder="contact@acme.com" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMan(p => ({ ...p, email: e.target.value }))} /></FG>
@@ -1525,7 +1565,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
             </div>
           )}
 
-          {tab === 'csv' && (
+          {tab === 'csv' && consentChecked && (
             <div>
               <DropZone theme={theme} $drag={isDrag} $file={!!csvFile}
                 onDragOver={e => { e.preventDefault(); setIsDrag(true); }}
@@ -1546,7 +1586,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
             </div>
           )}
 
-          {tab === 'ai' && (
+          {tab === 'ai' && consentChecked && (
             <div>
               {tvStatus === 'checking' && (
                 <TavilyBox theme={theme} $st="checking">
@@ -1697,7 +1737,7 @@ const AddCompaniesModal: React.FC<AddCompaniesModalProps> = ({
         </ModalBody>
 
         <ModalFoot theme={theme}>
-          <SubmitBtn theme={theme} onClick={handleSubmit} disabled={loading || (tab === 'ai' && tvStatus !== 'ok') || (tab === 'enroll' && !enrollHasChanges)}>
+          <SubmitBtn theme={theme} onClick={handleSubmit} disabled={loading || (tab === 'ai' && tvStatus !== 'ok') || (tab === 'enroll' && !enrollHasChanges) || ((tab === 'manual' || tab === 'csv' || tab === 'ai') && !consentChecked)}>
             {loading ? <BtnSpinner /> : <UploadIcon />}
             {submitLabel}
           </SubmitBtn>

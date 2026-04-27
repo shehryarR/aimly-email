@@ -80,7 +80,7 @@ const TermsOfService: React.FC = () => {
       <Hero theme={theme}>
         <HeroLabel theme={theme}>Legal</HeroLabel>
         <HeroTitle theme={theme}>Terms of Service</HeroTitle>
-        <HeroDate theme={theme}>Last updated: January 1, 2025</HeroDate>
+        <HeroDate theme={theme}>Last updated: April 27, 2026</HeroDate>
       </Hero>
       <Body>
         <Section>
@@ -143,11 +143,32 @@ const TermsOfService: React.FC = () => {
           <P theme={theme}>You may terminate your account at any time by canceling your subscription through the billing portal. We may terminate or suspend your access immediately, without prior notice, for conduct that we believe violates these terms or is harmful to other users, us, or third parties.</P>
         </Section>
         <Section>
-          <SectionTitle theme={theme}>9. Governing Law</SectionTitle>
+          <SectionTitle theme={theme}>9. Anti-Spam &amp; Acceptable Use of Outreach</SectionTitle>
+          <P theme={theme}><strong>9.1 Compliance with Laws.</strong> You agree to comply with all applicable laws governing electronic communications, including but not limited to the CAN-SPAM Act (US), GDPR (EU), PECR (UK), and CASL (Canada).</P>
+          <P theme={theme}><strong>9.2 Consent and Legitimate Interest.</strong> You represent and warrant that:</P>
+          <Ul>
+            <Li theme={theme}>All contacts are sourced from publicly available business information or you have obtained appropriate consent.</Li>
+            <Li theme={theme}>You have a legitimate business interest in contacting each recipient prior to engaging them.</Li>
+            <Li theme={theme}>You will not use Aimly to send unsolicited bulk commercial messages (spam).</Li>
+          </Ul>
+          <P theme={theme}><strong>9.3 Mandatory Opt-Out.</strong> Every message sent through Aimly includes a mandatory one-click unsubscribe mechanism. Unsubscribed addresses are automatically suppressed from future communications. This feature is enforced at the platform level and cannot be removed or disabled by users.</P>
+          <P theme={theme}><strong>9.4 Prohibited Activities.</strong> You may not:</P>
+          <Ul>
+            <Li theme={theme}>Send emails to purchased or scraped lists not verified as public business contacts.</Li>
+            <Li theme={theme}>Email individuals who have previously opted out.</Li>
+            <Li theme={theme}>Engage in spoofing, phishing, or deceptive practices.</Li>
+            <Li theme={theme}>Misrepresent your identity or the purpose of your communication.</Li>
+            <Li theme={theme}>Circumvent sending limits or platform safeguards.</Li>
+          </Ul>
+          <P theme={theme}><strong>9.5 Enforcement.</strong> Violations may result in immediate account suspension or termination. We reserve the right to report illegal activity to relevant authorities.</P>
+          <P theme={theme}><strong>9.6 Reporting Abuse.</strong> Report spam or abuse to abuse@aimly.online. We investigate all reports within 48 hours.</P>
+        </Section>
+        <Section>
+          <SectionTitle theme={theme}>10. Governing Law</SectionTitle>
           <P theme={theme}>These terms are governed by and construed in accordance with applicable laws. Any disputes arising from these terms shall be resolved through binding arbitration.</P>
         </Section>
         <Section>
-          <SectionTitle theme={theme}>10. Contact Us</SectionTitle>
+          <SectionTitle theme={theme}>11. Contact Us</SectionTitle>
           <P theme={theme}>If you have any questions about these Terms of Service, please contact us:</P>
           <ContactBox theme={theme}>
             <ContactLine theme={theme}>Orzeh Technologies</ContactLine>

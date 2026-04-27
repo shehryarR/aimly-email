@@ -267,6 +267,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
   const [tavilyStatusCode, setTavilyStatusCode] = useState<number>(0);
   const [llmMessage,       setLlmMessage]      = useState('');
   const [llmStatusCode,    setLlmStatusCode]   = useState<number>(0);
+  const [consentChecked,   setConsentChecked]  = useState(false);
 
 
   // Check Tavily + LLM whenever AI tab becomes active
@@ -312,6 +313,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
     setLlmMessage(''); setLlmStatusCode(0); setTavilyStatusCode(0);
     setLlmMessage('');    setLlmStatusCode(0);
     setResult(null);
+    setConsentChecked(false);
   };
 
   const handleClose = () => { resetAll(); onClose(); };
@@ -446,8 +448,40 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
             </Tab>
           </TabBar>
 
+          {/* ── Consent gate ── */}
+          {!consentChecked && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              padding: '2.5rem 1.5rem', gap: '1.25rem', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: `${theme.colors.primary.main}15`,
+                border: `1px solid ${theme.colors.primary.main}40`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: theme.colors.primary.main,
+              }}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <p style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: theme.colors.base.content }}>Confirm Contact Source</p>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', maxWidth: 380, textAlign: 'left' }}>
+                <input
+                  type="checkbox"
+                  checked={consentChecked}
+                  onChange={e => setConsentChecked(e.target.checked)}
+                  style={{ marginTop: '2px', accentColor: theme.colors.primary.main, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: '0.8rem', lineHeight: 1.55, color: theme.colors.base.content, opacity: 0.8 }}>
+                  I confirm that these contacts are sourced from publicly available business information and I have a legitimate business interest in contacting them.
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* ── Manual tab ─────────────────────────────────── */}
-          {activeTab === 'manual' && (
+          {activeTab === 'manual' && consentChecked && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <FormGroup>
                 <Label theme={theme}>Company Name *</Label>
@@ -483,7 +517,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
           )}
 
           {/* ── CSV tab ────────────────────────────────────── */}
-          {activeTab === 'csv' && (
+          {activeTab === 'csv' && consentChecked && (
             <div>
               <DropZone
                 theme={theme}
@@ -518,7 +552,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
           )}
 
           {/* ── AI search tab — gated on Tavily + LLM status ──── */}
-          {activeTab === 'ai' && (
+          {activeTab === 'ai' && consentChecked && (
             <div>
               {/* Checking state */}
               {tavilyStatus === 'checking' && (
@@ -682,7 +716,7 @@ const AddCompanyModal: React.FC<AddCompanyModalProps> = ({
         {/* Footer — no cancel button; submit disabled when AI tab & Tavily not ready */}
         <ModalFooter theme={theme}>
           <SaveButton theme={theme} onClick={handleSubmit}
-            disabled={loading || (activeTab === 'ai' && tavilyStatus !== 'ok')}>
+            disabled={loading || (activeTab === 'ai' && tavilyStatus !== 'ok') || !consentChecked}>
             {loading ? <Spinner /> : <UploadIcon />}
             {submitLabel}
           </SaveButton>

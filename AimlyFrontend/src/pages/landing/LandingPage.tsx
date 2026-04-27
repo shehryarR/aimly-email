@@ -730,34 +730,19 @@ const ViewAllLink = styled(Link)<{ theme: any }>`
 // ── Features & Pricing data ───────────────────────────────
 const FEATURES = () => [
   {
-    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/></svg>,
-    title: 'AI Email Generation',
-    desc: 'Generate plain text, HTML, and template emails per company — personalized using your campaign settings and company data.',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>,
+    title: 'AI Lead Discovery',
+    desc: 'Find businesses matching your ideal profile using AI agents that search public data sources.',
   },
   {
-    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>,
-    title: 'Bulk Campaigns',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 17h18v4H3z"/></svg>,
+    title: 'Bulk Campaign Sending',
     desc: 'Send to hundreds of companies in one action. Generate, review, and dispatch bulk emails with configurable scheduling.',
   },
   {
     icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
     title: 'Smart Scheduling',
     desc: 'Schedule emails with smart staggering — set start time, interval, and increment to avoid spam filters.',
-  },
-  {
-    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
-    title: 'Open Tracking',
-    desc: 'Track sent, read, failed, draft, and scheduled emails in real time. Campaign-level and company-level read rates.',
-  },
-  {
-    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-    title: 'Company Management',
-    desc: 'Organize companies by categories. Import via CSV, add manually, or let AI discover prospects for you.',
-  },
-  {
-    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>,
-    title: 'Attachment Management',
-    desc: 'Attach files to campaigns globally or per company. Inherit settings automatically or configure per campaign.',
   },
 ];
 
@@ -806,18 +791,17 @@ const LandingPage: React.FC = () => {
           <HeroInner>
             <HeroBadge theme={theme}>
               <BadgeDot theme={theme} />
-              AI-Powered Outreach Platform
+              AI-Powered B2B Lead Intelligence
             </HeroBadge>
 
             <HeroTitle theme={theme}>
-              Personalized outreach{' '}
-              at scale. <em>AI writes</em>{' '}
-              you close.
+              AI-Powered B2B{' '}
+              Lead Intelligence &amp; <em>Nurturing</em>{' '}
+              Platform
             </HeroTitle>
 
             <HeroSub theme={theme}>
-              Generate personalized emails for every company in your pipeline.
-              Manage campaigns, track opens, and schedule sends — all from one place.
+              Discover verified business leads from public sources. Generate personalized outreach emails with AI and send them at scale.
             </HeroSub>
 
             <HeroCtas>

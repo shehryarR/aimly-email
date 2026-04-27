@@ -68,11 +68,13 @@ const PrivacyPolicy: React.FC = () => {
             <Li theme={theme}>Monitor platform usage and detect security threats</Li>
             <Li theme={theme}>Comply with legal obligations</Li>
           </Ul>
+          <P theme={theme}>All contact data processed through the platform is used solely for the user's own outreach activities. Aimly enforces mandatory unsubscribe mechanisms on all outgoing messages, and opted-out contacts are automatically suppressed from future communications.</P>
         </Section>
         <Section>
           <SectionTitle theme={theme}>4. Data Storage and Security</SectionTitle>
           <P theme={theme}>Your data is stored on secure servers. We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.</P>
           <P theme={theme}>Authentication tokens are stored in HttpOnly cookies to prevent client-side access. Passwords are stored as secure hashes and are never stored in plain text.</P>
+          <P theme={theme}>User-provided API keys are stored in HttpOnly cookies on the client side. They are never persisted in our backend database. When an API key is required to perform an AI generation task, it is transmitted to the backend, held temporarily in encrypted form for the duration of that request, and discarded immediately after. It is never logged or stored in plain text.</P>
           <P theme={theme}>While we take all reasonable precautions, no method of transmission over the internet is 100% secure. We cannot guarantee absolute security of your data.</P>
         </Section>
         <Section>
@@ -92,7 +94,7 @@ const PrivacyPolicy: React.FC = () => {
         </Section>
         <Section>
           <SectionTitle theme={theme}>7. Data Retention</SectionTitle>
-          <P theme={theme}>We retain your personal data for as long as your account is active or as needed to provide the service. If you delete your account, we will delete your personal data within 30 days, except where we are required to retain it for legal purposes.</P>
+          <P theme={theme}>We retain your personal data for as long as your account is active or as needed to provide the service. If you delete your account, your personal data is deleted immediately and permanently. This action cannot be undone.</P>
         </Section>
         <Section>
           <SectionTitle theme={theme}>8. Your Rights</SectionTitle>
@@ -102,7 +104,6 @@ const PrivacyPolicy: React.FC = () => {
             <Li theme={theme}>Request correction of inaccurate data</Li>
             <Li theme={theme}>Request deletion of your data</Li>
             <Li theme={theme}>Export your data in a portable format</Li>
-            <Li theme={theme}>Withdraw consent at any time where processing is based on consent</Li>
           </Ul>
           <P theme={theme}>To exercise any of these rights, please contact us using the details below.</P>
         </Section>

@@ -206,12 +206,9 @@ const PLANS = [
     highlighted: false,
     features: [
       '1 branding profile',
-      '500 emails per day',
-      'AI-powered email generation',
+      '500 Verified Outreach Credits (per month)',
+      'AI-Powered Content',
       'Bulk scheduling & smart stagger',
-      'Email read tracking',
-      'Attachment management',
-      'Email support (48h)',
     ],
   },
   {
@@ -225,12 +222,9 @@ const PLANS = [
     highlighted: true,
     features: [
       'Up to 5 branding profiles',
-      '2,500 emails per day',
-      'AI-powered email generation',
+      '2,500 Verified Outreach Credits (per month)',
+      'AI-Powered Content',
       'Bulk scheduling & smart stagger',
-      'Email read tracking',
-      'Attachment management',
-      'Priority email support (24h)',
     ],
   },
   {
@@ -244,12 +238,9 @@ const PLANS = [
     highlighted: false,
     features: [
       'Unlimited branding profiles',
-      '7,500 emails per day',
-      'AI-powered email generation',
+      '7,500 Verified Outreach Credits (per month)',
+      'AI-Powered Content',
       'Bulk scheduling & smart stagger',
-      'Email read tracking',
-      'Attachment management',
-      'Slack / Discord support',
     ],
   },
 ];
@@ -344,6 +335,12 @@ const PricingPage: React.FC = () => {
             </Card>
           ))}
         </CardsWrap>
+
+        <div style={{ textAlign: 'center', padding: '0 2rem', position: 'relative', zIndex: 1 }}>
+          <p style={{ fontSize: '0.8rem', opacity: 0.6, color: theme.colors.base.content, margin: '0 auto', maxWidth: 560, lineHeight: 1.6 }}>
+            All plans include mandatory opt-out enforcement.
+          </p>
+        </div>
 
         <FaqSection>
           <FaqTitle theme={theme}>Frequently asked questions</FaqTitle>
