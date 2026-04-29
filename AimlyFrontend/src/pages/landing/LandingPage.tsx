@@ -5,19 +5,14 @@
  */
 
 import React, { useEffect } from 'react';
-import styled, { keyframes, createGlobalStyle } from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { Link } from 'react-router-dom';
 
 const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
 import { useAuth } from '../../App';
-
-// ── Google Font ───────────────────────────────────────────
-const LandingFont = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
-`;
 
 // ── Animations ────────────────────────────────────────────
 const fadeUp = keyframes`from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}`;
@@ -28,7 +23,7 @@ const float  = keyframes`0%,100%{transform:translateY(0)}50%{transform:translate
 const Root = styled.div<{ theme: any }>`
   background: ${p => p.theme.colors.base[100]};
   color: ${p => p.theme.colors.base.content};
-  font-family: 'DM Sans', sans-serif;
+  font-family: ${() => typography.fontBody};
   min-height: 100vh;
 `;
 
@@ -103,7 +98,7 @@ const BadgeDot = styled.span<{ theme: any }>`
 `;
 
 const HeroTitle = styled.h1<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-size: clamp(2.8rem, 6vw, 4.5rem);
   font-weight: 400;
   line-height: 1.08;
@@ -122,7 +117,7 @@ const HeroTitle = styled.h1<{ theme: any }>`
 `;
 
 const HeroSub = styled.p<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 1.05rem;
   font-weight: 400;
@@ -160,7 +155,7 @@ const PrimaryBtn = styled(Link)<{ theme: any }>`
   border: none;
   background: ${p => p.theme.colors.primary.main};
   color: ${p => p.theme.colors.primary.content};
-  font-family: 'DM Sans', sans-serif;
+  font-family: ${() => typography.fontBody};
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
@@ -183,7 +178,7 @@ const SecondaryBtn = styled(Link)<{ theme: any }>`
   border: 1px solid ${p => p.theme.colors.base[300]};
   background: transparent;
   color: ${p => p.theme.colors.base.content};
-  font-family: 'DM Sans', sans-serif;
+  font-family: ${() => typography.fontBody};
   font-size: 0.9375rem;
   font-weight: 500;
   cursor: pointer;
@@ -257,7 +252,7 @@ const PreviewCard = styled.div<{ theme: any; $accent?: string }>`
 `;
 
 const PreviewLabel = styled.div<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.7rem;
   letter-spacing: 0.01em;
@@ -269,7 +264,7 @@ const PreviewLabel = styled.div<{ theme: any }>`
 const PreviewValue = styled.div<{ $color?: string }>`
   font-size: 1.5rem;
   font-weight: 700;
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   color: ${p => p.$color || 'inherit'};
   letter-spacing: -0.02em;
 `;
@@ -324,7 +319,7 @@ const StatItem = styled.div<{ theme: any }>`
 `;
 
 const StatNum = styled.div<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.75rem;
   font-weight: 400;
   color: ${p => p.theme.colors.accent.main};
@@ -334,7 +329,7 @@ const StatNum = styled.div<{ theme: any }>`
 `;
 
 const StatDesc = styled.div<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.8rem;
   opacity: 0.7;
@@ -363,7 +358,7 @@ const TrustItem = styled.div<{ theme: any }>`
   gap: 0.5rem;
   padding: 1rem 2rem;
   border-right: 1px solid ${p => p.theme.colors.base[300]};
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.825rem;
   font-weight: 400;
@@ -392,7 +387,7 @@ const SectionLabel = styled.div<{ theme: any }>`
 `;
 
 const SectionTitle = styled.h2<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-size: clamp(1.8rem, 3.5vw, 2.75rem);
   font-weight: 400;
   line-height: 1.15;
@@ -403,7 +398,7 @@ const SectionTitle = styled.h2<{ theme: any }>`
 `;
 
 const SectionSub = styled.p<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.975rem;
   font-weight: 400;
@@ -476,7 +471,7 @@ const FeatureTitle = styled.h3<{ theme: any }>`
 `;
 
 const FeatureDesc = styled.p<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.9rem;
   font-weight: 400;
@@ -513,7 +508,7 @@ const StepNumber = styled.div<{ theme: any }>`
   align-items: center;
   justify-content: center;
   margin: 0 auto 1.25rem;
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.25rem;
   color: ${p => p.theme.colors.accent.main};
   position: relative;
@@ -529,7 +524,7 @@ const StepTitle = styled.h3<{ theme: any }>`
 `;
 
 const StepDesc = styled.p<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.9rem;
   font-weight: 400;
@@ -644,7 +639,7 @@ const PricingPlanName = styled.div<{ theme: any }>`
 `;
 
 const PricingIdealFor = styled.div<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.75rem;
   font-weight: 400;
@@ -671,7 +666,7 @@ const PricingCurrency = styled.span<{ theme: any }>`
 `;
 
 const PricingNumber = styled.span<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-size: 3rem;
   font-weight: 400;
   line-height: 1;
@@ -680,7 +675,7 @@ const PricingNumber = styled.span<{ theme: any }>`
 `;
 
 const PricingPer = styled.span<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.8125rem;
   font-weight: 400;
@@ -690,7 +685,7 @@ const PricingPer = styled.span<{ theme: any }>`
 `;
 
 const PricingSub = styled.p<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.75rem;
   font-weight: 400;
@@ -721,7 +716,7 @@ const PricingFeature = styled.li<{ theme: any }>`
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.8rem;
   font-weight: 400;
@@ -749,7 +744,7 @@ const PricingCta = styled(Link)<{ theme: any; $primary: boolean }>`
   border: ${p => p.$primary ? 'none' : `1px solid ${p.theme.colors.base[300]}`};
   background: ${p => p.$primary ? p.theme.colors.primary.main : 'transparent'};
   color: ${p => p.$primary ? p.theme.colors.primary.content : p.theme.colors.base.content};
-  font-family: 'DM Sans', sans-serif;
+  font-family: ${() => typography.fontBody};
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
@@ -848,7 +843,6 @@ const LandingPage: React.FC = () => {
 
   return (
     <>
-      <LandingFont />
       <Root theme={theme}>
         <Navbar isLandingPage user={user ? { username: user.username } : undefined} />
 
@@ -896,7 +890,7 @@ const LandingPage: React.FC = () => {
                   <PreviewDot $c="#ff5f57" />
                   <PreviewDot $c="#ffbd2e" />
                   <PreviewDot $c="#28ca41" />
-                  <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', opacity: 0.5, fontFamily: 'DM Sans', color: theme.colors.base.content }}>
+                  <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', opacity: 0.5, fontFamily: typography.fontBody, color: theme.colors.base.content }}>
                     email.aimly.online/campaigns
                   </span>
                 </PreviewBar>

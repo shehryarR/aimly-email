@@ -3,19 +3,19 @@
  */
 import React, { useEffect } from 'react';
 import styled from 'styled-components';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
 import { useAuth } from '../../App';
 
-const Root = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[100]}; color: ${p => p.theme.colors.base.content}; min-height: 100vh;`;
+const Root = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[100]}; color: ${p => p.theme.colors.base.content}; font-family: ${() => typography.fontBody}; min-height: 100vh;`;
 const Hero = styled.div<{ theme: any }>`background: ${p => p.theme.colors.base[200]}; border-bottom: 1px solid ${p => p.theme.colors.base[300]}; padding: 3.5rem 2rem; text-align: center; @media (max-width: 640px) { padding: 2.5rem 1.25rem; } @media (max-width: 480px) { padding: 2rem 1rem; }`;
 const HeroLabel = styled.div<{ theme: any }>`font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 0.75rem;`;
-const HeroTitle = styled.h1<{ theme: any }>`font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 0.5rem 0; color: ${p => p.theme.colors.base.content}; @media (max-width: 480px) { font-size: 1.5rem; }`;
+const HeroTitle = styled.h1<{ theme: any }>`font-family: ${() => typography.fontDisplay}; font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 0.5rem 0; color: ${p => p.theme.colors.base.content}; @media (max-width: 480px) { font-size: 1.5rem; }`;
 const HeroDate = styled.p<{ theme: any }>`font-size: 0.8125rem; opacity: 0.55; margin: 0; color: ${p => p.theme.colors.base.content};`;
 const Body = styled.div`max-width: 760px; margin: 0 auto; padding: 4rem 2rem; @media (max-width: 640px) { padding: 2.5rem 1.25rem; } @media (max-width: 480px) { padding: 1.75rem 1rem; }`;
 const Section = styled.section`margin-bottom: 2.75rem;`;
-const SectionTitle = styled.h2<{ theme: any }>`font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; padding-bottom: 0.625rem; border-bottom: 1px solid ${p => p.theme.colors.base[300]};`;
+const SectionTitle = styled.h2<{ theme: any }>`font-family: ${() => typography.fontDisplay}; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; padding-bottom: 0.625rem; border-bottom: 1px solid ${p => p.theme.colors.base[300]};`;
 const P = styled.p<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.85; opacity: 0.85; margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content}; &:last-child { margin-bottom: 0; }`;
 const Ul = styled.ul`padding-left: 1.25rem; margin: 0 0 0.875rem 0; display: flex; flex-direction: column; gap: 0.4rem;`;
 const Li = styled.li<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.75; opacity: 0.85; color: ${p => p.theme.colors.base.content};`;

@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import styled from 'styled-components';
-import { useTheme } from '../theme/styles';
+import { useTheme, typography } from '../theme/styles';
 import { Link } from 'react-router-dom';
 
 const FooterContainer = styled.footer<{ theme: any }>`
@@ -29,7 +29,7 @@ const FooterContainer = styled.footer<{ theme: any }>`
 `;
 
 const CopyrightText = styled.span<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.8rem;
   font-weight: 400;
@@ -59,7 +59,7 @@ const FooterLink = styled(Link)<{ theme: any }>`
   background: none;
   border: none;
   cursor: pointer;
-  font-family: 'DM Serif Display', serif;
+  font-family: ${() => typography.fontDisplay};
   font-style: italic;
   font-size: 0.8rem;
   font-weight: 400;

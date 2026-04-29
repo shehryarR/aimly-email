@@ -90,6 +90,28 @@ export interface ThemeRadius {
   box: string;
 }
 
+// ── Typography ────────────────────────────────────────────────────────────────
+// To swap fonts globally: change the values below and update the Google Fonts
+// import URL in ThemeProvider accordingly.
+export interface ThemeTypography {
+  /** Large headings, hero titles, modal headers (h1–h3) */
+  fontDisplay: string;
+  /** Body copy, labels, buttons, table cells, inputs */
+  fontBody: string;
+  /** Monospace — code snippets, API keys, IDs */
+  fontMono: string;
+  /** Google Fonts @import URL — kept here so font + URL stay in sync */
+  googleFontsUrl: string;
+}
+
+export const typography: ThemeTypography = {
+  fontDisplay: "'Manrope', sans-serif",
+  fontBody:    "'DM Sans', sans-serif",
+  fontMono:    "'ui-monospace', 'SFMono-Regular', 'Consolas', monospace",
+  googleFontsUrl:
+    'https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap',
+};
+
 export interface Theme {
   name: string;
   colorScheme: 'dark' | 'light';
@@ -294,6 +316,7 @@ interface ThemeContextValue {
   theme: Theme;
   themeMode: ThemeMode;
   toggleTheme: () => void;
+  typography: ThemeTypography;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -332,13 +355,26 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   };
 
   useEffect(() => {
-    // Set body background
+    // Inject Google Fonts if not already present
+    const fontLinkId = 'aimly-google-fonts';
+    if (!document.getElementById(fontLinkId)) {
+      const link = document.createElement('link');
+      link.id = fontLinkId;
+      link.rel = 'stylesheet';
+      link.href = typography.googleFontsUrl;
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Set body background and apply base font
     document.body.style.backgroundColor = theme.colors.base[100];
     document.body.style.color = theme.colors.base.content;
+    document.body.style.fontFamily = typography.fontBody;
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, themeMode, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, themeMode, toggleTheme, typography }}>
       {children}
     </ThemeContext.Provider>
   );

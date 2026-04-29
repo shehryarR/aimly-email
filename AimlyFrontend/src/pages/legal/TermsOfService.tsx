@@ -3,7 +3,7 @@
  */
 import React, { useEffect } from 'react';
 import styled from 'styled-components';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
 import { useAuth } from '../../App';
@@ -11,6 +11,7 @@ import { useAuth } from '../../App';
 const Root = styled.div<{ theme: any }>`
   background: ${p => p.theme.colors.base[100]};
   color: ${p => p.theme.colors.base.content};
+  font-family: ${() => typography.fontBody};
   min-height: 100vh;
 `;
 const Hero = styled.div<{ theme: any }>`
@@ -27,6 +28,7 @@ const HeroLabel = styled.div<{ theme: any }>`
   text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 0.75rem;
 `;
 const HeroTitle = styled.h1<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em;
   margin: 0 0 0.5rem 0; color: ${p => p.theme.colors.base.content};
 
@@ -43,6 +45,7 @@ const Body = styled.div`
 `;
 const Section = styled.section`margin-bottom: 2.75rem;`;
 const SectionTitle = styled.h2<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em;
   margin: 0 0 0.875rem 0; color: ${p => p.theme.colors.base.content};
   padding-bottom: 0.625rem; border-bottom: 1px solid ${p => p.theme.colors.base[300]};

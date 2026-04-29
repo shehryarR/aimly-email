@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { useTheme } from '../theme/styles';
+import { useTheme, typography } from '../theme/styles';
 import { Link } from 'react-router-dom';
 
 const NavbarContainer = styled.header<{ theme: any; $scrolled: boolean }>`
@@ -55,13 +55,7 @@ const LogoImage = styled.img`
 `;
 
 const PageTitle = styled.span<{ theme: any }>`
-  font-family: 'DM Serif Display', serif;
-  font-style: italic;
-  font-size: 0.875rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  color: ${props => props.theme.colors.base.content};
-  opacity: 0.65;
+  font-family: ${() => typography.fontDisplay};
   &::before {
     content: '•';
     margin-right: 0.75rem;
@@ -164,15 +158,7 @@ const NavTextBtn = styled(Link)<{ theme: any }>`
   border: 1px solid transparent;
   background: transparent;
   color: ${props => props.theme.colors.base.content};
-  font-family: 'DM Serif Display', serif;
-  font-style: italic;
-  font-size: 0.9rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  transition: all 0.2s;
-  opacity: 0.65;
-  white-space: nowrap;
+  font-family: ${() => typography.fontDisplay};
   &:hover {
     opacity: 1;
     border-color: ${props => props.theme.colors.base[300]};
@@ -190,15 +176,7 @@ const NavOutlineBtn = styled(Link)<{ theme: any }>`
   border: 1px solid ${props => props.theme.colors.base[300]};
   background: transparent;
   color: ${props => props.theme.colors.base.content};
-  font-family: 'DM Serif Display', serif;
-  font-style: italic;
-  font-size: 0.9rem;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  transition: all 0.2s;
-  opacity: 0.8;
-  white-space: nowrap;
+  font-family: ${() => typography.fontDisplay};
   &:hover {
     opacity: 1;
     border-color: ${props => props.theme.colors.primary.main};
@@ -334,9 +312,7 @@ const MobileMenuLink = styled(Link)<{ theme: any }>`
   padding: 0.75rem 1rem;
   border-radius: ${props => props.theme.radius.field};
   color: ${props => props.theme.colors.base.content};
-  font-family: 'DM Serif Display', serif;
-  font-style: italic;
-  font-size: 0.975rem;
+  font-family: ${() => typography.fontDisplay};
   font-weight: 400;
   letter-spacing: 0.01em;
   transition: background 0.15s;

@@ -3,18 +3,14 @@
  * Fully theme-aware, no hardcoded colors
  */
 import React, { useEffect } from 'react';
-import styled, { keyframes, createGlobalStyle } from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import Navbar from '../../template/navbar';
 import Footer from '../../template/footer';
 import { useAuth } from '../../App';
 
 const PADDLE_ENABLED = import.meta.env.VITE_PADDLE_ENABLED !== 'false';
-
-const LandingFont = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
-`;
 
 const fadeUp = keyframes`from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}`;
 const glow   = keyframes`0%,100%{opacity:0.4}50%{opacity:0.7}`;
@@ -22,7 +18,7 @@ const glow   = keyframes`0%,100%{opacity:0.4}50%{opacity:0.7}`;
 const Root = styled.div<{ theme: any }>`
   background: ${p => p.theme.colors.base[100]};
   color: ${p => p.theme.colors.base.content};
-  font-family: 'DM Sans', sans-serif;
+  font-family: ${() => typography.fontBody};
   min-height: 100vh;
   &::before {
     content: '';
@@ -50,7 +46,7 @@ const Hero = styled.div`
   @media (max-width: 480px) { padding: 2rem 1rem 1.5rem; }
 `;
 const HeroLabel = styled.div<{ theme: any }>`font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${p => p.theme.colors.accent.main}; margin-bottom: 1rem; animation: ${fadeUp} 0.5s ease both;`;
-const HeroTitle = styled.h1<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: clamp(2rem, 4vw, 3rem); font-weight: 400; letter-spacing: -0.02em; margin: 0 0 1rem 0; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.1s ease both;`;
+const HeroTitle = styled.h1<{ theme: any }>`font-family: ${() => typography.fontDisplay}; font-size: clamp(2rem, 4vw, 3rem); font-weight: 400; letter-spacing: -0.02em; margin: 0 0 1rem 0; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.1s ease both;`;
 const HeroSub = styled.p<{ theme: any }>`font-size: 1rem; opacity: 0.8; max-width: 500px; margin: 0 auto; line-height: 1.7; color: ${p => p.theme.colors.base.content}; animation: ${fadeUp} 0.5s 0.2s ease both;`;
 
 const CardsWrap = styled.div`
@@ -125,7 +121,7 @@ const IdealFor = styled.div<{ theme: any }>`font-size: 0.75rem; opacity: 0.4; ma
 
 const PriceRow = styled.div`display: flex; align-items: baseline; gap: 0.2rem; margin-bottom: 0.3rem;`;
 const Currency = styled.span<{ theme: any }>`font-size: 1.125rem; font-weight: 600; opacity: 0.7; align-self: flex-start; margin-top: 0.5rem; color: ${p => p.theme.colors.base.content};`;
-const Amount = styled.span<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: 3.25rem; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: ${p => p.theme.colors.base.content};`;
+const Amount = styled.span<{ theme: any }>`font-family: ${() => typography.fontDisplay}; font-size: 3.25rem; font-weight: 400; line-height: 1; letter-spacing: -0.03em; color: ${p => p.theme.colors.base.content};`;
 const Per = styled.span<{ theme: any }>`font-size: 0.8125rem; opacity: 0.55; color: ${p => p.theme.colors.base.content};`;
 const PriceSub = styled.p<{ theme: any }>`font-size: 0.775rem; opacity: 0.55; margin: 0 0 1.5rem 0; color: ${p => p.theme.colors.base.content};`;
 
@@ -149,7 +145,7 @@ const CtaBtn = styled(Link)<{ theme: any; $primary: boolean }>`
   border: ${p => p.$primary ? 'none' : `1px solid ${p.theme.colors.base[300]}`};
   background: ${p => p.$primary ? p.theme.colors.primary.main : 'transparent'};
   color: ${p => p.$primary ? p.theme.colors.primary.content : p.theme.colors.base.content};
-  font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 600;
+  font-family: ${() => typography.fontBody}; font-size: 0.9rem; font-weight: 600;
   cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.4rem;
   opacity: ${p => p.$primary ? 1 : 0.75};
   &:hover {
@@ -186,7 +182,7 @@ const FaqSection = styled.div`
 
   @media (max-width: 480px) { padding: 1rem 1rem 3rem; }
 `;
-const FaqTitle = styled.h2<{ theme: any }>`font-family: 'DM Serif Display', serif; font-size: 1.5rem; font-weight: 400; letter-spacing: -0.02em; text-align: center; margin: 0 0 2.5rem 0; color: ${p => p.theme.colors.base.content};`;
+const FaqTitle = styled.h2<{ theme: any }>`font-family: ${() => typography.fontDisplay}; font-size: 1.5rem; font-weight: 400; letter-spacing: -0.02em; text-align: center; margin: 0 0 2.5rem 0; color: ${p => p.theme.colors.base.content};`;
 const FaqItem = styled.div<{ theme: any }>`border-bottom: 1px solid ${p => p.theme.colors.base[300]}; padding: 1.25rem 0; &:first-of-type { border-top: 1px solid ${p => p.theme.colors.base[300]}; }`;
 const FaqQ = styled.h3<{ theme: any }>`font-size: 0.9375rem; font-weight: 600; margin: 0 0 0.5rem 0; letter-spacing: -0.01em; color: ${p => p.theme.colors.base.content};`;
 const FaqA = styled.p<{ theme: any }>`font-size: 0.9375rem; font-weight: 400; line-height: 1.85; opacity: 0.8; margin: 0; color: ${p => p.theme.colors.base.content};`;
@@ -263,7 +259,6 @@ const PricingPage: React.FC = () => {
 
   return (
     <>
-      <LandingFont />
       <Root theme={theme}>
         <Navbar isLandingPage user={user ? { username: user.username } : undefined} />
 
