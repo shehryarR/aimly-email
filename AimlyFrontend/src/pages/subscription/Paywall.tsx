@@ -10,7 +10,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import { useAuth } from '../../App';
 
 // ── Paddle env vars ───────────────────────────────────────
@@ -170,6 +170,7 @@ const Badge = styled.div<{ theme: any }>`
 `;
 
 const Title = styled.h1<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: -0.04em;

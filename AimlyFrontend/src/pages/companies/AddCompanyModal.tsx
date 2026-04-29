@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
+import { typography } from '../../theme/styles';
 import {
   ModalOverlay, ModalContent, ModalHeader, ModalTitle, CloseButton,
   ModalBody, ModalFooter, FormGroup, Label, Input, Textarea,
@@ -178,7 +179,7 @@ const CodeHint = styled.code<{ theme: any }>`
   border: 1px solid ${p => p.theme.colors.base[300]};
   border-radius: ${p => p.theme.radius.field};
   font-size: 0.75rem;
-  font-family: 'Courier New', monospace;
+  font-family: ${() => typography.fontMono};
   color: ${p => p.theme.colors.base.content};
   margin-top: 0.5rem;
   line-height: 1.6;

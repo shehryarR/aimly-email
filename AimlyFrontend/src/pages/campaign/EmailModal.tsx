@@ -136,6 +136,7 @@ const EmailModalHead = styled.div<{ theme: any }>`
   @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const EmailModalTitle = styled.h2`
+  font-family: ${() => typography.fontDisplay};
   margin: 0; font-size: 1rem; font-weight: 700; letter-spacing: -0.02em;
   display: flex; align-items: center; gap: 0.5rem;
   svg { width: 16px; height: 16px; opacity: 0.7; }

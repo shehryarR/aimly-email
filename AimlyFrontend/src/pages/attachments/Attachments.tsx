@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import { apiFetch } from '../../App';
 
 // ── Mobile detection hook ─────────────────────────────────────
@@ -1430,7 +1430,7 @@ const Attachments: React.FC = () => {
                         <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: theme.colors.base.content }}>
                           {att.filename}
                         </span>
-                        <span style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: 'SF Mono, Monaco, Courier New, monospace', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '0.72rem', opacity: 0.5, fontFamily: typography.fontMono, whiteSpace: 'nowrap' }}>
                           {formatBytes(att.file_size)}{att.created_at ? `  ·  ${formatDate(att.created_at)}` : ''}
                         </span>
                       </div>

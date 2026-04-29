@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 
 const Container = styled.div<{ theme: any }>`
   min-height: 100vh;
@@ -66,6 +66,7 @@ const ServerIcon = styled.div<{ theme: any }>`
 `;
 
 const Title = styled.h1<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   font-size: 2rem;
   font-weight: 600;
   color: ${props => props.theme.colors.base.content};

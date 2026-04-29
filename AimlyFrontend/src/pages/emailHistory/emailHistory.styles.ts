@@ -5,6 +5,7 @@
 // ============================================================
 
 import styled, { keyframes } from 'styled-components';
+import { typography } from '../../theme/styles';
 
 // ── Animations (private — not exported) ────────────────────────────────────────
 
@@ -261,7 +262,7 @@ export const EmailMeta = styled.div`
 export const EmailMetaItem = styled.span`
   font-size: 0.8125rem;
   opacity: 0.6;
-  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-family: ${() => typography.fontMono};
 `;
 
 export const EmailPreview = styled.div`

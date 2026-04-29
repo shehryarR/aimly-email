@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { useTheme } from '../../theme/styles';
+import { useTheme, typography } from '../../theme/styles';
 import styled, { keyframes } from 'styled-components';
 import BulkEmailModal from './BulkEmailModal';
 import { apiFetch } from '../../App';
@@ -247,6 +247,7 @@ const CampaignTitleSection = styled.div`
   max-width: 60%;
 `;
 const CampaignTitle = styled.h1`
+  font-family: ${() => typography.fontDisplay};
   font-size: 2rem; font-weight: 800; margin: 0;
   letter-spacing: -0.045em; line-height: 1;
   text-align: center;
@@ -322,6 +323,7 @@ const SectionHeader = styled.div<{ theme: any }>`
   @media (max-width: 480px) { margin-bottom: 1rem; padding-bottom: 0.75rem; }
 `;
 const SectionTitle = styled.h2`
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.125rem; font-weight: 600; margin: 0;
   display: flex; align-items: center; gap: 0.5rem;
   svg { width: 20px; height: 20px; }
@@ -428,7 +430,7 @@ const CompanyCardName = styled.h3`
   font-size: 0.9375rem; font-weight: 600; margin: 0 0 0.375rem 0; letter-spacing: -0.01em;
 `;
 const CompanyCardEmail = styled.span`
-  font-size: 0.8125rem; opacity: 0.6; font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8125rem; opacity: 0.6; font-family: ${() => typography.fontMono};
 `;
 const OptedOutBadge = styled.span`
   display: inline-flex; align-items: center; gap: 0.25rem;
@@ -779,7 +781,7 @@ const ModalHead = styled.div<{ theme: any }>`
   border-bottom: 1px solid ${p => p.theme.colors.base[300]};
   display: flex; align-items: center; justify-content: space-between;
 `;
-const ModalTitle = styled.h3`margin: 0; font-size: 1.125rem; font-weight: 600;`;
+const ModalTitle = styled.h3`font-family: ${() => typography.fontDisplay}; margin: 0; font-size: 1.125rem; font-weight: 600;`;
 const ModalCloseBtn = styled.button<{ theme: any }>`
   padding: 0.375rem; border: none; background: transparent;
   color: ${p => p.theme.colors.base.content}; cursor: pointer;
@@ -871,7 +873,7 @@ const CodeHint = styled.code<{ theme: any }>`
   background: ${p => p.theme.colors.base[200]};
   border: 1px solid ${p => p.theme.colors.base[300]};
   border-radius: ${p => p.theme.radius.field};
-  font-size: 0.75rem; font-family: 'Courier New', monospace;
+  font-size: 0.75rem; font-family: ${() => typography.fontMono};
   color: ${p => p.theme.colors.base.content};
   margin-top: 0.5rem; line-height: 1.6; opacity: 0.8;
 `;
@@ -1791,7 +1793,7 @@ const DetailLabel = styled.span`
 `;
 const DetailValue = styled.span<{ theme: any; $mono?: boolean }>`
   font-size: 0.9rem; font-weight: 500;
-  font-family: ${p => p.$mono ? "'SF Mono', 'Monaco', 'Courier New', monospace" : 'inherit'};
+  font-family: ${p => p.$mono ? typography.fontMono : 'inherit'};
   color: ${p => p.theme.colors.base.content};
   word-break: break-word;
 `;
@@ -2934,7 +2936,7 @@ const Campaign: React.FC<CampaignProps> = ({ campaignId: propId, onBack }) => {
                           </OptedOutBadge>
                         )}
                       </div>
-                      <span style={{ fontSize: '0.75rem', opacity: 0.55, fontFamily: 'SF Mono, Monaco, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.75rem', opacity: 0.55, fontFamily: typography.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {company.email}
                       </span>
                     </div>

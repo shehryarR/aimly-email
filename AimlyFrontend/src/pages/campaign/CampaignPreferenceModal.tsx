@@ -92,6 +92,7 @@ const CsHead = styled.div<{ theme: any }>`
   @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const CsTitle = styled.h2`
+  font-family: ${() => typography.fontDisplay};
   margin: 0; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em;
   display: flex; align-items: center; gap: 0.6rem;
   svg { width: 20px; height: 20px; opacity: 0.8; }
@@ -241,6 +242,7 @@ const CsTabPanel = styled.div<{ theme: any }>`
   @media (max-width: 480px) { padding: 1rem 0.875rem; }
 `;
 const CsPanelTitle = styled.h3<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   margin: 0 0 0.25rem 0;
   font-size: 1.05rem; font-weight: 700;
   color: ${p => p.theme.colors.base.content};
@@ -1343,7 +1345,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                                   )}
                                 </div>
                                 {b.email_address && (
-                                  <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', opacity: 0.5, marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <div style={{ fontSize: '0.75rem', fontFamily: typography.fontMono, opacity: 0.5, marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {b.email_address}
                                   </div>
                                 )}
@@ -1377,13 +1379,13 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                                 show: !!selectedBrand.email_address,
                                 icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
                                 label: 'From address',
-                                value: <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selectedBrand.email_address}</span>,
+                                value: <span style={{ fontFamily: typography.fontMono, fontSize: '0.8125rem' }}>{selectedBrand.email_address}</span>,
                               },
                               {
                                 show: !!selectedBrand.smtp_host,
                                 icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>,
                                 label: 'SMTP',
-                                value: <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{selectedBrand.smtp_host}{selectedBrand.smtp_port ? `:${selectedBrand.smtp_port}` : ''}</span>,
+                                value: <span style={{ fontFamily: typography.fontMono, fontSize: '0.8125rem' }}>{selectedBrand.smtp_host}{selectedBrand.smtp_port ? `:${selectedBrand.smtp_port}` : ''}</span>,
                               },
                               {
                                 show: !!selectedBrand.signature,
@@ -1509,7 +1511,7 @@ const CampaignSettingsModal: React.FC<CampaignSettingsModalProps> = ({
                             placeholder={'Hi {{company_name}} team,\n\nI wanted to reach out…'}
                             value={templateBody}
                             onChange={e => { setTemplateBody(e.target.value); markDirty('template'); }}
-                            style={{ fontFamily: "'SF Mono', 'Monaco', 'Courier New', monospace", fontSize: '0.83rem', lineHeight: 1.65 }}
+                            style={{ fontFamily: typography.fontMono, fontSize: '0.83rem', lineHeight: 1.65 }}
                           />
                         </SFG>
 

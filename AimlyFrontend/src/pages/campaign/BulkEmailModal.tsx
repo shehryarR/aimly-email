@@ -114,6 +114,7 @@ const ModalHeader = styled.div<{ theme: any }>`
   @media (max-width: 480px) { padding: 0.875rem 1rem; }
 `;
 const ModalTitle = styled.h2`
+  font-family: ${() => typography.fontDisplay};
   margin:0;font-size:1rem;font-weight:700;letter-spacing:-0.02em;
   display:flex;align-items:center;gap:0.5rem;
 `;
@@ -258,6 +259,7 @@ const BulkPane = styled.div`
 
 // ── SETTINGS-STYLE COMPONENTS ─────────────────────────────────
 const PanelTitle = styled.h3<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   margin: 0 0 0.25rem 0;
   font-size: 1.05rem; font-weight: 700;
   color: ${p => p.theme.colors.base.content};

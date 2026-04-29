@@ -13,6 +13,7 @@
 // ============================================================
 
 import styled from 'styled-components';
+import { typography } from '../../theme/styles';
 
 // ── Page shell ─────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ export const HeaderCenter = styled.div`
 `;
 
 export const HeaderTitle = styled.h1`
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.75rem;
   font-weight: 600;
   margin: 0 0 0.25rem 0;
@@ -209,6 +211,7 @@ export const SectionHeader = styled.div<{ theme: any }>`
 `;
 
 export const SectionTitle = styled.h2`
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
@@ -448,6 +451,7 @@ export const FileInfo = styled.div`
 `;
 
 export const FileName = styled.h3`
+  font-family: ${() => typography.fontDisplay};
   font-size: 0.9375rem;
   font-weight: 600;
   margin: 0 0 0.375rem 0;
@@ -480,7 +484,7 @@ export const FileMeta = styled.div`
 export const FileMetaItem = styled.span`
   font-size: 0.8125rem;
   opacity: 0.6;
-  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-family: ${() => typography.fontMono};
   @media (max-width: 640px) { font-size: 0.75rem; }
 `;
 
@@ -664,6 +668,7 @@ export const EmptyIcon = styled.div`
 `;
 
 export const EmptyTitle = styled.h3`
+  font-family: ${() => typography.fontDisplay};
   font-size: 1.125rem;
   font-weight: 600;
   opacity: 0.7;
@@ -726,6 +731,7 @@ export const ModalHeader = styled.div<{ theme: any }>`
 `;
 
 export const ModalTitle = styled.h3`
+  font-family: ${() => typography.fontDisplay};
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
@@ -1006,6 +1012,7 @@ export const ConfirmIconWrap = styled.div<{ theme: any }>`
 export const ConfirmContent = styled.div`flex: 1; min-width: 0;`;
 
 export const ConfirmTitle = styled.h3<{ theme: any }>`
+  font-family: ${() => typography.fontDisplay};
   margin: 0 0 0.5rem 0;
   font-size: 1.125rem;
   font-weight: 600;
