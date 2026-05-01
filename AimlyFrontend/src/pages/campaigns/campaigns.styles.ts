@@ -473,6 +473,8 @@ export const CampaignCard = styled(Card)`
 `;
 
 export const CampaignHeader = styled.div`
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;

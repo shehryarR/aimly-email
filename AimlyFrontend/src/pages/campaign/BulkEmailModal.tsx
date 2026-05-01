@@ -19,6 +19,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
 import { apiFetch } from '../../App';
+import { typography } from '../../theme/styles';
 
 // ─────────────────────────────────────────────────────────────
 // TYPES

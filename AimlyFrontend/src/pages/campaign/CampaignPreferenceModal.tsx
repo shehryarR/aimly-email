@@ -12,7 +12,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { apiFetch } from '../../App';
-
+import { typography } from '../../theme/styles';
 // ─────────────────────────────────────────────────────────────
 // RE-USED TYPES (import these from a shared types file if you have one)
 // ─────────────────────────────────────────────────────────────

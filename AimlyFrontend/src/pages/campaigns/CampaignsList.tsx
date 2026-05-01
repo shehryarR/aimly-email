@@ -498,7 +498,7 @@ const CampaignsList: React.FC<CampaignsListProps> = ({
 
                 {isMobile ? (
                   /* ── Mobile: flat row — checkbox · content · dots ── */
-                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
                     {/* Checkbox */}
                     <div onClick={(e) => { e.stopPropagation(); onSelectCampaign(campaign.campaign_id, e); }}
                       style={{ width: 18, height: 18, minWidth: 18, flexShrink: 0, borderRadius: 4,
